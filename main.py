@@ -34,6 +34,8 @@ def _is_installed(package_name):
 
 
 def ensure_dependencies():
+    if getattr(sys, "frozen", False):
+        return
     if not os.path.exists(REQUIREMENTS_FILE):
         return
 
