@@ -30,3 +30,4 @@ dist/
 accounts.txt
 accounts.xlsx
 *.log
+funpay_monitor/
