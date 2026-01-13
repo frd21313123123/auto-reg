@@ -16,20 +16,36 @@ SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hotkey
 
 # Default hotkeys
 DEFAULT_HOTKEYS = {
+    # SK Generator hotkeys
     "card": "ctrl+1",
     "name": "ctrl+2", 
     "city": "ctrl+3",
     "street": "ctrl+4",
-    "postcode": "ctrl+5"
+    "postcode": "ctrl+5",
+    # Main app hotkeys
+    "email": "ctrl+e",
+    "password": "ctrl+p",
+    "paste_account": "ctrl+shift+v",
+    "copy_account": "ctrl+shift+c",
+    "random_name": "ctrl+n",
+    "random_birthdate": "ctrl+b"
 }
 
-# Labels for hotkeys
+# Labels for hotkeys (grouped by category)
 HOTKEY_LABELS = {
-    "card": "Номер карты",
-    "name": "Имя",
-    "city": "Город",
-    "street": "Улица",
-    "postcode": "Индекс"
+    # Main app hotkeys
+    "email": "📧 Копировать Email",
+    "password": "🔑 Копировать пароль",
+    "paste_account": "📥 Вставить аккаунт(ы)",
+    "copy_account": "📤 Копировать аккаунт",
+    "random_name": "🎲 Случайное имя",
+    "random_birthdate": "🎂 Дата рождения",
+    # SK Generator hotkeys  
+    "card": "💳 Карта (SK)",
+    "name": "👤 Имя (SK)",
+    "city": "🏙 Город (SK)",
+    "street": "🛣 Улица (SK)",
+    "postcode": "📮 Индекс (SK)"
 }
 
 
@@ -55,7 +71,11 @@ class HotkeySettings:
         if os.path.exists(SETTINGS_FILE):
             try:
                 with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    loaded = json.load(f)
+                    # Merge with defaults to ensure all keys exist
+                    result = DEFAULT_HOTKEYS.copy()
+                    result.update(loaded)
+                    return result
             except Exception:
                 pass
         return DEFAULT_HOTKEYS.copy()
@@ -104,8 +124,9 @@ def show_settings_window(parent, theme_name="light", on_save=None):
     """Open hotkey settings window."""
     win = tk.Toplevel(parent)
     win.title("⚙ Настройки горячих клавиш")
-    win.geometry("400x350")
-    win.resizable(False, False)
+    win.geometry("480x550")
+    win.resizable(True, True)
+    win.minsize(400, 400)
     
     colors = THEMES[theme_name]
     accent_bg = colors.get("accent", "#2563eb")
@@ -127,16 +148,38 @@ def show_settings_window(parent, theme_name="light", on_save=None):
     
     hint_lbl = tk.Label(
         win,
-        text="Нажмите на поле и введите комбинацию клавиш",
+        text="Нажмите 🎤 и введите комбинацию клавиш",
         font=("Segoe UI", 9),
         bg=colors["bg"],
         fg=colors.get("status_fg", "#888")
     )
     hint_lbl.pack(pady=(0, 10))
     
-    # Frame for hotkey entries
-    frame = tk.Frame(win, bg=colors["bg"])
-    frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+    # Scrollable frame
+    container = tk.Frame(win, bg=colors["bg"])
+    container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    
+    canvas = tk.Canvas(container, bg=colors["bg"], highlightthickness=0)
+    scrollbar = tk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg=colors["bg"])
+    
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+    
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    
+    # Mouse wheel scrolling
+    def on_mousewheel(event):
+        canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+    canvas.bind_all("<MouseWheel>", on_mousewheel)
+    
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+    
+    frame = scrollable_frame
     
     entries = {}
     recording_entry = {"current": None, "key": None}

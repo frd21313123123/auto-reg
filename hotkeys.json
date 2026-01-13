@@ -1,4 +1,10 @@
 {
+  "email": "q",
+  "password": "e",
+  "paste_account": "ctrl+shift+v",
+  "copy_account": "ctrl+shift+c",
+  "random_name": "ctrl+n",
+  "random_birthdate": "ctrl+b",
   "card": "ctrl+1",
   "name": "ctrl+2",
   "city": "ctrl+3",

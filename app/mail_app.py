@@ -17,7 +17,8 @@ import time
 import platform
 import winsound
 import ctypes
-from datetime import datetime
+from datetime import datetime, timedelta
+from faker import Faker
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 
@@ -30,6 +31,7 @@ from .widgets import ThemedCheckbox
 from .imap_client import IMAPClient
 from .sk_generator import show_sk_window
 from .minesweeper import show_minesweeper
+from .hotkey_settings import HotkeySettings, show_settings_window
 
 
 class MailApp:
@@ -147,6 +149,10 @@ class MailApp:
         self.btn_minesweeper = tk.Button(self.btn_frame, text="💣", command=self._show_minesweeper, font=("Segoe UI", 12), width=3)
         self.btn_minesweeper.pack(side=tk.LEFT, padx=2)
         
+        # Кнопка настроек горячих клавиш
+        self.btn_hotkey_settings = tk.Button(self.btn_frame, text="⚙", command=self._show_hotkey_settings, font=("Segoe UI", 12), width=3)
+        self.btn_hotkey_settings.pack(side=tk.LEFT, padx=2)
+        
         # Список аккаунтов
         self.acc_listbox = tk.Listbox(self.left_panel, height=20, exportselection=False)
         self.acc_listbox.pack(pady=5, padx=10, fill=tk.BOTH, expand=True)
@@ -162,6 +168,42 @@ class MailApp:
         
         # Загружаем сохраненные аккаунты сразу
         self.load_accounts_from_file()
+        
+        # --- ПАНЕЛЬ СЛУЧАЙНЫХ ДАННЫХ ---
+        self.person_frame = tk.LabelFrame(self.left_panel, text="👤 Случайные данные", font=FONT_BOLD, bg="#f0f0f0")
+        self.person_frame.pack(fill=tk.X, padx=10, pady=(5, 10))
+        
+        # Инициализация Faker (английский)
+        self.fake = Faker("en_US")
+        
+        # Переменные для случайных данных
+        self.random_name_var = tk.StringVar()
+        self.random_birthdate_var = tk.StringVar()
+        
+        # Имя
+        name_row = tk.Frame(self.person_frame, bg="#f0f0f0")
+        name_row.pack(fill=tk.X, padx=5, pady=2)
+        tk.Label(name_row, text="Name:", font=FONT_SMALL, bg="#f0f0f0", width=8, anchor="w").pack(side=tk.LEFT)
+        self.entry_random_name = tk.Entry(name_row, textvariable=self.random_name_var, font=FONT_SMALL, state="readonly", width=18)
+        self.entry_random_name.pack(side=tk.LEFT, padx=2)
+        self.btn_copy_random_name = tk.Button(name_row, text="📋", command=self.copy_random_name, font=FONT_SMALL, width=2)
+        self.btn_copy_random_name.pack(side=tk.LEFT, padx=2)
+        
+        # Дата рождения
+        bdate_row = tk.Frame(self.person_frame, bg="#f0f0f0")
+        bdate_row.pack(fill=tk.X, padx=5, pady=2)
+        tk.Label(bdate_row, text="Дата:", font=FONT_SMALL, bg="#f0f0f0", width=8, anchor="w").pack(side=tk.LEFT)
+        self.entry_random_bdate = tk.Entry(bdate_row, textvariable=self.random_birthdate_var, font=FONT_SMALL, state="readonly", width=18)
+        self.entry_random_bdate.pack(side=tk.LEFT, padx=2)
+        self.btn_copy_random_bdate = tk.Button(bdate_row, text="📋", command=self.copy_random_birthdate, font=FONT_SMALL, width=2)
+        self.btn_copy_random_bdate.pack(side=tk.LEFT, padx=2)
+        
+        # Кнопка генерации
+        self.btn_generate_person = tk.Button(self.person_frame, text="🔄 Сгенерировать", command=self.generate_random_person, font=FONT_SMALL)
+        self.btn_generate_person.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Генерируем случайные данные при старте
+        self.generate_random_person()
         
         # --- ПРАВАЯ ПАНЕЛЬ (ПИСЬМА) ---
         self.right_panel = tk.Frame(self.paned)
@@ -223,6 +265,154 @@ class MailApp:
         
         # Запуск цикла автообновления
         self.start_auto_refresh()
+        
+        # Регистрация горячих клавиш
+        self._setup_hotkeys()
+    
+    def _setup_hotkeys(self):
+        """Настройка глобальных горячих клавиш."""
+        self.hotkey_settings = HotkeySettings.get_instance()
+        self.hotkey_settings.set_callback("email", self.copy_email)
+        self.hotkey_settings.set_callback("password", self.copy_pass)
+        self.hotkey_settings.set_callback("paste_account", self.paste_accounts_from_clipboard)
+        self.hotkey_settings.set_callback("copy_account", self.copy_full_account)
+        self.hotkey_settings.set_callback("random_name", self.copy_random_name)
+        self.hotkey_settings.set_callback("random_birthdate", self.copy_random_birthdate)
+        self.hotkey_settings.register_all()
+    
+    def paste_accounts_from_clipboard(self):
+        """Вставить аккаунты из буфера обмена."""
+        try:
+            clipboard_text = pyperclip.paste()
+            if not clipboard_text:
+                self.update_status("Буфер обмена пуст")
+                return
+            
+            lines = clipboard_text.strip().split('\n')
+            added_count = 0
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                email = ""
+                password = ""
+                
+                # Parse different formats
+                if " / " in line:
+                    parts = line.split(" / ", 1)
+                    email = parts[0].strip()
+                    password = parts[1].strip() if len(parts) > 1 else ""
+                elif ":" in line:
+                    parts = line.split(":", 1)
+                    email = parts[0].strip()
+                    password = parts[1].strip() if len(parts) > 1 else ""
+                elif "\t" in line:
+                    parts = line.split("\t", 1)
+                    email = parts[0].strip()
+                    password = parts[1].strip() if len(parts) > 1 else ""
+                
+                if email and password and "@" in email:
+                    # Check if already exists
+                    exists = any(acc["email"] == email for acc in self.accounts_data)
+                    if not exists:
+                        self.accounts_data.append({
+                            "email": email,
+                            "password": password,
+                            "status": "not_registered"
+                        })
+                        display_text = f"{email} / {password}"
+                        self.acc_listbox.insert(tk.END, display_text)
+                        added_count += 1
+            
+            if added_count > 0:
+                self.update_listbox_colors()
+                self.save_accounts_to_file()
+                self.update_status(f"Добавлено аккаунтов: {added_count}")
+            else:
+                self.update_status("Не найдено валидных аккаунтов для добавления")
+                
+        except Exception as e:
+            self.update_status(f"Ошибка вставки: {e}")
+    
+    def copy_full_account(self):
+        """Копировать полный аккаунт (email / password)."""
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            self.update_status("Выберите аккаунт для копирования")
+            return
+        
+        idx = selection[0]
+        if idx < len(self.accounts_data):
+            acc = self.accounts_data[idx]
+            full_text = f"{acc['email']} / {acc['password']}"
+            pyperclip.copy(full_text)
+            self.update_status(f"Скопировано: {acc['email']} / ***")
+    
+    def _show_hotkey_settings(self):
+        """Открыть окно настроек горячих клавиш."""
+        def on_save(new_hotkeys):
+            self.hotkey_settings.register_all()
+        
+        theme_name = self.params.get("theme", "light")
+        show_settings_window(self.root, theme_name, on_save=on_save)
+    
+    def generate_random_person(self):
+        """Генерация случайных данных о человеке."""
+        # Генерируем имя (только имя, без фамилии)
+        name = self.fake.first_name()
+        self.random_name_var.set(name)
+        
+        # Генерируем дату рождения (с 1975 по 2004 год)
+        start_date = datetime(1975, 1, 1)
+        end_date = datetime(2004, 12, 31)
+        days_between = (end_date - start_date).days
+        random_days = random.randint(0, days_between)
+        birthdate = start_date + timedelta(days=random_days)
+        self.random_birthdate_var.set(birthdate.strftime("%d.%m.%Y"))
+        
+        self.update_status(f"Сгенерировано: {name}")
+    
+    def copy_random_name(self):
+        """Копировать случайное имя."""
+        name = self.random_name_var.get()
+        if name:
+            pyperclip.copy(name)
+            self.update_status(f"Скопировано имя: {name[:20]}...")
+    
+    def copy_random_birthdate(self):
+        """Копировать случайную дату рождения."""
+        bdate = self.random_birthdate_var.get()
+        if bdate:
+            pyperclip.copy(bdate)
+            self.update_status(f"Скопирована дата: {bdate}")
+    
+    def copy_email(self):
+        """Копировать email выбранного аккаунта."""
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            self.update_status("Выберите аккаунт для копирования")
+            return
+        
+        idx = selection[0]
+        if idx < len(self.accounts_data):
+            acc = self.accounts_data[idx]
+            pyperclip.copy(acc['email'])
+            self.update_status(f"Скопирован email: {acc['email']}")
+    
+    def copy_pass(self):
+        """Копировать пароль выбранного аккаунта."""
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            self.update_status("Выберите аккаунт для копирования")
+            return
+        
+        idx = selection[0]
+        if idx < len(self.accounts_data):
+            acc = self.accounts_data[idx]
+            pyperclip.copy(acc['password'])
+            self.update_status(f"Скопирован пароль для: {acc['email']}")
     
     def toggle_pin(self):
         """Переключение режима 'Поверх всех окон'"""
@@ -498,10 +688,26 @@ class MailApp:
         self.file_btn_frame.config(bg=colors["panel_bg"])
         self.btn_frame.config(bg=colors["panel_bg"])
         
+        # Person frame (random data)
+        if hasattr(self, "person_frame"):
+            self.person_frame.config(bg=colors["panel_bg"], fg=colors["fg"])
+            for child in self.person_frame.winfo_children():
+                if isinstance(child, tk.Frame):
+                    child.config(bg=colors["panel_bg"])
+                    for subchild in child.winfo_children():
+                        if isinstance(subchild, tk.Label):
+                            subchild.config(bg=colors["panel_bg"], fg=colors["fg"])
+                        elif isinstance(subchild, tk.Entry):
+                            subchild.config(readonlybackground=colors["entry_bg"], fg=colors["entry_fg"])
+                        elif isinstance(subchild, tk.Button):
+                            subchild.config(bg=colors["btn_bg"], fg=colors["btn_fg"], activebackground=colors["btn_bg"], activeforeground=colors["btn_fg"])
+                elif isinstance(child, tk.Button):
+                    child.config(bg=colors["btn_bg"], fg=colors["btn_fg"], activebackground=colors["btn_bg"], activeforeground=colors["btn_fg"])
+        
         # Buttons (Generic)
         generic_btns = [
             self.btn_reload, self.btn_open_file, self.btn_open_excel,
-            self.btn_copy_email, self.btn_copy_pass, self.btn_sk, self.btn_minesweeper
+            self.btn_copy_email, self.btn_copy_pass, self.btn_sk, self.btn_minesweeper, self.btn_hotkey_settings
         ]
         for btn in generic_btns:
             btn.config(bg=colors["btn_bg"], fg=colors["btn_fg"], activebackground=colors["btn_bg"], activeforeground=colors["btn_fg"], relief=tk.FLAT, bd=0)
