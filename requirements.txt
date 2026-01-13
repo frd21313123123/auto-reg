@@ -5,3 +5,4 @@ selenium
 webdriver-manager
 tkhtmlview
 openpyxl
+keyboard
