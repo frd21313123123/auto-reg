@@ -36,6 +36,7 @@ class MailApp:
         self.root = root
         self.root.title("Mail.tm — регистрация и почтовый клиент")
         self.root.geometry("1000x650")
+        self.root.overrideredirect(True)
         
         # Переменные состояния
         self.accounts_data = []
@@ -56,9 +57,35 @@ class MailApp:
         threading.Thread(target=self.load_mail_tm_domains, daemon=True).start()
         
         # Статус бар
+        # Контейнер окна и кастомный заголовок
+        self.root_container = tk.Frame(root, bg="#0b0f1a", highlightthickness=1)
+        self.root_container.pack(fill=tk.BOTH, expand=True)
+
+        self.title_bar = tk.Frame(self.root_container, height=36, bg="#111827")
+        self.title_bar.pack(side=tk.TOP, fill=tk.X)
+
+        self.title_label = tk.Label(self.title_bar, text="Mail.tm — регистрация и почтовый клиент", bg="#111827", fg="#e2e8f0", font=FONT_BOLD)
+        self.title_label.pack(side=tk.LEFT, padx=10)
+
+        self._is_maximized = False
+        self._normal_geometry = None
+
+        self.btn_maximize = tk.Button(self.title_bar, text="□", width=3, bd=0, command=self.toggle_maximize, font=FONT_BOLD)
+        self.btn_maximize.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
+
+        self.btn_close = tk.Button(self.title_bar, text="✕", width=3, bd=0, command=self.root.destroy, font=FONT_BOLD)
+        self.btn_close.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
+
+        self.title_bar.bind("<ButtonPress-1>", self.start_move)
+        self.title_bar.bind("<B1-Motion>", self.do_move)
+        self.title_bar.bind("<Double-Button-1>", lambda e: self.toggle_maximize())
+        self.title_label.bind("<ButtonPress-1>", self.start_move)
+        self.title_label.bind("<B1-Motion>", self.do_move)
+        self.title_label.bind("<Double-Button-1>", lambda e: self.toggle_maximize())
+
         self.status_var = tk.StringVar()
         self.status_var.set("Готов к работе")
-        self.status_bar = tk.Label(root, textvariable=self.status_var, bd=1, relief=tk.FLAT, anchor=tk.W, font=FONT_SMALL)
+        self.status_bar = tk.Label(self.root_container, textvariable=self.status_var, bd=1, relief=tk.FLAT, anchor=tk.W, font=FONT_SMALL)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         
         # Стили
@@ -73,7 +100,7 @@ class MailApp:
         self.design_var = tk.StringVar(value=default_design)
         
         # --- Сплиттер (PanedWindow) ---
-        self.paned = tk.PanedWindow(root, orient=tk.HORIZONTAL, sashwidth=4, bg="#dcdcdc")
+        self.paned = tk.PanedWindow(self.root_container, orient=tk.HORIZONTAL, sashwidth=4, bg="#dcdcdc")
         self.paned.pack(fill=tk.BOTH, expand=True)
         
         # --- ЛЕВАЯ ПАНЕЛЬ (аккаунты) ---
@@ -87,7 +114,7 @@ class MailApp:
         # Тема (светлая/темная)
         self.lbl_theme = tk.Label(self.left_header, text="Тема", bg="#f0f0f0", font=FONT_SMALL)
         self.lbl_theme.pack(side=tk.LEFT)
-        self.theme_toggle = ThemedCheckbox(self.left_header, on_toggle=self.on_theme_toggle_click, size=24, checked=False)
+        self.theme_toggle = ThemedCheckbox(self.left_header, on_toggle=self.on_theme_toggle_click, size=28, checked=False)
         self.theme_toggle.pack(side=tk.LEFT, padx=(2, 10))
         
         # Кнопка создания
@@ -205,6 +232,37 @@ class MailApp:
         # Запуск цикла автообновления
         self.start_auto_refresh()
     
+    def start_move(self, event):
+        self._drag_start_x = event.x
+        self._drag_start_y = event.y
+
+    def do_move(self, event):
+        x = event.x_root - self._drag_start_x
+        y = event.y_root - self._drag_start_y
+        self.root.geometry(f"+{x}+{y}")
+
+    def minimize_window(self):
+        self.root.update_idletasks()
+        self.root.overrideredirect(False)
+        self.root.iconify()
+        self.root.bind("<Map>", self._restore_overrideredirect)
+
+    def _restore_overrideredirect(self, event=None):
+        self.root.unbind("<Map>")
+        self.root.overrideredirect(True)
+
+    def toggle_maximize(self):
+        if not self._is_maximized:
+            self._normal_geometry = self.root.geometry()
+            w = self.root.winfo_screenwidth()
+            h = self.root.winfo_screenheight()
+            self.root.geometry(f"{w}x{h}+0+0")
+            self._is_maximized = True
+        else:
+            if self._normal_geometry:
+                self.root.geometry(self._normal_geometry)
+            self._is_maximized = False
+
     def load_mail_tm_domains(self):
         """Загрузка доменов mail.tm"""
         try:
@@ -446,6 +504,31 @@ class MailApp:
         self.root.config(bg=colors["bg"])
         self.paned.config(bg=colors["header_bg"])
         self.status_bar.config(bg=colors["status_bg"], fg=colors["status_fg"])
+        if hasattr(self, "root_container"):
+            self.root_container.config(bg=colors["bg"], highlightbackground=colors["header_bg"])
+        if hasattr(self, "title_bar"):
+            self.title_bar.config(bg=colors["header_bg"])
+        if hasattr(self, "title_label"):
+            self.title_label.config(bg=colors["header_bg"], fg=colors["fg"])
+        if hasattr(self, "btn_maximize"):
+            self.btn_maximize.config(
+                bg=colors["header_bg"],
+                fg=colors["fg"],
+                activebackground=accent_bg,
+                activeforeground=accent_fg
+            )
+            self.btn_maximize.bind("<Enter>", lambda e: self.btn_maximize.config(bg=accent_bg, fg=accent_fg))
+            self.btn_maximize.bind("<Leave>", lambda e: self.btn_maximize.config(bg=colors["header_bg"], fg=colors["fg"]))
+        if hasattr(self, "btn_close"):
+            self.btn_close.config(
+                bg=colors["header_bg"],
+                fg=colors["fg"],
+                activebackground="#ef4444" if theme_name == "light" else "#b91c1c",
+                activeforeground="#ffffff"
+            )
+            hover_bg = "#ef4444" if theme_name == "light" else "#b91c1c"
+            self.btn_close.bind("<Enter>", lambda e: self.btn_close.config(bg=hover_bg, fg="#ffffff"))
+            self.btn_close.bind("<Leave>", lambda e: self.btn_close.config(bg=colors["header_bg"], fg=colors["fg"]))
         
         # Left Panel Components
         self.left_panel.config(bg=colors["panel_bg"])
