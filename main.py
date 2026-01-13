@@ -10,9 +10,24 @@ import re
 import subprocess
 import sys
 import tkinter as tk
+import ctypes
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REQUIREMENTS_FILE = os.path.join(BASE_DIR, "requirements.txt")
+
+
+def set_app_id():
+    """Register AppUserModelID so the app pins to taskbar like a normal program."""
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AutoReg.MailTM")
+    except Exception:
+        pass
+
+
+# Set AppUserModelID as early as possible, before any windows are created
+set_app_id()
 
 
 def _normalize_requirement(line):
@@ -20,7 +35,7 @@ def _normalize_requirement(line):
     if not line:
         return None
     line = line.split(";", 1)[0].strip()
-    name = re.split(r"[\\[=<>!~ ]", line, 1)[0].strip()
+    name = re.split(r"[\\[=<>!~ ]", line, maxsplit=1)[0].strip()
     return name or None
 
 

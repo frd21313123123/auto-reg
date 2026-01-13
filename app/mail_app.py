@@ -9,12 +9,14 @@ import requests
 import random
 import string
 import os
+import sys
 import pyperclip
 import threading
 import re
 import time
 import platform
 import winsound
+import ctypes
 from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -231,6 +233,8 @@ class MailApp:
         
         # Запуск цикла автообновления
         self.start_auto_refresh()
+        # Вызываем с задержкой для гарантии создания окна
+        self.root.after(100, self.ensure_taskbar_icon)
     
     def start_move(self, event):
         self._drag_start_x = event.x
@@ -240,6 +244,48 @@ class MailApp:
         x = event.x_root - self._drag_start_x
         y = event.y_root - self._drag_start_y
         self.root.geometry(f"+{x}+{y}")
+
+    def ensure_taskbar_icon(self):
+        """Подправляет стили окна, чтобы оно отображалось в панели задач с иконкой."""
+        if sys.platform != "win32":
+            return
+        
+        # Устанавливаем иконку окна
+        try:
+            icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "icon.ico")
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+        except Exception:
+            pass
+        
+        # Исправляем отображение в панели задач для borderless окна
+        try:
+            # Ждём пока окно полностью создастся
+            self.root.update_idletasks()
+            
+            # Получаем правильный HWND через frame
+            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            if hwnd == 0:
+                hwnd = self.root.winfo_id()
+            
+            user32 = ctypes.windll.user32
+            GWL_EXSTYLE = -20
+            WS_EX_APPWINDOW = 0x00040000
+            WS_EX_TOOLWINDOW = 0x00000080
+            
+            # Получаем текущий стиль
+            style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            # Добавляем APPWINDOW и убираем TOOLWINDOW
+            style = (style | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
+            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+            
+            # Скрываем и показываем для применения изменений
+            SW_HIDE = 0
+            SW_SHOW = 5
+            user32.ShowWindow(hwnd, SW_HIDE)
+            user32.ShowWindow(hwnd, SW_SHOW)
+        except Exception as e:
+            print(f"[taskbar] Error: {e}")
 
     def minimize_window(self):
         self.root.update_idletasks()
