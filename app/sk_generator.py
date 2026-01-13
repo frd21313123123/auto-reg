@@ -9,7 +9,7 @@ import pyperclip
 from datetime import datetime
 from faker import Faker
 
-from themes import THEMES
+from .themes import THEMES
 
 
 def show_sk_window(parent, theme_name="light"):

@@ -19,14 +19,14 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 
-from config import (
+from .config import (
     API_URL, ACCOUNTS_FILE, EXCEL_FILE,
     STATUS_COLORS, FONT_BASE, FONT_SMALL, FONT_BOLD, FONT_TITLE
 )
-from themes import THEMES
-from widgets import AnimatedToggle
-from imap_client import IMAPClient
-from sk_generator import show_sk_window
+from .themes import THEMES
+from .widgets import ThemedCheckbox
+from .imap_client import IMAPClient
+from .sk_generator import show_sk_window
 
 
 class MailApp:
@@ -87,7 +87,7 @@ class MailApp:
         # Тема (светлая/темная)
         self.lbl_theme = tk.Label(self.left_header, text="Тема", bg="#f0f0f0", font=FONT_SMALL)
         self.lbl_theme.pack(side=tk.LEFT)
-        self.theme_toggle = AnimatedToggle(self.left_header, on_toggle=self.on_theme_toggle_click, width=40, height=20)
+        self.theme_toggle = ThemedCheckbox(self.left_header, on_toggle=self.on_theme_toggle_click, size=24, checked=False)
         self.theme_toggle.pack(side=tk.LEFT, padx=(2, 10))
         
         # Кнопка создания
@@ -438,6 +438,9 @@ class MailApp:
         colors = THEMES[theme_name]
         accent_bg = colors.get("accent", colors["btn_bg"])
         accent_fg = colors.get("accent_fg", colors["btn_fg"])
+        if hasattr(self, "theme_toggle"):
+            self.theme_toggle.set_checked(theme_name == "dark")
+            self.theme_toggle.set_theme(colors, accent_bg)
         
         # Root
         self.root.config(bg=colors["bg"])
@@ -451,6 +454,14 @@ class MailApp:
         for widget in self.left_header.winfo_children():
             if isinstance(widget, tk.Label):
                 widget.config(bg=colors["panel_bg"], fg=colors["fg"])
+            elif isinstance(widget, tk.Checkbutton):
+                widget.config(
+                    bg=colors["panel_bg"],
+                    fg=colors["fg"],
+                    activebackground=colors["panel_bg"],
+                    activeforeground=colors["fg"],
+                    selectcolor=accent_bg
+                )
         
         self.lbl_saved.config(bg=colors["panel_bg"], fg=colors["fg"])
         self.file_btn_frame.config(bg=colors["panel_bg"])
@@ -481,9 +492,31 @@ class MailApp:
         self.lbl_current_email.config(bg=colors["header_bg"], fg=colors["fg"])
         self.lbl_msg_title.config(bg=colors["bg"], fg=colors["fg"])
         self.btn_refresh.config(bg=accent_bg, fg=accent_fg, activebackground=accent_bg, activeforeground=accent_fg)
-        self.btn_nr.config(bg=colors["btn_bg"], fg=colors["btn_fg"])
-        self.btn_reg.config(bg="#B3E5FC", fg="black")
-        self.btn_plus.config(bg="#80DEEA", fg="black")
+        status_btn_fg = "#0b1220" if theme_name == "light" else "#e2e8f0"
+        self.btn_nr.config(
+            bg=STATUS_COLORS["not_registered"][theme_name],
+            fg=status_btn_fg,
+            activebackground=STATUS_COLORS["not_registered"][theme_name],
+            activeforeground=status_btn_fg,
+            relief=tk.FLAT,
+            bd=0
+        )
+        self.btn_reg.config(
+            bg=STATUS_COLORS["registered"][theme_name],
+            fg=status_btn_fg,
+            activebackground=STATUS_COLORS["registered"][theme_name],
+            activeforeground=status_btn_fg,
+            relief=tk.FLAT,
+            bd=0
+        )
+        self.btn_plus.config(
+            bg=STATUS_COLORS["plus"][theme_name],
+            fg=status_btn_fg,
+            activebackground=STATUS_COLORS["plus"][theme_name],
+            activeforeground=status_btn_fg,
+            relief=tk.FLAT,
+            bd=0
+        )
         
         # Text
         self.msg_text.config(bg=colors["text_bg"], fg=colors["text_fg"], insertbackground=colors["fg"], relief=tk.FLAT, borderwidth=1, highlightthickness=0)
@@ -536,11 +569,12 @@ class MailApp:
             if i < len(self.accounts_data):
                 status = self.accounts_data[i].get("status", "not_registered")
                 color = STATUS_COLORS.get(status, {}).get(theme, "white")
-                fg_color = "#111827" if theme == "light" else "#e2e8f0"
-                if status in ("registered", "plus"):
-                    fg_color = "#0b1220"
-                if status == "not_registered" and theme == "dark":
+                if theme == "dark":
                     fg_color = "#e2e8f0"
+                else:
+                    fg_color = "#111827"
+                    if status in ("registered", "plus"):
+                        fg_color = "#0b1220"
                 
                 self.acc_listbox.itemconfig(i, {'bg': color, 'fg': fg_color})
     

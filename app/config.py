@@ -6,16 +6,16 @@
 import os
 
 # --- ПУТИ И URL ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API_URL = "https://api.mail.tm"
 ACCOUNTS_FILE = os.path.join(BASE_DIR, "accounts.txt")
 EXCEL_FILE = os.path.join(BASE_DIR, "accounts.xlsx")
 
 # --- ЦВЕТА СТАТУСОВ ---
 STATUS_COLORS = {
-    "not_registered": {"light": "#f8fafc", "dark": "#1f2937"},
-    "registered": {"light": "#dbeafe", "dark": "#2563eb"},
-    "plus": {"light": "#ccfbf1", "dark": "#0f766e"}
+    "not_registered": {"light": "#f8fafc", "dark": "#0f172a"},
+    "registered": {"light": "#dbeafe", "dark": "#1e3a8a"},
+    "plus": {"light": "#ccfbf1", "dark": "#134e4a"}
 }
 
 # --- ШРИФТЫ ---
