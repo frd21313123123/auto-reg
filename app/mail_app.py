@@ -39,7 +39,14 @@ class MailApp:
         self.root = root
         self.root.title("Mail.tm — регистрация и почтовый клиент")
         self.root.geometry("1000x650")
-        self.root.overrideredirect(True)
+        
+        # Устанавливаем иконку окна
+        try:
+            icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "icon.ico")
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+        except Exception:
+            pass
         
         # Переменные состояния
         self.accounts_data = []
@@ -60,35 +67,9 @@ class MailApp:
         # Загружаем домены mail.tm в фоне
         threading.Thread(target=self.load_mail_tm_domains, daemon=True).start()
         
-        # Статус бар
-        # Контейнер окна и кастомный заголовок
-        self.root_container = tk.Frame(root, bg="#0b0f1a", highlightthickness=1)
+        # Основной контейнер
+        self.root_container = tk.Frame(root, bg="#f0f0f0")
         self.root_container.pack(fill=tk.BOTH, expand=True)
-
-        self.title_bar = tk.Frame(self.root_container, height=36, bg="#111827")
-        self.title_bar.pack(side=tk.TOP, fill=tk.X)
-
-        self.title_label = tk.Label(self.title_bar, text="Mail.tm — регистрация и почтовый клиент", bg="#111827", fg="#e2e8f0", font=FONT_BOLD)
-        self.title_label.pack(side=tk.LEFT, padx=10)
-
-        self._is_maximized = False
-        self._normal_geometry = None
-
-        self.btn_maximize = tk.Button(self.title_bar, text="□", width=3, bd=0, command=self.toggle_maximize, font=FONT_BOLD)
-        self.btn_maximize.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
-
-        self.btn_pin = tk.Button(self.title_bar, text="⚓", width=3, bd=0, command=self.toggle_pin, font=FONT_BOLD)
-        self.btn_pin.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
-
-        self.btn_close = tk.Button(self.title_bar, text="✕", width=3, bd=0, command=self.root.destroy, font=FONT_BOLD)
-        self.btn_close.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
-
-        self.title_bar.bind("<ButtonPress-1>", self.start_move)
-        self.title_bar.bind("<B1-Motion>", self.do_move)
-        self.title_bar.bind("<Double-Button-1>", lambda e: self.toggle_maximize())
-        self.title_label.bind("<ButtonPress-1>", self.start_move)
-        self.title_label.bind("<B1-Motion>", self.do_move)
-        self.title_label.bind("<Double-Button-1>", lambda e: self.toggle_maximize())
 
         self.status_var = tk.StringVar()
         self.status_var.set("Готов к работе")
@@ -242,98 +223,11 @@ class MailApp:
         
         # Запуск цикла автообновления
         self.start_auto_refresh()
-        # Вызываем с задержкой для гарантии создания окна
-        self.root.after(100, self.ensure_taskbar_icon)
     
-    def start_move(self, event):
-        self._drag_start_x = event.x
-        self._drag_start_y = event.y
-
-    def do_move(self, event):
-        x = event.x_root - self._drag_start_x
-        y = event.y_root - self._drag_start_y
-        self.root.geometry(f"+{x}+{y}")
-
-    def ensure_taskbar_icon(self):
-        """Подправляет стили окна, чтобы оно отображалось в панели задач с иконкой."""
-        if sys.platform != "win32":
-            return
-        
-        # Устанавливаем иконку окна
-        try:
-            icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "icon.ico")
-            if os.path.exists(icon_path):
-                self.root.iconbitmap(icon_path)
-        except Exception:
-            pass
-        
-        # Исправляем отображение в панели задач для borderless окна
-        try:
-            # Ждём пока окно полностью создастся
-            self.root.update_idletasks()
-            
-            # Получаем правильный HWND через frame
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
-            if hwnd == 0:
-                hwnd = self.root.winfo_id()
-            
-            user32 = ctypes.windll.user32
-            GWL_EXSTYLE = -20
-            WS_EX_APPWINDOW = 0x00040000
-            WS_EX_TOOLWINDOW = 0x00000080
-            
-            # Получаем текущий стиль
-            style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            # Добавляем APPWINDOW и убираем TOOLWINDOW
-            style = (style | WS_EX_APPWINDOW) & ~WS_EX_TOOLWINDOW
-            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
-            
-            # Скрываем и показываем для применения изменений
-            SW_HIDE = 0
-            SW_SHOW = 5
-            user32.ShowWindow(hwnd, SW_HIDE)
-            user32.ShowWindow(hwnd, SW_SHOW)
-        except Exception as e:
-            print(f"[taskbar] Error: {e}")
-
-    def minimize_window(self):
-        self.root.update_idletasks()
-        self.root.overrideredirect(False)
-        self.root.iconify()
-        self.root.bind("<Map>", self._restore_overrideredirect)
-
-    def _restore_overrideredirect(self, event=None):
-        self.root.unbind("<Map>")
-        self.root.overrideredirect(True)
-
     def toggle_pin(self):
         """Переключение режима 'Поверх всех окон'"""
         self.is_pinned = not self.is_pinned
         self.root.wm_attributes("-topmost", self.is_pinned)
-        self.btn_pin.config(text="📌" if self.is_pinned else "⚓")
-        
-        # Обновляем цвет активного состояния, чтобы было видно что нажато
-        theme = self.params.get("theme", "light")
-        colors = THEMES[theme]
-        accent_bg = colors.get("accent", colors["btn_bg"])
-        accent_fg = colors.get("accent_fg", colors["btn_fg"])
-        
-        if self.is_pinned:
-           self.btn_pin.config(fg=accent_bg)
-        else:
-           self.btn_pin.config(fg=colors["fg"])
-
-    def toggle_maximize(self):
-        if not self._is_maximized:
-            self._normal_geometry = self.root.geometry()
-            w = self.root.winfo_screenwidth()
-            h = self.root.winfo_screenheight()
-            self.root.geometry(f"{w}x{h}+0+0")
-            self._is_maximized = True
-        else:
-            if self._normal_geometry:
-                self.root.geometry(self._normal_geometry)
-            self._is_maximized = False
 
     def load_mail_tm_domains(self):
         """Загрузка доменов mail.tm"""
@@ -582,41 +476,7 @@ class MailApp:
         self.paned.config(bg=colors["header_bg"])
         self.status_bar.config(bg=colors["status_bg"], fg=colors["status_fg"])
         if hasattr(self, "root_container"):
-            self.root_container.config(bg=colors["bg"], highlightbackground=colors["header_bg"])
-        if hasattr(self, "title_bar"):
-            self.title_bar.config(bg=colors["header_bg"])
-        if hasattr(self, "title_label"):
-            self.title_label.config(bg=colors["header_bg"], fg=colors["fg"])
-        if hasattr(self, "btn_maximize"):
-            self.btn_maximize.config(
-                bg=colors["header_bg"],
-                fg=colors["fg"],
-                activebackground=accent_bg,
-                activeforeground=accent_fg
-            )
-            self.btn_maximize.bind("<Enter>", lambda e: self.btn_maximize.config(bg=accent_bg, fg=accent_fg))
-            self.btn_maximize.bind("<Leave>", lambda e: self.btn_maximize.config(bg=colors["header_bg"], fg=colors["fg"]))
-        if hasattr(self, "btn_pin"):
-            pin_fg = accent_bg if self.is_pinned else colors["fg"]
-            self.btn_pin.config(
-                bg=colors["header_bg"],
-                fg=pin_fg,
-                activebackground=accent_bg,
-                activeforeground=accent_fg,
-                text="📌" if self.is_pinned else "⚓"
-            )
-            self.btn_pin.bind("<Enter>", lambda e: self.btn_pin.config(bg=accent_bg, fg=accent_fg))
-            self.btn_pin.bind("<Leave>", lambda e: self.btn_pin.config(bg=colors["header_bg"], fg=accent_bg if self.is_pinned else colors["fg"]))
-        if hasattr(self, "btn_close"):
-            self.btn_close.config(
-                bg=colors["header_bg"],
-                fg=colors["fg"],
-                activebackground="#ef4444" if theme_name == "light" else "#b91c1c",
-                activeforeground="#ffffff"
-            )
-            hover_bg = "#ef4444" if theme_name == "light" else "#b91c1c"
-            self.btn_close.bind("<Enter>", lambda e: self.btn_close.config(bg=hover_bg, fg="#ffffff"))
-            self.btn_close.bind("<Leave>", lambda e: self.btn_close.config(bg=colors["header_bg"], fg=colors["fg"]))
+            self.root_container.config(bg=colors["bg"])
         
         # Left Panel Components
         self.left_panel.config(bg=colors["panel_bg"])

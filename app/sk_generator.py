@@ -16,70 +16,16 @@ def show_sk_window(parent, theme_name="light"):
     """Открывает окно с генератором данных для Южной Кореи."""
     win = tk.Toplevel(parent)
     win.title("South Korea Data Generator")
-    win.geometry("500x550")
-    win.overrideredirect(True)
+    win.geometry("500x500")
 
     colors = THEMES[theme_name]
     accent_bg = colors.get("accent", "#2563eb")
     accent_fg = colors.get("accent_fg", colors["fg"])
     win.config(bg=colors["bg"])
 
-    # Container + title bar
-    root_container = tk.Frame(win, bg=colors["bg"], highlightthickness=1, highlightbackground=colors["header_bg"])
-    root_container.pack(fill=tk.BOTH, expand=True)
-
-    title_bar = tk.Frame(root_container, height=34, bg=colors["header_bg"])
-    title_bar.pack(side=tk.TOP, fill=tk.X)
-
-    title_label = tk.Label(title_bar, text="South Korea Data Generator", bg=colors["header_bg"], fg=colors["fg"])
-    title_label.pack(side=tk.LEFT, padx=10)
-
-    _is_maximized = {"value": False}
-    _normal_geometry = {"value": None}
-
-    def toggle_maximize():
-        if not _is_maximized["value"]:
-            _normal_geometry["value"] = win.geometry()
-            w = win.winfo_screenwidth()
-            h = win.winfo_screenheight()
-            win.geometry(f"{w}x{h}+0+0")
-            _is_maximized["value"] = True
-        else:
-            if _normal_geometry["value"]:
-                win.geometry(_normal_geometry["value"])
-            _is_maximized["value"] = False
-
-    btn_maximize = tk.Button(title_bar, text="□", width=3, bd=0, command=toggle_maximize, font=("Segoe UI", 10, "bold"))
-    btn_maximize.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
-
-    btn_close = tk.Button(title_bar, text="✕", width=3, bd=0, command=win.destroy, font=("Segoe UI", 10, "bold"))
-    btn_close.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
-
-    btn_maximize.config(bg=colors["header_bg"], fg=colors["fg"], activebackground=accent_bg, activeforeground=accent_fg)
-    btn_close.config(bg=colors["header_bg"], fg=colors["fg"], activebackground="#b91c1c", activeforeground="#ffffff")
-    btn_maximize.bind("<Enter>", lambda e: btn_maximize.config(bg=accent_bg, fg=accent_fg))
-    btn_maximize.bind("<Leave>", lambda e: btn_maximize.config(bg=colors["header_bg"], fg=colors["fg"]))
-    btn_close.bind("<Enter>", lambda e: btn_close.config(bg="#b91c1c", fg="#ffffff"))
-    btn_close.bind("<Leave>", lambda e: btn_close.config(bg=colors["header_bg"], fg=colors["fg"]))
-
-    def start_move(event):
-        win._drag_start_x = event.x
-        win._drag_start_y = event.y
-
-    def do_move(event):
-        x = event.x_root - win._drag_start_x
-        y = event.y_root - win._drag_start_y
-        win.geometry(f"+{x}+{y}")
-
-    title_bar.bind("<ButtonPress-1>", start_move)
-    title_bar.bind("<B1-Motion>", do_move)
-    title_bar.bind("<Double-Button-1>", lambda e: toggle_maximize())
-    title_label.bind("<ButtonPress-1>", start_move)
-    title_label.bind("<B1-Motion>", do_move)
-    title_label.bind("<Double-Button-1>", lambda e: toggle_maximize())
-
-    content_frame = tk.Frame(root_container, bg=colors["bg"])
-    content_frame.pack(fill=tk.BOTH, expand=True)
+    # Основной контейнер
+    content_frame = tk.Frame(win, bg=colors["bg"])
+    content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     fake_kr = Faker("ko_KR")
     lbl_font = ("Arial", 10, "bold")
@@ -126,7 +72,7 @@ def show_sk_window(parent, theme_name="light"):
         c_num, c_exp, c_cvv = generate_card()
         card_val.set(c_num)
         card_extra_val.set(f"Exp: {c_exp}  CVV: {c_cvv}")
-        city_val.set("Сеул")
+        city_val.set("서울")  # Seoul in Korean
         street_val.set(f"{fake_kr.street_name()} {fake_kr.building_number()}")
         postcode_val.set(fake_kr.postcode())
         addr_en_val.set(generate_eng_address())
