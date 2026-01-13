@@ -1,0 +1,7 @@
+requests
+faker
+pyperclip
+selenium
+webdriver-manager
+tkhtmlview
+openpyxl
