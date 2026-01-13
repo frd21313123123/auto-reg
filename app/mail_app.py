@@ -29,6 +29,7 @@ from .themes import THEMES
 from .widgets import ThemedCheckbox
 from .imap_client import IMAPClient
 from .sk_generator import show_sk_window
+from .minesweeper import show_minesweeper
 
 
 class MailApp:
@@ -54,6 +55,7 @@ class MailApp:
         self.auto_refresh_job = None
         self.stop_threads = False
         self.params = {"theme": "light"}
+        self.is_pinned = False  # State for "Always on Top"
         
         # Загружаем домены mail.tm в фоне
         threading.Thread(target=self.load_mail_tm_domains, daemon=True).start()
@@ -74,6 +76,9 @@ class MailApp:
 
         self.btn_maximize = tk.Button(self.title_bar, text="□", width=3, bd=0, command=self.toggle_maximize, font=FONT_BOLD)
         self.btn_maximize.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
+
+        self.btn_pin = tk.Button(self.title_bar, text="⚓", width=3, bd=0, command=self.toggle_pin, font=FONT_BOLD)
+        self.btn_pin.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
 
         self.btn_close = tk.Button(self.title_bar, text="✕", width=3, bd=0, command=self.root.destroy, font=FONT_BOLD)
         self.btn_close.pack(side=tk.RIGHT, padx=(2, 0), pady=4)
@@ -156,6 +161,10 @@ class MailApp:
         # Кнопка для генерации SK данных
         self.btn_sk = tk.Button(self.btn_frame, text="SK Info", command=self._show_sk_window, font=FONT_SMALL)
         self.btn_sk.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        
+        # Кнопка для игры в Сапер
+        self.btn_minesweeper = tk.Button(self.btn_frame, text="💣", command=self._show_minesweeper, font=("Segoe UI", 12), width=3)
+        self.btn_minesweeper.pack(side=tk.LEFT, padx=2)
         
         # Список аккаунтов
         self.acc_listbox = tk.Listbox(self.left_panel, height=20, exportselection=False)
@@ -297,6 +306,23 @@ class MailApp:
         self.root.unbind("<Map>")
         self.root.overrideredirect(True)
 
+    def toggle_pin(self):
+        """Переключение режима 'Поверх всех окон'"""
+        self.is_pinned = not self.is_pinned
+        self.root.wm_attributes("-topmost", self.is_pinned)
+        self.btn_pin.config(text="📌" if self.is_pinned else "⚓")
+        
+        # Обновляем цвет активного состояния, чтобы было видно что нажато
+        theme = self.params.get("theme", "light")
+        colors = THEMES[theme]
+        accent_bg = colors.get("accent", colors["btn_bg"])
+        accent_fg = colors.get("accent_fg", colors["btn_fg"])
+        
+        if self.is_pinned:
+           self.btn_pin.config(fg=accent_bg)
+        else:
+           self.btn_pin.config(fg=colors["fg"])
+
     def toggle_maximize(self):
         if not self._is_maximized:
             self._normal_geometry = self.root.geometry()
@@ -324,6 +350,11 @@ class MailApp:
         """Открывает окно генератора данных Южной Кореи"""
         theme_name = self.params.get("theme", "light")
         show_sk_window(self.root, theme_name)
+    
+    def _show_minesweeper(self):
+        """Открывает окно игры Сапер"""
+        theme_name = self.params.get("theme", "light")
+        show_minesweeper(self.root, theme_name)
     
     def play_notification_sound(self, count=1):
         """Проигрывает звук при появлении новых писем"""
@@ -565,6 +596,17 @@ class MailApp:
             )
             self.btn_maximize.bind("<Enter>", lambda e: self.btn_maximize.config(bg=accent_bg, fg=accent_fg))
             self.btn_maximize.bind("<Leave>", lambda e: self.btn_maximize.config(bg=colors["header_bg"], fg=colors["fg"]))
+        if hasattr(self, "btn_pin"):
+            pin_fg = accent_bg if self.is_pinned else colors["fg"]
+            self.btn_pin.config(
+                bg=colors["header_bg"],
+                fg=pin_fg,
+                activebackground=accent_bg,
+                activeforeground=accent_fg,
+                text="📌" if self.is_pinned else "⚓"
+            )
+            self.btn_pin.bind("<Enter>", lambda e: self.btn_pin.config(bg=accent_bg, fg=accent_fg))
+            self.btn_pin.bind("<Leave>", lambda e: self.btn_pin.config(bg=colors["header_bg"], fg=accent_bg if self.is_pinned else colors["fg"]))
         if hasattr(self, "btn_close"):
             self.btn_close.config(
                 bg=colors["header_bg"],
@@ -599,7 +641,7 @@ class MailApp:
         # Buttons (Generic)
         generic_btns = [
             self.btn_reload, self.btn_open_file, self.btn_open_excel,
-            self.btn_copy_email, self.btn_copy_pass, self.btn_sk
+            self.btn_copy_email, self.btn_copy_pass, self.btn_sk, self.btn_minesweeper
         ]
         for btn in generic_btns:
             btn.config(bg=colors["btn_bg"], fg=colors["btn_fg"], activebackground=colors["btn_bg"], activeforeground=colors["btn_fg"], relief=tk.FLAT, bd=0)
@@ -781,7 +823,7 @@ class MailApp:
         if success:
             self.last_message_ids = set()
             self.update_status(f"Вход выполнен ({self.account_type.upper()}). Получаю письма...")
-            self.refresh_inbox_thread()
+            self.refresh_inbox_thread(show_loading=True)
         else:
             self.update_status("Ошибка входа (API и IMAP недоступны)")
             self.current_token = None
@@ -790,7 +832,7 @@ class MailApp:
     def on_manual_refresh(self):
         """Ручное обновление писем"""
         self.update_status("Обновление писем...")
-        threading.Thread(target=self.refresh_inbox_thread, daemon=True).start()
+        threading.Thread(target=lambda: self.refresh_inbox_thread(show_loading=True), daemon=True).start()
     
     def start_auto_refresh(self):
         """Запускает таймер автообновления"""
@@ -806,7 +848,7 @@ class MailApp:
         
         self.root.after(self.refresh_interval_ms, self.start_auto_refresh)
     
-    def refresh_inbox_thread(self):
+    def refresh_inbox_thread(self, show_loading=False):
         """Поток обновления писем"""
         if self.is_refreshing:
             return
@@ -816,8 +858,10 @@ class MailApp:
             return
         
         self.is_refreshing = True
-        self.root.after(0, self.show_inbox_loading_state)
-        self.root.after(0, self.show_loading_messages_text)
+        # Показываем загрузку только при ручном обновлении
+        if show_loading:
+            self.root.after(0, self.show_inbox_loading_state)
+            self.root.after(0, self.show_loading_messages_text)
         try:
             messages = []
             if self.account_type == "api":
@@ -838,6 +882,7 @@ class MailApp:
     
     def _update_inbox_ui(self, messages):
         """Обновление таблицы писем"""
+        # Сохраняем выбранное письмо
         selected = self.tree.selection()
         selected_id = None
         if selected:
@@ -845,10 +890,13 @@ class MailApp:
             if len(values) >= 4:
                 selected_id = values[3]
         
+        # Очищаем список
         for item in self.tree.get_children():
             self.tree.delete(item)
         
         seen_ids = set()
+        new_selection = None
+        
         for msg in messages:
             sender = msg.get('from', {}).get('address', "Неизвестно")
             subject = msg.get('subject') or "(без темы)"
@@ -863,10 +911,17 @@ class MailApp:
             item_id = self.tree.insert("", 0, values=(sender, subject, date_str, msg_id))
             seen_ids.add(msg_id)
             
+            # Восстанавливаем выделение
             if selected_id and msg_id == selected_id:
-                self.tree.selection_set(item_id)
+                new_selection = item_id
         
-        if not messages:
+        # Восстанавливаем выделение и прокрутку
+        if new_selection:
+            self.tree.selection_set(new_selection)
+            self.tree.see(new_selection)
+        
+        # Очищаем текст только если нет писем И не было выбрано письмо
+        if not messages and not selected_id:
             self.msg_text.delete(1.0, tk.END)
             self.msg_text.insert(tk.END, "Нет новых писем.")
         
