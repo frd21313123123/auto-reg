@@ -1,8 +1,8 @@
 {
   "email": "ctrl+\u0439",
   "password": "ctrl+\u0443",
-  "paste_account": "ctrl+\u043c",
-  "copy_account": "ctrl+\u0441",
+  "paste_account": "ctrl+shift+\u041c",
+  "copy_account": "ctrl+shift+\u0421",
   "random_name": "alt+\u0439",
   "random_birthdate": "alt+\u0443",
   "card": "ctrl+1",

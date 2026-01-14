@@ -105,7 +105,8 @@ class HotkeySettings:
         for key, hotkey in self._hotkeys.items():
             if hotkey and key in self._callbacks:
                 try:
-                    keyboard.add_hotkey(hotkey, self._callbacks[key], suppress=True)
+                    # Don't use suppress=True as it blocks system hotkeys like Shift+Alt
+                    keyboard.add_hotkey(hotkey, self._callbacks[key], suppress=False)
                 except Exception as e:
                     print(f"Error registering hotkey {hotkey}: {e}")
         
@@ -186,31 +187,12 @@ def show_settings_window(parent, theme_name="light", on_save=None):
     
     def start_recording(entry, key):
         """Start recording hotkey when entry is clicked."""
-        if recording_entry["current"]:
-            # Stop previous recording
-            try:
-                keyboard.unhook_all()
-            except Exception:
-                pass
-        
+        # Reset previous recording state if any
         recording_entry["current"] = entry
         recording_entry["key"] = key
         entry.delete(0, tk.END)
         entry.insert(0, "Нажмите...")
         entry.config(fg="#888")
-        
-        def on_hotkey(event):
-            hotkey_str = keyboard.read_hotkey(suppress=False)
-            if hotkey_str:
-                entry.delete(0, tk.END)
-                entry.insert(0, hotkey_str)
-                entry.config(fg=colors.get("entry_fg", "#000000"))
-            recording_entry["current"] = None
-            recording_entry["key"] = None
-            try:
-                keyboard.unhook_all()
-            except Exception:
-                pass
         
         # Use keyboard library to capture the hotkey
         win.after(100, lambda: capture_with_keyboard(entry))
@@ -228,6 +210,19 @@ def show_settings_window(parent, theme_name="light", on_save=None):
         finally:
             recording_entry["current"] = None
             win.focus_set()
+    
+    def on_window_close():
+        """Handle window close - re-register hotkeys."""
+        # Unbind mousewheel to prevent errors after window closes
+        try:
+            canvas.unbind_all("<MouseWheel>")
+        except Exception:
+            pass
+        # Re-register all hotkeys to restore functionality
+        settings.register_all()
+        win.destroy()
+    
+    win.protocol("WM_DELETE_WINDOW", on_window_close)
     
     row = 0
     for key, label in HOTKEY_LABELS.items():
@@ -279,7 +274,7 @@ def show_settings_window(parent, theme_name="light", on_save=None):
             on_save(new_hotkeys)
         
         messagebox.showinfo("Сохранено", "Настройки горячих клавиш сохранены!")
-        win.destroy()
+        on_window_close()
     
     def reset_defaults():
         for key, entry in entries.items():
