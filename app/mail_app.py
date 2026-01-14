@@ -96,10 +96,12 @@ class MailApp:
         # --- ЛЕВАЯ ПАНЕЛЬ (аккаунты) ---
         self.left_panel = tk.Frame(self.paned, width=260, bg="#f0f0f0")
         self.paned.add(self.left_panel, minsize=200)
+        self.left_panel.grid_columnconfigure(0, weight=1)
+        self.left_panel.grid_rowconfigure(4, weight=1)
         
         # Заголовок левой панели (тема)
         self.left_header = tk.Frame(self.left_panel, bg="#f0f0f0")
-        self.left_header.pack(fill=tk.X, padx=10, pady=(10, 0))
+        self.left_header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
         
         # Тема (светлая/темная)
         self.lbl_theme = tk.Label(self.left_header, text="Тема", bg="#f0f0f0", font=FONT_SMALL)
@@ -109,15 +111,15 @@ class MailApp:
         
         # Кнопка создания
         self.btn_create = tk.Button(self.left_panel, text="Создать аккаунт", bg="#2563eb", fg="white", font=FONT_BOLD, command=self.start_create_account)
-        self.btn_create.pack(pady=10, padx=10, fill=tk.X)
+        self.btn_create.grid(row=1, column=0, sticky="ew", padx=10, pady=10)
         
         # Список аккаунтов
         self.lbl_saved = tk.Label(self.left_panel, text="Сохраненные аккаунты", bg="#f0f0f0", font=FONT_BOLD)
-        self.lbl_saved.pack(pady=(10, 0))
+        self.lbl_saved.grid(row=2, column=0, sticky="ew", padx=10, pady=(10, 0))
         
         # Панель кнопок файла
         self.file_btn_frame = tk.Frame(self.left_panel, bg="#f0f0f0")
-        self.file_btn_frame.pack(pady=(0, 5), padx=10, fill=tk.X)
+        self.file_btn_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 5))
         
         # Кнопка обновления списка
         self.btn_reload = tk.Button(self.file_btn_frame, text="Обновить", font=FONT_SMALL, command=self.load_accounts_from_file)
@@ -133,7 +135,7 @@ class MailApp:
         
         # Кнопки управления аккаунтом
         self.btn_frame = tk.Frame(self.left_panel, bg="#f0f0f0")
-        self.btn_frame.pack(side=tk.BOTTOM, pady=10, fill=tk.X, padx=10)
+        self.btn_frame.grid(row=6, column=0, sticky="ew", padx=10, pady=10)
         
         self.btn_copy_email = tk.Button(self.btn_frame, text="Email", command=self.copy_email, font=FONT_SMALL)
         self.btn_copy_email.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
@@ -155,7 +157,7 @@ class MailApp:
         
         # Список аккаунтов
         self.acc_listbox = tk.Listbox(self.left_panel, height=20, exportselection=False)
-        self.acc_listbox.pack(pady=5, padx=10, fill=tk.BOTH, expand=True)
+        self.acc_listbox.grid(row=4, column=0, sticky="nsew", padx=10, pady=5)
         self.acc_listbox.bind('<<ListboxSelect>>', self.on_account_select)
         
         # Контекстное меню для аккаунтов
@@ -171,7 +173,7 @@ class MailApp:
         
         # --- ПАНЕЛЬ СЛУЧАЙНЫХ ДАННЫХ ---
         self.person_frame = tk.LabelFrame(self.left_panel, text="👤 Случайные данные", font=FONT_BOLD, bg="#f0f0f0")
-        self.person_frame.pack(fill=tk.X, padx=10, pady=(5, 10))
+        self.person_frame.grid(row=5, column=0, sticky="ew", padx=10, pady=(5, 10))
         
         # Инициализация Faker (английский)
         self.fake = Faker("en_US")
@@ -199,7 +201,7 @@ class MailApp:
         self.btn_copy_random_bdate.pack(side=tk.LEFT, padx=2)
         
         # Кнопка генерации
-        self.btn_generate_person = tk.Button(self.person_frame, text="🔄 Сгенерировать", command=self.generate_random_person, font=FONT_SMALL)
+        self.btn_generate_person = tk.Button(self.person_frame, text="🔄 Новые данные", command=self.generate_random_person, font=FONT_SMALL)
         self.btn_generate_person.pack(fill=tk.X, padx=5, pady=5)
         
         # Генерируем случайные данные при старте
@@ -226,10 +228,10 @@ class MailApp:
         self.btn_nr = tk.Button(self.status_frame, text="Не рег", bg="white", font=FONT_SMALL, command=lambda: self.set_account_status("not_registered"))
         self.btn_nr.pack(side=tk.LEFT, padx=2)
         
-        self.btn_reg = tk.Button(self.status_frame, text="Рег", bg="#B3E5FC", font=FONT_SMALL, command=lambda: self.set_account_status("registered"))
+        self.btn_reg = tk.Button(self.status_frame, text="Рег", bg="#d9e1f2", font=FONT_SMALL, command=lambda: self.set_account_status("registered"))
         self.btn_reg.pack(side=tk.LEFT, padx=2)
         
-        self.btn_plus = tk.Button(self.status_frame, text="Plus", bg="#80DEEA", font=FONT_SMALL, command=lambda: self.set_account_status("plus"))
+        self.btn_plus = tk.Button(self.status_frame, text="Plus", bg="#46bdc6", font=FONT_SMALL, command=lambda: self.set_account_status("plus"))
         self.btn_plus.pack(side=tk.LEFT, padx=2)
         
         # Список писем (Treeview)
@@ -485,9 +487,10 @@ class MailApp:
             ws = wb.active
             ws.title = "Аккаунты"
             
-            headers = ["Логин/Пароль", "Логин", "Пароль", "Подписка"]
+            headers = ["Логин/Пароль", "Логин", "Пароль"]
             header_fill = PatternFill(start_color="4CAF50", end_color="4CAF50", fill_type="solid")
-            header_font_white = Font(bold=True, size=11, color="FFFFFF")
+            header_font_white = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+            data_font = Font(name="Arial", size=10)
             
             for col, header in enumerate(headers, 1):
                 cell = ws.cell(row=1, column=col, value=header)
@@ -498,18 +501,12 @@ class MailApp:
             ws.column_dimensions['A'].width = 50
             ws.column_dimensions['B'].width = 35
             ws.column_dimensions['C'].width = 20
-            ws.column_dimensions['D'].width = 20
             
-            status_labels = {
-                "not_registered": "Не зарегистрирован",
-                "registered": "Зарегистрирован",
-                "plus": "Plus"
-            }
             
             status_fills = {
                 "not_registered": PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"),
-                "registered": PatternFill(start_color="B3E5FC", end_color="B3E5FC", fill_type="solid"),
-                "plus": PatternFill(start_color="80DEEA", end_color="80DEEA", fill_type="solid")
+                "registered": PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"),
+                "plus": PatternFill(start_color="46BDC6", end_color="46BDC6", fill_type="solid")
             }
             
             for row, account in enumerate(self.accounts_data, 2):
@@ -520,12 +517,11 @@ class MailApp:
                 ws.cell(row=row, column=1, value=f"{email} / {password}")
                 ws.cell(row=row, column=2, value=email)
                 ws.cell(row=row, column=3, value=password)
-                status_cell = ws.cell(row=row, column=4, value=status_labels.get(status, status))
-                status_cell.alignment = Alignment(horizontal="center")
-                
                 row_fill = status_fills.get(status, status_fills["not_registered"])
-                for col in range(1, 5):
-                    ws.cell(row=row, column=col).fill = row_fill
+                for col in range(1, 4):
+                    cell = ws.cell(row=row, column=col)
+                    cell.fill = row_fill
+                    cell.font = data_font
             
             wb.save(EXCEL_FILE)
             

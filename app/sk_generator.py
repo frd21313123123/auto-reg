@@ -17,7 +17,7 @@ def show_sk_window(parent, theme_name="light"):
     """Открывает окно с генератором данных для Южной Кореи."""
     win = tk.Toplevel(parent)
     win.title("South Korea Data Generator")
-    win.geometry("500x550")
+    win.geometry("500x650")
 
     colors = THEMES[theme_name]
     accent_bg = colors.get("accent", "#2563eb")
@@ -35,9 +35,10 @@ def show_sk_window(parent, theme_name="light"):
     content_frame.columnconfigure(1, weight=1)
     
     # StringVars for data
-    name_val = tk.StringVar()
     card_val = tk.StringVar()
-    card_extra_val = tk.StringVar()
+    exp_val = tk.StringVar()
+    cvv_val = tk.StringVar()
+    name_val = tk.StringVar()
     city_val = tk.StringVar()
     street_val = tk.StringVar()
     postcode_val = tk.StringVar()
@@ -81,40 +82,73 @@ def show_sk_window(parent, theme_name="light"):
         name_val.set(fake_kr.name())
         c_num, c_exp, c_cvv = generate_card()
         card_val.set(c_num)
-        card_extra_val.set(f"Exp: {c_exp}  CVV: {c_cvv}")
+        exp_val.set(c_exp)
+        cvv_val.set(c_cvv)
         city_val.set("서울")  # Seoul in Korean
         street_val.set(f"{fake_kr.street_name()} {fake_kr.building_number()}")
         postcode_val.set(fake_kr.postcode())
         addr_en_val.set(generate_eng_address())
+
+    row_widgets = {}
+    highlight_bg = "#f59e0b"
+    default_label_bg = colors["bg"]
+    default_entry_bg = colors["entry_bg"]
+    default_label_fg = colors["fg"]
+    default_entry_fg = colors["entry_fg"]
+    cycle_keys = ["card", "exp_date", "cvv", "name", "city", "street", "postcode"]
+    cycle_index = {"value": 0}
+
+    def set_active_row(key):
+        for row_key, widgets in row_widgets.items():
+            is_active = row_key == key
+            lbl = widgets["label"]
+            entry = widgets["entry"]
+            if is_active:
+                lbl.config(bg=highlight_bg, fg=default_label_fg)
+                entry.config(readonlybackground=highlight_bg, fg=default_entry_fg)
+            else:
+                lbl.config(bg=default_label_bg, fg=default_label_fg)
+                entry.config(readonlybackground=default_entry_bg, fg=default_entry_fg)
+
+    def copy_value(key):
+        value = row_widgets[key]["value"]()
+        if value:
+            pyperclip.copy(value)
+        set_active_row(key)
+
+    def cycle_copy():
+        key = cycle_keys[cycle_index["value"]]
+        copy_value(key)
+        cycle_index["value"] = (cycle_index["value"] + 1) % len(cycle_keys)
 
     def copy_to_clipboard(text):
         pyperclip.copy(text)
     
     # Hotkey copy functions
     def copy_card():
-        pyperclip.copy(card_val.get())
+        copy_value("card")
+
+    def copy_exp_date():
+        copy_value("exp_date")
+
+    def copy_cvv():
+        copy_value("cvv")
     
     def copy_name():
-        pyperclip.copy(name_val.get())
+        copy_value("name")
     
     def copy_city():
-        pyperclip.copy(city_val.get())
+        copy_value("city")
     
     def copy_street():
-        pyperclip.copy(street_val.get())
+        copy_value("street")
     
     def copy_postcode():
-        pyperclip.copy(postcode_val.get())
+        copy_value("postcode")
     
     # Setup hotkeys
     hotkey_settings = HotkeySettings.get_instance()
-    hotkey_settings.set_callback("card", copy_card)
-    hotkey_settings.set_callback("name", copy_name)
-    hotkey_settings.set_callback("city", copy_city)
-    hotkey_settings.set_callback("street", copy_street)
-    hotkey_settings.set_callback("postcode", copy_postcode)
-    hotkey_settings.register_all()
-    
+
     def on_settings_save(new_hotkeys):
         """Called when settings are saved."""
         hotkey_settings.register_all()
@@ -129,9 +163,19 @@ def show_sk_window(parent, theme_name="light"):
     
     win.protocol("WM_DELETE_WINDOW", on_close)
 
+    hotkey_settings.set_callback("card", copy_card)
+    hotkey_settings.set_callback("name", copy_name)
+    hotkey_settings.set_callback("city", copy_city)
+    hotkey_settings.set_callback("street", copy_street)
+    hotkey_settings.set_callback("postcode", copy_postcode)
+    hotkey_settings.set_callback("sk_cycle", cycle_copy)
+    hotkey_settings.set_callback("sk_close", on_close)
+    hotkey_settings.register_all()
+
     def create_row(parent_frame, label_text, variable, row, copy_func=None):
-        tk.Label(parent_frame, text=label_text, font=lbl_font, anchor="w",
-                 bg=colors["bg"], fg=colors["fg"]).grid(row=row, column=0, padx=10, pady=(10, 0), sticky="w")
+        lbl = tk.Label(parent_frame, text=label_text, font=lbl_font, anchor="w",
+                       bg=colors["bg"], fg=colors["fg"])
+        lbl.grid(row=row, column=0, padx=10, pady=(10, 0), sticky="w")
 
         e = tk.Entry(parent_frame, textvariable=variable, font=val_font, state="readonly",
                      readonlybackground=colors["entry_bg"], fg=colors["entry_fg"])
@@ -145,26 +189,35 @@ def show_sk_window(parent, theme_name="light"):
         else:
             tk.Button(parent_frame, text="Copy", command=lambda: copy_to_clipboard(variable.get()),
                       width=6, bg=btn_bg, fg=btn_fg).grid(row=row + 1, column=2, padx=5, pady=(0, 5))
+        return lbl, e
 
     r = 0
-    create_row(content_frame, "Имя (Name):", name_val, r)
+    lbl, entry = create_row(content_frame, "Номер карты:", card_val, r, copy_card)
+    row_widgets["card"] = {"label": lbl, "entry": entry, "value": card_val.get}
     r += 2
 
-    create_row(content_frame, "Номер карты:", card_val, r)
+    lbl, entry = create_row(content_frame, "Expiration Date:", exp_val, r, copy_exp_date)
+    row_widgets["exp_date"] = {"label": lbl, "entry": entry, "value": exp_val.get}
     r += 2
 
-    extra_color = "#aaa" if theme_name == "dark" else "#555"
-    tk.Label(content_frame, textvariable=card_extra_val, font=("Arial", 9),
-             fg=extra_color, bg=colors["bg"]).grid(row=r, column=0, columnspan=2, padx=10, sticky="w")
-    r += 1
-
-    create_row(content_frame, "Город (City):", city_val, r)
+    lbl, entry = create_row(content_frame, "CVV:", cvv_val, r, copy_cvv)
+    row_widgets["cvv"] = {"label": lbl, "entry": entry, "value": cvv_val.get}
     r += 2
 
-    create_row(content_frame, "Улица (Street):", street_val, r)
+    lbl, entry = create_row(content_frame, "Имя (Name):", name_val, r, copy_name)
+    row_widgets["name"] = {"label": lbl, "entry": entry, "value": name_val.get}
     r += 2
 
-    create_row(content_frame, "Индекс (Postcode):", postcode_val, r)
+    lbl, entry = create_row(content_frame, "Город (City):", city_val, r, copy_city)
+    row_widgets["city"] = {"label": lbl, "entry": entry, "value": city_val.get}
+    r += 2
+
+    lbl, entry = create_row(content_frame, "Улица (Street):", street_val, r, copy_street)
+    row_widgets["street"] = {"label": lbl, "entry": entry, "value": street_val.get}
+    r += 2
+
+    lbl, entry = create_row(content_frame, "Индекс (Postcode):", postcode_val, r, copy_postcode)
+    row_widgets["postcode"] = {"label": lbl, "entry": entry, "value": postcode_val.get}
     r += 2
 
     create_row(content_frame, "Address (English):", addr_en_val, r)
@@ -181,9 +234,18 @@ def show_sk_window(parent, theme_name="light"):
     
     # Hotkey hint
     r += 1
+    extra_color = "#aaa" if theme_name == "dark" else "#555"
     hotkeys = hotkey_settings.get_hotkeys()
-    hint_text = f"Горячие клавиши: Карта={hotkeys.get('card', '-')}, Имя={hotkeys.get('name', '-')}, Город={hotkeys.get('city', '-')}"
+    hint_text = (
+        f"Горячие клавиши: Следующее={hotkeys.get('sk_cycle', '-')}, "
+        f"Закрыть={hotkeys.get('sk_close', '-')}, "
+        f"Карта={hotkeys.get('card', '-')}, "
+        f"Имя={hotkeys.get('name', '-')}, "
+        f"Город={hotkeys.get('city', '-')}"
+    )
     hint_lbl = tk.Label(content_frame, text=hint_text, font=("Arial", 8), fg=extra_color, bg=colors["bg"])
     hint_lbl.grid(row=r, column=0, columnspan=3, pady=(0, 10))
 
     refresh_data()
+    cycle_index["value"] = 0
+    cycle_copy()

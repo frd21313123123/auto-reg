@@ -22,6 +22,8 @@ DEFAULT_HOTKEYS = {
     "city": "ctrl+3",
     "street": "ctrl+4",
     "postcode": "ctrl+5",
+    "sk_cycle": "ё",
+    "sk_close": "esc",
     # Main app hotkeys
     "email": "ctrl+e",
     "password": "ctrl+p",
@@ -45,7 +47,9 @@ HOTKEY_LABELS = {
     "name": "👤 Имя (SK)",
     "city": "🏙 Город (SK)",
     "street": "🛣 Улица (SK)",
-    "postcode": "📮 Индекс (SK)"
+    "postcode": "📮 Индекс (SK)",
+    "sk_cycle": "🔁 Последовательно (SK)",
+    "sk_close": "❌ Закрыть окно (SK)"
 }
 
 
