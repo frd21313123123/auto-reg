@@ -179,6 +179,7 @@ class MailApp:
         self.context_menu.add_command(label="Статус: Зарегистрирован", command=lambda: self.set_account_status("registered"))
         self.context_menu.add_command(label="Статус: Plus", command=lambda: self.set_account_status("plus"))
         self.context_menu.add_command(label="Статус: Banned 🚫", command=lambda: self.set_account_status("banned"))
+        self.context_menu.add_command(label="Статус: Неверный пароль 🔒", command=lambda: self.set_account_status("invalid_password"))
         
         self.acc_listbox.bind("<Button-3>", self.show_context_menu)
         
@@ -713,6 +714,7 @@ class MailApp:
     def ban_check_thread(self):
         """Поток проверки всех аккаунтов на бан"""
         banned_count = 0
+        invalid_pass_count = 0
         checked_count = 0
         total = len(self.accounts_data)
         
@@ -727,8 +729,8 @@ class MailApp:
             if not email or not password:
                 continue
             
-            # Пропускаем уже забаненные
-            if account.get("status") == "banned":
+            # Пропускаем уже забаненные и с неверным паролем
+            if account.get("status") in ("banned", "invalid_password"):
                 checked_count += 1
                 self.root.after(0, lambda i=idx, e=email, b=banned_count, c=checked_count: 
                     self._update_progress(i+1, total, e, b, c))
@@ -739,13 +741,19 @@ class MailApp:
                 self._update_progress(i+1, total, e, b, c))
             
             try:
-                is_banned = self._check_account_for_ban(email, password)
+                result, reason = self._check_account_for_ban(email, password)
                 
-                if is_banned:
+                if result == "banned":
                     # Помечаем как забаненный
                     self.accounts_data[idx]["status"] = "banned"
                     banned_count += 1
                     print(f"[BAN] Account banned: {email}")
+                elif result == "invalid_password":
+                    # Помечаем как неверный пароль
+                    self.accounts_data[idx]["status"] = "invalid_password"
+                    invalid_pass_count += 1
+                    print(f"[BAN] Invalid password: {email}")
+                # result == "ok" или "error" - не меняем статус
                 
             except Exception as e:
                 print(f"[BAN] Error checking {email}: {e}")
@@ -756,10 +764,17 @@ class MailApp:
             time.sleep(0.3)
         
         # Обновляем UI
-        self.root.after(0, lambda: self._on_ban_check_complete(checked_count, banned_count))
+        self.root.after(0, lambda: self._on_ban_check_complete(checked_count, banned_count, invalid_pass_count))
     
     def _check_account_for_ban(self, email_addr, password):
-        """Проверка одного аккаунта на бан OpenAI"""
+        """
+        Проверка одного аккаунта на бан OpenAI.
+        
+        Returns:
+            tuple: (result, reason) где:
+                - result: "banned", "invalid_password", "ok", "error"
+                - reason: строка с описанием
+        """
         domain = email_addr.split("@")[-1]
         is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
         
@@ -770,19 +785,25 @@ class MailApp:
                 payload = {"address": email_addr, "password": password}
                 res = self._make_request('post', f"{API_URL}/token", retry_auth=False, json=payload)
                 
-                if not res or res.status_code != 200:
-                    return False
+                if not res:
+                    return ("error", "network_error")
+                
+                if res.status_code == 401:
+                    return ("invalid_password", "wrong_credentials")
+                
+                if res.status_code != 200:
+                    return ("error", f"auth_failed_{res.status_code}")
                 
                 token = res.json().get('token')
                 if not token:
-                    return False
+                    return ("error", "no_token")
                 
                 # Получаем список писем
                 headers = {"Authorization": f"Bearer {token}"}
                 res = self._make_request('get', f"{API_URL}/messages", retry_auth=False, headers=headers)
                 
                 if not res or res.status_code != 200:
-                    return False
+                    return ("error", "messages_failed")
                 
                 messages = res.json().get('hydra:member', [])
                 
@@ -794,26 +815,30 @@ class MailApp:
                     # Проверяем отправителя и тему
                     if 'openai' in sender or 'noreply@tm.openai.com' in sender:
                         if 'access deactivated' in subject or 'deactivated' in subject:
-                            return True
+                            return ("banned", "access_deactivated")
                     
                     # Альтернативные проверки
                     if 'access deactivated' in subject and 'openai' in sender:
-                        return True
+                        return ("banned", "access_deactivated")
                 
-                return False
+                return ("ok", "no_ban_found")
                 
             except Exception as e:
                 print(f"[BAN] API check error for {email_addr}: {e}")
-                return False
+                return ("error", str(e))
         else:
             # Для не-mail.tm аккаунтов пробуем IMAP
             try:
                 imap_client = IMAPClient(host=f"imap.{domain}")
-                if not imap_client.login(email_addr, password):
+                login_success = imap_client.login(email_addr, password)
+                
+                if not login_success:
                     # Пробуем стандартный хост
                     imap_client = IMAPClient(host="imap.firstmail.ltd")
-                    if not imap_client.login(email_addr, password):
-                        return False
+                    login_success = imap_client.login(email_addr, password)
+                    
+                    if not login_success:
+                        return ("invalid_password", "imap_login_failed")
                 
                 messages = imap_client.get_messages(limit=50)
                 imap_client.logout()
@@ -824,15 +849,15 @@ class MailApp:
                     
                     if 'openai' in sender:
                         if 'access deactivated' in subject or 'deactivated' in subject:
-                            return True
+                            return ("banned", "access_deactivated")
                 
-                return False
+                return ("ok", "no_ban_found")
                 
             except Exception as e:
                 print(f"[BAN] IMAP check error for {email_addr}: {e}")
-                return False
+                return ("error", str(e))
     
-    def _on_ban_check_complete(self, checked, banned):
+    def _on_ban_check_complete(self, checked, banned, invalid_pass=0):
         """Завершение проверки бана"""
         # Закрываем окно прогресса
         if hasattr(self, 'progress_window') and self.progress_window.winfo_exists():
@@ -845,13 +870,13 @@ class MailApp:
         self.update_listbox_colors()
         self.save_accounts_to_file()
         
-        msg = f"Проверка завершена!\n\nПроверено: {checked}\nЗабанено: {banned}"
-        if banned > 0:
+        msg = f"Проверка завершена!\n\nПроверено: {checked}\n🚫 Забанено: {banned}\n🔒 Неверный пароль: {invalid_pass}"
+        if banned > 0 or invalid_pass > 0:
             messagebox.showwarning("Результаты проверки", msg)
         else:
             messagebox.showinfo("Результаты проверки", msg)
         
-        self.update_status(f"Проверка завершена. Забаненных: {banned}")
+        self.update_status(f"Проверка завершена. Забанено: {banned}, Неверный пароль: {invalid_pass}")
     
     def save_accounts_to_excel(self):
         """Сохраняет данные аккаунтов в Excel файл"""
@@ -880,7 +905,8 @@ class MailApp:
                 "not_registered": PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"),
                 "registered": PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"),
                 "plus": PatternFill(start_color="46BDC6", end_color="46BDC6", fill_type="solid"),
-                "banned": PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")
+                "banned": PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid"),
+                "invalid_password": PatternFill(start_color="E9D5FF", end_color="E9D5FF", fill_type="solid")
             }
             
             for row, account in enumerate(self.accounts_data, 2):

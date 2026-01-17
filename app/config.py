@@ -16,7 +16,8 @@ STATUS_COLORS = {
     "not_registered": {"light": "#f8fafc", "dark": "#0f172a"},
     "registered": {"light": "#d9e1f2", "dark": "#1e3a8a"},
     "plus": {"light": "#46bdc6", "dark": "#134e4a"},
-    "banned": {"light": "#fecaca", "dark": "#7f1d1d"}
+    "banned": {"light": "#fecaca", "dark": "#7f1d1d"},
+    "invalid_password": {"light": "#e9d5ff", "dark": "#581c87"}
 }
 
 # --- ШРИФТЫ ---
