@@ -140,7 +140,11 @@ class MailApp:
         
         # Кнопка открытия Excel файла
         self.btn_open_excel = tk.Button(self.file_btn_frame, text="Excel", font=FONT_SMALL, command=self.open_excel_file)
-        self.btn_open_excel.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(2, 0))
+        self.btn_open_excel.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2, 0))
+        
+        # Кнопка проверки бана OpenAI
+        self.btn_check_ban = tk.Button(self.file_btn_frame, text="🚫 Бан", font=FONT_SMALL, command=self.start_ban_check, bg="#ef4444", fg="white")
+        self.btn_check_ban.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(2, 0))
         
         # Кнопки управления аккаунтом
         self.btn_frame = tk.Frame(self.left_panel, bg="#f0f0f0")
@@ -174,6 +178,7 @@ class MailApp:
         self.context_menu.add_command(label="Статус: Не зарегистрирован", command=lambda: self.set_account_status("not_registered"))
         self.context_menu.add_command(label="Статус: Зарегистрирован", command=lambda: self.set_account_status("registered"))
         self.context_menu.add_command(label="Статус: Plus", command=lambda: self.set_account_status("plus"))
+        self.context_menu.add_command(label="Статус: Banned 🚫", command=lambda: self.set_account_status("banned"))
         
         self.acc_listbox.bind("<Button-3>", self.show_context_menu)
         
@@ -591,6 +596,263 @@ class MailApp:
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось открыть Excel файл:\n{e}")
     
+    def start_ban_check(self):
+        """Запуск проверки всех аккаунтов на бан OpenAI"""
+        if not self.accounts_data:
+            messagebox.showwarning("Внимание", "Нет аккаунтов для проверки")
+            return
+        
+        # Подтверждение
+        total = len(self.accounts_data)
+        if not messagebox.askyesno("Проверка бана", 
+            f"Проверить {total} аккаунтов на бан OpenAI?\n\n"
+            "Это может занять некоторое время.\n"
+            "Аккаунты с письмом 'Access Deactivated' будут помечены как забаненные."):
+            return
+        
+        self.btn_check_ban.config(state=tk.DISABLED, text="⏳ Проверка...")
+        
+        # Создаём окно прогресса
+        self._create_progress_window(total)
+        
+        threading.Thread(target=self.ban_check_thread, daemon=True).start()
+    
+    def _create_progress_window(self, total):
+        """Создание окна с прогресс баром"""
+        self.progress_window = tk.Toplevel(self.root)
+        self.progress_window.title("Проверка на бан OpenAI")
+        self.progress_window.geometry("450x180")
+        self.progress_window.resizable(False, False)
+        self.progress_window.transient(self.root)
+        self.progress_window.grab_set()
+        
+        # Центрируем окно
+        self.progress_window.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() - 450) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - 180) // 2
+        self.progress_window.geometry(f"+{x}+{y}")
+        
+        # Применяем тему
+        theme = self.params.get("theme", "light")
+        colors = THEMES[theme]
+        self.progress_window.config(bg=colors["bg"])
+        
+        # Заголовок
+        self.progress_title = tk.Label(
+            self.progress_window, 
+            text="🔍 Проверка аккаунтов на бан...", 
+            font=FONT_BOLD,
+            bg=colors["bg"],
+            fg=colors["fg"]
+        )
+        self.progress_title.pack(pady=(15, 5))
+        
+        # Текущий аккаунт
+        self.progress_label = tk.Label(
+            self.progress_window,
+            text=f"Подготовка... 0/{total}",
+            font=FONT_SMALL,
+            bg=colors["bg"],
+            fg=colors["fg"]
+        )
+        self.progress_label.pack(pady=5)
+        
+        # Прогресс бар
+        style = ttk.Style()
+        style.configure("ban.Horizontal.TProgressbar", 
+                       troughcolor=colors.get("list_bg", "#e5e7eb"),
+                       background="#ef4444")
+        
+        self.progress_bar = ttk.Progressbar(
+            self.progress_window,
+            orient="horizontal",
+            length=380,
+            mode="determinate",
+            maximum=total,
+            style="ban.Horizontal.TProgressbar"
+        )
+        self.progress_bar.pack(pady=10)
+        
+        # Статистика
+        self.progress_stats = tk.Label(
+            self.progress_window,
+            text="Забанено: 0 | Проверено: 0",
+            font=FONT_SMALL,
+            bg=colors["bg"],
+            fg=colors["fg"]
+        )
+        self.progress_stats.pack(pady=5)
+        
+        # Кнопка отмены
+        self.ban_check_cancelled = False
+        self.btn_cancel_ban = tk.Button(
+            self.progress_window,
+            text="Отмена",
+            command=self._cancel_ban_check,
+            font=FONT_SMALL,
+            bg="#6b7280",
+            fg="white"
+        )
+        self.btn_cancel_ban.pack(pady=10)
+        
+        # Обработка закрытия окна
+        self.progress_window.protocol("WM_DELETE_WINDOW", self._cancel_ban_check)
+    
+    def _cancel_ban_check(self):
+        """Отмена проверки бана"""
+        self.ban_check_cancelled = True
+        self.progress_label.config(text="Отмена...")
+    
+    def _update_progress(self, current, total, email, banned_count, checked_count):
+        """Обновление прогресс бара"""
+        if hasattr(self, 'progress_window') and self.progress_window.winfo_exists():
+            self.progress_bar["value"] = current
+            self.progress_label.config(text=f"Проверка: {email[:35]}... ({current}/{total})")
+            self.progress_stats.config(text=f"Забанено: {banned_count} | Проверено: {checked_count}")
+    
+    def ban_check_thread(self):
+        """Поток проверки всех аккаунтов на бан"""
+        banned_count = 0
+        checked_count = 0
+        total = len(self.accounts_data)
+        
+        for idx, account in enumerate(self.accounts_data):
+            # Проверяем отмену
+            if hasattr(self, 'ban_check_cancelled') and self.ban_check_cancelled:
+                break
+            
+            email = account.get("email", "")
+            password = account.get("password", "")
+            
+            if not email or not password:
+                continue
+            
+            # Пропускаем уже забаненные
+            if account.get("status") == "banned":
+                checked_count += 1
+                self.root.after(0, lambda i=idx, e=email, b=banned_count, c=checked_count: 
+                    self._update_progress(i+1, total, e, b, c))
+                continue
+            
+            # Обновляем прогресс
+            self.root.after(0, lambda i=idx, e=email, b=banned_count, c=checked_count: 
+                self._update_progress(i+1, total, e, b, c))
+            
+            try:
+                is_banned = self._check_account_for_ban(email, password)
+                
+                if is_banned:
+                    # Помечаем как забаненный
+                    self.accounts_data[idx]["status"] = "banned"
+                    banned_count += 1
+                    print(f"[BAN] Account banned: {email}")
+                
+            except Exception as e:
+                print(f"[BAN] Error checking {email}: {e}")
+            
+            checked_count += 1
+            
+            # Небольшая пауза между запросами
+            time.sleep(0.3)
+        
+        # Обновляем UI
+        self.root.after(0, lambda: self._on_ban_check_complete(checked_count, banned_count))
+    
+    def _check_account_for_ban(self, email_addr, password):
+        """Проверка одного аккаунта на бан OpenAI"""
+        domain = email_addr.split("@")[-1]
+        is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
+        
+        # Проверяем через API mail.tm
+        if is_mail_tm:
+            try:
+                # Получаем токен
+                payload = {"address": email_addr, "password": password}
+                res = self._make_request('post', f"{API_URL}/token", retry_auth=False, json=payload)
+                
+                if not res or res.status_code != 200:
+                    return False
+                
+                token = res.json().get('token')
+                if not token:
+                    return False
+                
+                # Получаем список писем
+                headers = {"Authorization": f"Bearer {token}"}
+                res = self._make_request('get', f"{API_URL}/messages", retry_auth=False, headers=headers)
+                
+                if not res or res.status_code != 200:
+                    return False
+                
+                messages = res.json().get('hydra:member', [])
+                
+                # Проверяем каждое письмо на признаки бана
+                for msg in messages:
+                    sender = msg.get('from', {}).get('address', '').lower()
+                    subject = msg.get('subject', '').lower()
+                    
+                    # Проверяем отправителя и тему
+                    if 'openai' in sender or 'noreply@tm.openai.com' in sender:
+                        if 'access deactivated' in subject or 'deactivated' in subject:
+                            return True
+                    
+                    # Альтернативные проверки
+                    if 'access deactivated' in subject and 'openai' in sender:
+                        return True
+                
+                return False
+                
+            except Exception as e:
+                print(f"[BAN] API check error for {email_addr}: {e}")
+                return False
+        else:
+            # Для не-mail.tm аккаунтов пробуем IMAP
+            try:
+                imap_client = IMAPClient(host=f"imap.{domain}")
+                if not imap_client.login(email_addr, password):
+                    # Пробуем стандартный хост
+                    imap_client = IMAPClient(host="imap.firstmail.ltd")
+                    if not imap_client.login(email_addr, password):
+                        return False
+                
+                messages = imap_client.get_messages(limit=50)
+                imap_client.logout()
+                
+                for msg in messages:
+                    sender = msg.get('from', {}).get('address', '').lower()
+                    subject = msg.get('subject', '').lower()
+                    
+                    if 'openai' in sender:
+                        if 'access deactivated' in subject or 'deactivated' in subject:
+                            return True
+                
+                return False
+                
+            except Exception as e:
+                print(f"[BAN] IMAP check error for {email_addr}: {e}")
+                return False
+    
+    def _on_ban_check_complete(self, checked, banned):
+        """Завершение проверки бана"""
+        # Закрываем окно прогресса
+        if hasattr(self, 'progress_window') and self.progress_window.winfo_exists():
+            self.progress_window.destroy()
+        
+        # Сбрасываем флаг отмены
+        self.ban_check_cancelled = False
+        
+        self.btn_check_ban.config(state=tk.NORMAL, text="🚫 Бан")
+        self.update_listbox_colors()
+        self.save_accounts_to_file()
+        
+        msg = f"Проверка завершена!\n\nПроверено: {checked}\nЗабанено: {banned}"
+        if banned > 0:
+            messagebox.showwarning("Результаты проверки", msg)
+        else:
+            messagebox.showinfo("Результаты проверки", msg)
+        
+        self.update_status(f"Проверка завершена. Забаненных: {banned}")
+    
     def save_accounts_to_excel(self):
         """Сохраняет данные аккаунтов в Excel файл"""
         try:
@@ -617,7 +879,8 @@ class MailApp:
             status_fills = {
                 "not_registered": PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid"),
                 "registered": PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"),
-                "plus": PatternFill(start_color="46BDC6", end_color="46BDC6", fill_type="solid")
+                "plus": PatternFill(start_color="46BDC6", end_color="46BDC6", fill_type="solid"),
+                "banned": PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")
             }
             
             for row, account in enumerate(self.accounts_data, 2):
