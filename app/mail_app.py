@@ -6,6 +6,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import random
 import string
 import os
@@ -59,6 +61,13 @@ class MailApp:
         self.account_type = "api"  # "api" or "imap"
         self.imap_client = None
         self.mail_tm_domains = []
+        
+        # Сохраняем учетные данные для переподключения при смене VPN
+        self.current_email = None
+        self.current_password = None
+        
+        # HTTP сессия с настройками повторного подключения
+        self.http_session = self._create_http_session()
         
         self.is_refreshing = False
         self.auto_refresh_job = None
@@ -271,6 +280,108 @@ class MailApp:
         # Регистрация горячих клавиш
         self._setup_hotkeys()
     
+    def _create_http_session(self):
+        """Создание HTTP сессии с настройками переподключения для устойчивости к смене VPN."""
+        session = requests.Session()
+        
+        # Настройка повторных попыток при ошибках соединения
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST", "OPTIONS"],
+            raise_on_status=False
+        )
+        
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=1,  # Минимальный пул для быстрого переподключения
+            pool_maxsize=1,
+            pool_block=False
+        )
+        
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        return session
+    
+    def _reset_http_session(self):
+        """Сбросить HTTP сессию (полезно при смене VPN)."""
+        try:
+            if self.http_session:
+                self.http_session.close()
+        except Exception:
+            pass
+        self.http_session = self._create_http_session()
+    
+    def _make_request(self, method, url, retry_auth=True, **kwargs):
+        """
+        Выполнить HTTP запрос с обработкой ошибок сети и переподключением.
+        
+        Args:
+            method: HTTP метод ('get', 'post')
+            url: URL для запроса
+            retry_auth: Если True, попытаться переавторизоваться при ошибке
+            **kwargs: Дополнительные параметры для requests
+            
+        Returns:
+            Response объект или None при ошибке
+        """
+        try:
+            response = getattr(self.http_session, method)(url, timeout=10, **kwargs)
+            return response
+        except (requests.exceptions.ConnectionError, 
+                requests.exceptions.Timeout,
+                requests.exceptions.ChunkedEncodingError,
+                OSError) as e:
+            print(f"[Network] Connection error: {e}")
+            
+            # Сбрасываем сессию и пробуем снова
+            self._reset_http_session()
+            
+            try:
+                response = getattr(self.http_session, method)(url, timeout=10, **kwargs)
+                return response
+            except Exception as e2:
+                print(f"[Network] Retry failed: {e2}")
+                
+                # Если есть сохранённые учётные данные и нужна переавторизация
+                if retry_auth and self.current_email and self.current_password:
+                    print("[Network] Attempting re-authentication...")
+                    self._try_reauth()
+                
+                return None
+        except Exception as e:
+            print(f"[Network] Unexpected error: {e}")
+            return None
+    
+    def _try_reauth(self):
+        """Попытка переавторизации при потере соединения."""
+        if not self.current_email or not self.current_password:
+            return False
+        
+        try:
+            # Сбрасываем текущее состояние
+            self.current_token = None
+            if self.imap_client:
+                try:
+                    self.imap_client.logout()
+                except Exception:
+                    pass
+                self.imap_client = None
+            
+            # Запускаем переавторизацию в отдельном потоке
+            self.root.after(0, lambda: self.update_status("Переподключение после смены сети..."))
+            threading.Thread(
+                target=self.login_thread, 
+                args=(self.current_email, self.current_password), 
+                daemon=True
+            ).start()
+            return True
+        except Exception as e:
+            print(f"[Reauth] Failed: {e}")
+            return False
+    
     def _setup_hotkeys(self):
         """Настройка глобальных горячих клавиш."""
         self.hotkey_settings = HotkeySettings.get_instance()
@@ -424,8 +535,8 @@ class MailApp:
     def load_mail_tm_domains(self):
         """Загрузка доменов mail.tm"""
         try:
-            res = requests.get(f"{API_URL}/domains")
-            if res.status_code == 200:
+            res = self._make_request('get', f"{API_URL}/domains", retry_auth=False)
+            if res and res.status_code == 200:
                 data = res.json()['hydra:member']
                 self.mail_tm_domains = [d['domain'] for d in data]
                 print(f"[*] Loaded {len(self.mail_tm_domains)} mail.tm domains")
@@ -595,9 +706,10 @@ class MailApp:
     def create_account_thread(self):
         """Поток создания аккаунта"""
         try:
-            domain_res = requests.get(f"{API_URL}/domains")
-            if domain_res.status_code != 200:
-                self.root.after(0, lambda: messagebox.showerror("Ошибка", "Не удалось получить список доменов"))
+            domain_res = self._make_request('get', f"{API_URL}/domains", retry_auth=False)
+            if not domain_res or domain_res.status_code != 200:
+                error_msg = "Сетевая ошибка" if not domain_res else f"Код: {domain_res.status_code}"
+                self.root.after(0, lambda: messagebox.showerror("Ошибка", f"Не удалось получить список доменов\n{error_msg}"))
                 self.root.after(0, lambda: self.btn_create.config(state=tk.NORMAL))
                 return
             
@@ -611,9 +723,12 @@ class MailApp:
             email = f"{username}@{domain}"
             
             payload = {"address": email, "password": password}
-            res = requests.post(f"{API_URL}/accounts", json=payload)
+            res = self._make_request('post', f"{API_URL}/accounts", retry_auth=False, json=payload)
             
-            if res.status_code == 201:
+            if not res:
+                self.update_status("Сетевая ошибка при регистрации")
+                self.root.after(0, lambda: messagebox.showerror("Ошибка", "Сетевая ошибка при регистрации"))
+            elif res.status_code == 201:
                 self.root.after(0, lambda: self._on_account_created(email, password))
             else:
                 self.update_status("Ошибка регистрации")
@@ -849,6 +964,13 @@ class MailApp:
                 pass
             self.imap_client = None
         
+        # Сохраняем учётные данные для переподключения при смене VPN
+        self.current_email = email_addr
+        self.current_password = password
+        
+        # Сбрасываем HTTP сессию для чистого подключения
+        self._reset_http_session()
+        
         is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
         
         success = False
@@ -856,13 +978,15 @@ class MailApp:
         if is_mail_tm:
             try:
                 payload = {"address": email_addr, "password": password}
-                res = requests.post(f"{API_URL}/token", json=payload)
-                if res.status_code == 200:
+                res = self._make_request('post', f"{API_URL}/token", retry_auth=False, json=payload)
+                if res and res.status_code == 200:
                     self.current_token = res.json()['token']
                     self.account_type = "api"
                     success = True
-                else:
+                elif res:
                     print(f"API Login failed: {res.status_code}")
+                else:
+                    print("API Login failed: network error")
             except Exception as e:
                 print(f"API Error: {e}")
         
@@ -928,15 +1052,29 @@ class MailApp:
             messages = []
             if self.account_type == "api":
                 headers = {"Authorization": f"Bearer {self.current_token}"}
-                res = requests.get(f"{API_URL}/messages", headers=headers)
-                if res.status_code == 200:
+                res = self._make_request('get', f"{API_URL}/messages", retry_auth=True, headers=headers)
+                if res is None:
+                    # Сетевая ошибка - переподключение будет запущено автоматически
+                    self.root.after(0, lambda: self.update_status("Сетевая ошибка, переподключение..."))
+                elif res.status_code == 200:
                     messages = res.json()['hydra:member']
+                elif res.status_code == 401:
+                    # Токен недействителен - переавторизуемся
+                    self.root.after(0, lambda: self.update_status("Сессия истекла, переподключение..."))
+                    self._try_reauth()
                 else:
                     self.root.after(0, lambda: self.update_status(f"Ошибка загрузки писем: {res.status_code}"))
             elif self.account_type == "imap":
-                messages = self.imap_client.get_messages(limit=20)
+                try:
+                    messages = self.imap_client.get_messages(limit=20)
+                except Exception as imap_err:
+                    print(f"IMAP error: {imap_err}")
+                    # IMAP соединение разорвано - переподключаемся
+                    self.root.after(0, lambda: self.update_status("IMAP соединение потеряно, переподключение..."))
+                    self._try_reauth()
             
-            self.root.after(0, lambda: self._update_inbox_ui(messages))
+            if messages:
+                self.root.after(0, lambda: self._update_inbox_ui(messages))
         except Exception as e:
             print(f"Background update error: {e}")
         finally:
@@ -1045,20 +1183,30 @@ class MailApp:
         try:
             if self.account_type == "api":
                 headers = {"Authorization": f"Bearer {self.current_token}"}
-                res = requests.get(f"{API_URL}/messages/{msg_id}", headers=headers)
-                if res.status_code == 200:
+                res = self._make_request('get', f"{API_URL}/messages/{msg_id}", retry_auth=True, headers=headers)
+                if res is None:
+                    self.root.after(0, lambda: self.msg_text.insert(tk.END, "\nСетевая ошибка при загрузке письма"))
+                elif res.status_code == 200:
                     data = res.json()
                     text = data.get('text') or data.get('html') or "Нет текстового содержимого"
                     self.root.after(0, lambda: self._show_message_content(data, text))
+                elif res.status_code == 401:
+                    self.root.after(0, lambda: self.msg_text.insert(tk.END, "\nСессия истекла, переподключение..."))
+                    self._try_reauth()
                 else:
                     self.root.after(0, lambda: self.msg_text.insert(tk.END, f"\nОшибка загрузки письма: {res.status_code}"))
             elif self.account_type == "imap":
-                text = self.imap_client.get_message_content(msg_id)
-                data = {
-                    "from": {"address": sender or "IMAP Sender"},
-                    "subject": subject or "IMAP Message"
-                }
-                self.root.after(0, lambda: self._show_message_content(data, text, is_imap=True))
+                try:
+                    text = self.imap_client.get_message_content(msg_id)
+                    data = {
+                        "from": {"address": sender or "IMAP Sender"},
+                        "subject": subject or "IMAP Message"
+                    }
+                    self.root.after(0, lambda: self._show_message_content(data, text, is_imap=True))
+                except Exception as imap_err:
+                    print(f"IMAP error loading message: {imap_err}")
+                    self.root.after(0, lambda: self.msg_text.insert(tk.END, "\nIMAP соединение потеряно, переподключение..."))
+                    self._try_reauth()
         except Exception as e:
             self.root.after(0, lambda: self.msg_text.insert(tk.END, f"\nError: {e}"))
     
