@@ -153,7 +153,12 @@ class MailApp:
         self.btn_copy_email = tk.Button(self.btn_frame, text="Email", command=self.copy_email, font=FONT_SMALL)
         self.btn_copy_email.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         
-        self.btn_copy_pass = tk.Button(self.btn_frame, text="Пароль", command=self.copy_pass, font=FONT_SMALL)
+        # Кнопка копирования пароля OpenAI
+        self.btn_copy_pass_openai = tk.Button(self.btn_frame, text="🔑 OpenAI", command=self.copy_pass_openai, font=FONT_SMALL)
+        self.btn_copy_pass_openai.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        
+        # Кнопка копирования пароля от почты
+        self.btn_copy_pass = tk.Button(self.btn_frame, text="📧 Почта", command=self.copy_pass, font=FONT_SMALL)
         self.btn_copy_pass.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
         
         # Кнопка для генерации SK данных
@@ -400,7 +405,12 @@ class MailApp:
         self.hotkey_settings.register_all()
     
     def paste_accounts_from_clipboard(self):
-        """Вставить аккаунты из буфера обмена."""
+        """Вставить аккаунты из буфера обмена.
+        
+        Поддерживаемые форматы:
+        1. Новый: email:password_openai;password_mail
+        2. Старый: email:password или email / password
+        """
         try:
             clipboard_text = pyperclip.paste()
             if not clipboard_text:
@@ -416,32 +426,56 @@ class MailApp:
                     continue
                 
                 email = ""
-                password = ""
+                password_openai = ""
+                password_mail = ""
                 
                 # Parse different formats
                 if " / " in line:
                     parts = line.split(" / ", 1)
                     email = parts[0].strip()
-                    password = parts[1].strip() if len(parts) > 1 else ""
+                    passwords = parts[1].strip() if len(parts) > 1 else ""
+                    if ";" in passwords:
+                        pwd_parts = passwords.split(";", 1)
+                        password_openai = pwd_parts[0].strip()
+                        password_mail = pwd_parts[1].strip()
+                    else:
+                        password_openai = passwords
+                        password_mail = passwords
                 elif ":" in line:
                     parts = line.split(":", 1)
                     email = parts[0].strip()
-                    password = parts[1].strip() if len(parts) > 1 else ""
+                    passwords = parts[1].strip() if len(parts) > 1 else ""
+                    if ";" in passwords:
+                        pwd_parts = passwords.split(";", 1)
+                        password_openai = pwd_parts[0].strip()
+                        password_mail = pwd_parts[1].strip()
+                    else:
+                        password_openai = passwords
+                        password_mail = passwords
                 elif "\t" in line:
                     parts = line.split("\t", 1)
                     email = parts[0].strip()
-                    password = parts[1].strip() if len(parts) > 1 else ""
+                    passwords = parts[1].strip() if len(parts) > 1 else ""
+                    if ";" in passwords:
+                        pwd_parts = passwords.split(";", 1)
+                        password_openai = pwd_parts[0].strip()
+                        password_mail = pwd_parts[1].strip()
+                    else:
+                        password_openai = passwords
+                        password_mail = passwords
                 
-                if email and password and "@" in email:
+                if email and (password_openai or password_mail) and "@" in email:
                     # Check if already exists
                     exists = any(acc["email"] == email for acc in self.accounts_data)
                     if not exists:
                         self.accounts_data.append({
                             "email": email,
-                            "password": password,
+                            "password_openai": password_openai,
+                            "password_mail": password_mail,
+                            "password": password_mail,  # Для совместимости
                             "status": "not_registered"
                         })
-                        display_text = f"{email} / {password}"
+                        display_text = email
                         self.acc_listbox.insert(tk.END, display_text)
                         added_count += 1
             
@@ -456,7 +490,7 @@ class MailApp:
             self.update_status(f"Ошибка вставки: {e}")
     
     def copy_full_account(self):
-        """Копировать полный аккаунт (email / password)."""
+        """Копировать полный аккаунт (email:password_openai;password_mail)."""
         selection = self.acc_listbox.curselection()
         if not selection:
             self.update_status("Выберите аккаунт для копирования")
@@ -465,9 +499,17 @@ class MailApp:
         idx = selection[0]
         if idx < len(self.accounts_data):
             acc = self.accounts_data[idx]
-            full_text = f"{acc['email']} / {acc['password']}"
+            password_openai = acc.get('password_openai', acc.get('password', ''))
+            password_mail = acc.get('password_mail', acc.get('password', ''))
+            
+            # Формируем строку в формате email:password_openai;password_mail
+            if password_openai != password_mail:
+                full_text = f"{acc['email']}:{password_openai};{password_mail}"
+            else:
+                full_text = f"{acc['email']}:{password_openai}"
+            
             pyperclip.copy(full_text)
-            self.update_status(f"Скопировано: {acc['email']} / ***")
+            self.update_status(f"Скопировано: {acc['email']}:***")
     
     def _show_hotkey_settings(self):
         """Открыть окно настроек горячих клавиш."""
@@ -520,8 +562,8 @@ class MailApp:
             pyperclip.copy(acc['email'])
             self.update_status(f"Скопирован email: {acc['email']}")
     
-    def copy_pass(self):
-        """Копировать пароль выбранного аккаунта."""
+    def copy_pass_openai(self):
+        """Копировать пароль OpenAI выбранного аккаунта."""
         selection = self.acc_listbox.curselection()
         if not selection:
             self.update_status("Выберите аккаунт для копирования")
@@ -530,8 +572,23 @@ class MailApp:
         idx = selection[0]
         if idx < len(self.accounts_data):
             acc = self.accounts_data[idx]
-            pyperclip.copy(acc['password'])
-            self.update_status(f"Скопирован пароль для: {acc['email']}")
+            password = acc.get('password_openai', acc.get('password', ''))
+            pyperclip.copy(password)
+            self.update_status(f"Скопирован пароль OpenAI для: {acc['email']}")
+    
+    def copy_pass(self):
+        """Копировать пароль от почты выбранного аккаунта."""
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            self.update_status("Выберите аккаунт для копирования")
+            return
+        
+        idx = selection[0]
+        if idx < len(self.accounts_data):
+            acc = self.accounts_data[idx]
+            password = acc.get('password_mail', acc.get('password', ''))
+            pyperclip.copy(password)
+            self.update_status(f"Скопирован пароль почты для: {acc['email']}")
     
     def toggle_pin(self):
         """Переключение режима 'Поверх всех окон'"""
@@ -929,7 +986,13 @@ class MailApp:
             print(f"Ошибка сохранения Excel: {e}")
     
     def load_accounts_from_file(self):
-        """Загрузка аккаунтов из файла"""
+        """Загрузка аккаунтов из файла
+        
+        Поддерживаемые форматы:
+        1. Новый формат: email:password_openai;password_mail
+        2. Внутренний формат: email / password_openai;password_mail / status
+        3. Старый формат: email:password или email / password
+        """
         self.acc_listbox.delete(0, tk.END)
         self.accounts_data = []
         
@@ -946,30 +1009,59 @@ class MailApp:
                         continue
                     
                     email = ""
-                    password = ""
+                    password_openai = ""
+                    password_mail = ""
                     status = "not_registered"
                     
                     if " / " in line:
+                        # Внутренний формат приложения: email / passwords / status
                         parts = line.split(" / ")
                         if len(parts) >= 2:
                             email = parts[0].strip()
-                            password = parts[1].strip()
+                            passwords = parts[1].strip()
+                            
+                            # Проверяем, есть ли два пароля
+                            if ";" in passwords:
+                                pwd_parts = passwords.split(";", 1)
+                                password_openai = pwd_parts[0].strip()
+                                password_mail = pwd_parts[1].strip()
+                            else:
+                                # Старый формат - один пароль
+                                password_openai = passwords
+                                password_mail = passwords
+                            
                             if len(parts) >= 3:
                                 status = parts[2].strip()
                     elif ":" in line:
+                        # Новый формат или старый: email:password_openai;password_mail
                         parts = line.split(":", 1)
                         if len(parts) == 2:
-                            email, password = parts[0].strip(), parts[1].strip()
+                            email = parts[0].strip()
+                            passwords = parts[1].strip()
+                            
+                            # Проверяем, есть ли два пароля
+                            if ";" in passwords:
+                                pwd_parts = passwords.split(";", 1)
+                                password_openai = pwd_parts[0].strip()
+                                password_mail = pwd_parts[1].strip()
+                            else:
+                                # Старый формат - один пароль
+                                password_openai = passwords
+                                password_mail = passwords
+                            
                             needs_save = True
                     
-                    if email and password:
+                    if email and (password_openai or password_mail):
                         self.accounts_data.append({
                             "email": email,
-                            "password": password,
+                            "password_openai": password_openai,
+                            "password_mail": password_mail,
+                            "password": password_mail,  # Для совместимости с IMAP логином
                             "status": status
                         })
                         
-                        display_text = f"{email} / {password}"
+                        # Отображаем только email в списке
+                        display_text = email
                         self.acc_listbox.insert(tk.END, display_text)
                 
                 if needs_save:
@@ -1028,14 +1120,20 @@ class MailApp:
             self.root.after(0, lambda: self.btn_create.config(state=tk.NORMAL))
     
     def _on_account_created(self, email, password):
-        """Обработка созданного аккаунта"""
+        """Обработка созданного аккаунта
+        
+        При создании аккаунта через API оба пароля одинаковые.
+        """
         self.accounts_data.append({
             "email": email,
-            "password": password,
+            "password_openai": password,
+            "password_mail": password,
+            "password": password,  # Для совместимости
             "status": "not_registered"
         })
         
-        display_text = f"{email} / {password}"
+        # Отображаем только email в списке
+        display_text = email
         self.acc_listbox.insert(tk.END, display_text)
         self.update_listbox_colors()
         
@@ -1107,7 +1205,7 @@ class MailApp:
         # Buttons (Generic)
         generic_btns = [
             self.btn_reload, self.btn_open_file, self.btn_open_excel,
-            self.btn_copy_email, self.btn_copy_pass, self.btn_sk, self.btn_minesweeper, self.btn_hotkey_settings
+            self.btn_copy_email, self.btn_copy_pass_openai, self.btn_copy_pass, self.btn_sk, self.btn_minesweeper, self.btn_hotkey_settings
         ]
         for btn in generic_btns:
             btn.config(bg=colors["btn_bg"], fg=colors["btn_fg"], activebackground=colors["btn_bg"], activeforeground=colors["btn_fg"], relief=tk.FLAT, bd=0)
@@ -1221,13 +1319,17 @@ class MailApp:
         if not selection:
             return
         
-        data = self.acc_listbox.get(selection[0])
+        idx = selection[0]
+        if idx >= len(self.accounts_data):
+            return
         
-        if " / " in data:
-            email, password = data.split(" / ", 1)
-        elif ":" in data:
-            email, password = data.split(":", 1)
-        else:
+        # Получаем данные аккаунта из accounts_data
+        acc = self.accounts_data[idx]
+        email = acc.get("email", "")
+        # Для авторизации используем пароль от почты
+        password = acc.get("password_mail", acc.get("password", ""))
+        
+        if not email or not password:
             return
         
         self.lbl_current_email.config(text=f"Аккаунт: {email}")
@@ -1522,35 +1624,7 @@ class MailApp:
         """Копирование кода в буфер"""
         pyperclip.copy(code)
         self.status_var.set(f"Код {code} скопирован в буфер!")
-    
-    def copy_email(self):
-        """Копирование email"""
-        selection = self.acc_listbox.curselection()
-        if selection:
-            data = self.acc_listbox.get(selection[0])
-            if " / " in data:
-                email = data.split(" / ")[0]
-            elif ":" in data:
-                email = data.split(":")[0]
-            else:
-                return
-            pyperclip.copy(email)
-            self.status_var.set("Email скопирован в буфер")
-    
-    def copy_pass(self):
-        """Копирование пароля"""
-        selection = self.acc_listbox.curselection()
-        if selection:
-            data = self.acc_listbox.get(selection[0])
-            if " / " in data:
-                password = data.split(" / ")[1]
-            elif ":" in data:
-                password = data.split(":")[1]
-            else:
-                return
-            pyperclip.copy(password)
-            self.status_var.set("Пароль скопирован в буфер")
-    
+
     def show_context_menu(self, event):
         """Показ контекстного меню"""
         try:
@@ -1576,11 +1650,24 @@ class MailApp:
             self.update_status(f"Статус обновлен: {status}")
     
     def save_accounts_to_file(self):
-        """Сохранение аккаунтов в файл"""
+        """Сохранение аккаунтов в файл
+        
+        Формат: email / password_openai;password_mail / status
+        """
         try:
             with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
                 for item in self.accounts_data:
-                    line = f"{item['email']} / {item['password']} / {item['status']}\n"
+                    # Формируем строку паролей
+                    password_openai = item.get('password_openai', item.get('password', ''))
+                    password_mail = item.get('password_mail', item.get('password', ''))
+                    
+                    # Если пароли разные, сохраняем оба, иначе один
+                    if password_openai != password_mail:
+                        passwords = f"{password_openai};{password_mail}"
+                    else:
+                        passwords = password_openai
+                    
+                    line = f"{item['email']} / {passwords} / {item['status']}\n"
                     f.write(line)
             self.save_accounts_to_excel()
         except Exception as e:
