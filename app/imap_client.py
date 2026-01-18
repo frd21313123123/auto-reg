@@ -21,8 +21,7 @@ class IMAPClient:
             self.mail = imaplib.IMAP4_SSL(self.host)
             self.mail.login(email_addr, password)
             return True
-        except Exception as e:
-            print(f"IMAP Login Error: {e}")
+        except Exception:
             return False
     
     def logout(self):
