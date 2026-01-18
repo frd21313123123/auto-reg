@@ -14,6 +14,7 @@ import os
 import sys
 import pyperclip
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 import time
 import platform
@@ -664,11 +665,15 @@ class MailApp:
         total = len(self.accounts_data)
         if not messagebox.askyesno("Проверка бана", 
             f"Проверить {total} аккаунтов на бан OpenAI?\n\n"
-            "Это может занять некоторое время.\n"
+            "Используется многопоточность для ускорения.\n"
             "Аккаунты с письмом 'Access Deactivated' будут помечены как забаненные."):
             return
         
         self.btn_check_ban.config(state=tk.DISABLED, text="⏳ Проверка...")
+        
+        # Настройки многопоточности
+        self.ban_check_threads = 5  # Количество потоков
+        self.ban_check_lock = threading.Lock()
         
         # Создаём окно прогресса
         self._create_progress_window(total)
@@ -769,59 +774,183 @@ class MailApp:
             self.progress_stats.config(text=f"Забанено: {banned_count} | Проверено: {checked_count}")
     
     def ban_check_thread(self):
-        """Поток проверки всех аккаунтов на бан"""
+        """Поток проверки всех аккаунтов на бан с многопоточностью"""
         banned_count = 0
         invalid_pass_count = 0
         checked_count = 0
         total = len(self.accounts_data)
+        start_time = time.time()
         
-        for idx, account in enumerate(self.accounts_data):
-            # Проверяем отмену
-            if hasattr(self, 'ban_check_cancelled') and self.ban_check_cancelled:
-                break
-            
+        # Функция проверки одного аккаунта
+        def check_single_account(idx, account):
             email = account.get("email", "")
             password = account.get("password", "")
+            old_status = account.get("status", "not_registered")
             
             if not email or not password:
-                continue
+                return (idx, email, None, None, True)  # skip
             
             # Пропускаем уже забаненные и с неверным паролем
-            if account.get("status") in ("banned", "invalid_password"):
-                checked_count += 1
-                self.root.after(0, lambda i=idx, e=email, b=banned_count, c=checked_count: 
-                    self._update_progress(i+1, total, e, b, c))
-                continue
-            
-            # Обновляем прогресс
-            self.root.after(0, lambda i=idx, e=email, b=banned_count, c=checked_count: 
-                self._update_progress(i+1, total, e, b, c))
+            if old_status in ("banned", "invalid_password"):
+                return (idx, email, None, None, True)  # skip
             
             try:
-                result, reason = self._check_account_for_ban(email, password)
-                
-                if result == "banned":
-                    # Помечаем как забаненный
-                    self.accounts_data[idx]["status"] = "banned"
-                    banned_count += 1
-                    print(f"[BAN] Account banned: {email}")
-                elif result == "invalid_password":
-                    # Помечаем как неверный пароль
-                    self.accounts_data[idx]["status"] = "invalid_password"
-                    invalid_pass_count += 1
-                    print(f"[BAN] Invalid password: {email}")
-                # result == "ok" или "error" - не меняем статус
-                
+                result, reason = self._check_account_for_ban_threadsafe(email, password)
+                return (idx, email, result, reason, False)
             except Exception as e:
-                print(f"[BAN] Error checking {email}: {e}")
+                return (idx, email, "error", str(e), False)
+        
+        # Используем ThreadPoolExecutor для параллельной проверки
+        with ThreadPoolExecutor(max_workers=self.ban_check_threads) as executor:
+            # Запускаем все задачи
+            futures = {
+                executor.submit(check_single_account, idx, account): idx 
+                for idx, account in enumerate(self.accounts_data)
+            }
             
-            checked_count += 1
-            
-            # Небольшая пауза между запросами
-            time.sleep(0.3)
+            # Обрабатываем результаты по мере завершения
+            for future in as_completed(futures):
+                # Проверяем отмену
+                if hasattr(self, 'ban_check_cancelled') and self.ban_check_cancelled:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
+                
+                try:
+                    idx, email, result, reason, skipped = future.result()
+                    
+                    if skipped or not email:
+                        checked_count += 1
+                        continue
+                    
+                    # Потокобезопасное обновление статистики
+                    with self.ban_check_lock:
+                        if result == "banned":
+                            self.accounts_data[idx]["status"] = "banned"
+                            banned_count += 1
+                            print(f"[BAN] Account banned: {email}")
+                        elif result == "invalid_password":
+                            self.accounts_data[idx]["status"] = "invalid_password"
+                            invalid_pass_count += 1
+                            print(f"[BAN] Invalid password: {email}")
+                        # result == "ok" или "error" - не меняем статус
+                        
+                        checked_count += 1
+                    
+                    # Обновляем прогресс
+                    self.root.after(0, lambda c=checked_count, e=email, b=banned_count: 
+                        self._update_progress(c, total, e, b, c))
+                        
+                except Exception as e:
+                    print(f"[BAN] Future error: {e}")
+                    checked_count += 1
+        
+        elapsed_time = time.time() - start_time
+        print(f"[BAN] Проверка завершена за {elapsed_time:.1f} сек ({total/max(elapsed_time, 0.1):.1f} акк/сек)")
         
         # Обновляем UI
         self.root.after(0, lambda: self._on_ban_check_complete(checked_count, banned_count, invalid_pass_count))
+    
+    def _check_account_for_ban_threadsafe(self, email_addr, password):
+        """
+        Потокобезопасная проверка одного аккаунта на бан OpenAI.
+        Создаёт собственную HTTP сессию для каждого вызова.
+        """
+        # Создаём отдельную сессию для этого потока
+        session = requests.Session()
+        
+        retry_strategy = Retry(
+            total=2,
+            backoff_factor=0.3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST", "OPTIONS"],
+            raise_on_status=False
+        )
+        
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=1,
+            pool_maxsize=1,
+            pool_block=False
+        )
+        
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        try:
+            domain = email_addr.split("@")[-1]
+            is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
+            
+            if is_mail_tm:
+                try:
+                    # Получаем токен
+                    payload = {"address": email_addr, "password": password}
+                    res = session.post(f"{API_URL}/token", json=payload, timeout=10)
+                    
+                    if res.status_code == 401:
+                        return ("invalid_password", "wrong_credentials")
+                    
+                    if res.status_code != 200:
+                        return ("error", f"auth_failed_{res.status_code}")
+                    
+                    token = res.json().get('token')
+                    if not token:
+                        return ("error", "no_token")
+                    
+                    # Получаем список писем
+                    headers = {"Authorization": f"Bearer {token}"}
+                    res = session.get(f"{API_URL}/messages", headers=headers, timeout=10)
+                    
+                    if res.status_code != 200:
+                        return ("error", "messages_failed")
+                    
+                    messages = res.json().get('hydra:member', [])
+                    
+                    # Проверяем каждое письмо на признаки бана
+                    for msg in messages:
+                        sender = msg.get('from', {}).get('address', '').lower()
+                        subject = msg.get('subject', '').lower()
+                        
+                        if 'openai' in sender or 'noreply@tm.openai.com' in sender:
+                            if 'access deactivated' in subject or 'deactivated' in subject:
+                                return ("banned", "access_deactivated")
+                        
+                        if 'access deactivated' in subject and 'openai' in sender:
+                            return ("banned", "access_deactivated")
+                    
+                    return ("ok", "no_ban_found")
+                    
+                except requests.exceptions.RequestException as e:
+                    return ("error", str(e))
+            else:
+                # IMAP проверка
+                try:
+                    imap_client = IMAPClient(host=f"imap.{domain}")
+                    login_success = imap_client.login(email_addr, password)
+                    
+                    if not login_success:
+                        imap_client = IMAPClient(host="imap.firstmail.ltd")
+                        login_success = imap_client.login(email_addr, password)
+                        
+                        if not login_success:
+                            return ("invalid_password", "imap_login_failed")
+                    
+                    messages = imap_client.get_messages(limit=50)
+                    imap_client.logout()
+                    
+                    for msg in messages:
+                        sender = msg.get('from', {}).get('address', '').lower()
+                        subject = msg.get('subject', '').lower()
+                        
+                        if 'openai' in sender:
+                            if 'access deactivated' in subject or 'deactivated' in subject:
+                                return ("banned", "access_deactivated")
+                    
+                    return ("ok", "no_ban_found")
+                    
+                except Exception as e:
+                    return ("error", str(e))
+        finally:
+            session.close()
     
     def _check_account_for_ban(self, email_addr, password):
         """
