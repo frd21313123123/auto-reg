@@ -11,14 +11,15 @@ from email.header import decode_header
 class IMAPClient:
     """Клиент для работы с почтой через IMAP"""
     
-    def __init__(self, host="imap.firstmail.ltd"):
+    def __init__(self, host="imap.firstmail.ltd", timeout=8):
         self.host = host
+        self.timeout = timeout
         self.mail = None
     
     def login(self, email_addr, password):
         """Авторизация на IMAP сервере"""
         try:
-            self.mail = imaplib.IMAP4_SSL(self.host)
+            self.mail = imaplib.IMAP4_SSL(self.host, timeout=self.timeout)
             self.mail.login(email_addr, password)
             return True
         except Exception:

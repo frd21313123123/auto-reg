@@ -14,6 +14,9 @@ import ctypes
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REQUIREMENTS_FILE = os.path.join(BASE_DIR, "requirements.txt")
+PACKAGE_IMPORT_ALIASES = {
+    "beautifulsoup4": "bs4",
+}
 
 
 def set_app_id():
@@ -40,11 +43,17 @@ def _normalize_requirement(line):
 
 
 def _is_installed(package_name):
-    if importlib.util.find_spec(package_name) is not None:
-        return True
+    candidates = []
+    alias = PACKAGE_IMPORT_ALIASES.get(package_name.lower())
+    if alias:
+        candidates.append(alias)
+    candidates.append(package_name)
     if "-" in package_name:
-        alt = package_name.replace("-", "_")
-        return importlib.util.find_spec(alt) is not None
+        candidates.append(package_name.replace("-", "_"))
+
+    for candidate in dict.fromkeys(candidates):
+        if importlib.util.find_spec(candidate) is not None:
+            return True
     return False
 
 

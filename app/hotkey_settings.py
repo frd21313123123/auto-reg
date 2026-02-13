@@ -51,6 +51,7 @@ HOTKEY_LABELS = {
     "sk_cycle": "🔁 Последовательно (SK)",
     "sk_close": "❌ Закрыть окно (SK)"
 }
+RECORDING_PLACEHOLDER = "Нажмите..."
 
 
 class HotkeySettings:
@@ -195,7 +196,7 @@ def show_settings_window(parent, theme_name="light", on_save=None):
         recording_entry["current"] = entry
         recording_entry["key"] = key
         entry.delete(0, tk.END)
-        entry.insert(0, "Нажмите...")
+        entry.insert(0, RECORDING_PLACEHOLDER)
         entry.config(fg="#888")
         
         # Use keyboard library to capture the hotkey
@@ -267,7 +268,7 @@ def show_settings_window(parent, theme_name="light", on_save=None):
         new_hotkeys = {}
         for key, entry in entries.items():
             value = entry.get().strip()
-            if value and value != "Нажмите клавиши...":
+            if value and value != RECORDING_PLACEHOLDER:
                 new_hotkeys[key] = value
             else:
                 new_hotkeys[key] = ""
@@ -312,7 +313,7 @@ def show_settings_window(parent, theme_name="light", on_save=None):
     btn_cancel = tk.Button(
         btn_frame,
         text="Отмена",
-        command=win.destroy,
+        command=on_window_close,
         bg=colors.get("btn_bg", "#e0e0e0"),
         fg=colors.get("btn_fg", "#000000"),
         font=("Segoe UI", 10),
