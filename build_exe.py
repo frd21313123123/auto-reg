@@ -45,9 +45,9 @@ def main():
     if result == 0:
         exe_path = os.path.join(BASE_DIR, "dist", f"{name}.exe")
         print(f"\n[build] SUCCESS! Executable created at:\n  {exe_path}")
-        print("\nТеперь вы можете:")
-        print("1. Запустить .exe файл из папки dist")
-        print("2. Закрепить его в панели задач")
+        print("\nNext steps:")
+        print("1. Run the .exe file from the dist folder")
+        print("2. Pin it to the taskbar if needed")
     
     return result
 
