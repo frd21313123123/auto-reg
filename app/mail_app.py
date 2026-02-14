@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Основной класс приложения Mail.tm
+Основной класс приложения Mail.tm — Modern UI
 """
 
 import tkinter as tk
@@ -34,9 +34,10 @@ from .config import (
     FONT_SMALL,
     FONT_BOLD,
     FONT_TITLE,
+    FONT_SECTION,
 )
 from .themes import THEMES
-from .widgets import ThemedCheckbox
+from .widgets import HoverButton, AnimatedToggle, ThemedCheckbox, SectionLabel
 from .imap_client import IMAPClient
 from .sk_generator import show_sk_window
 from .in_generator import show_in_window
@@ -47,10 +48,15 @@ from .hotkey_settings import HotkeySettings, show_settings_window
 class MailApp:
     """Основной класс приложения Mail.tm"""
 
+    # Отступы
+    PAD_X = 12
+    PAD_Y = 6
+
     def __init__(self, root):
         self.root = root
-        self.root.title("Mail.tm — регистрация и почтовый клиент")
-        self.root.geometry("1000x650")
+        self.root.title("Mail.tm — Auto Registration")
+        self.root.geometry("1050x680")
+        self.root.minsize(800, 500)
 
         # Устанавливаем иконку окна
         try:
@@ -83,7 +89,7 @@ class MailApp:
         self.auto_refresh_job = None
         self.stop_threads = False
         self.params = {"theme": "light"}
-        self.is_pinned = False  # State for "Always on Top"
+        self.is_pinned = False
         self._ban_thread_local = threading.local()
         self._ban_thread_sessions = []
         self._ban_thread_sessions_lock = threading.Lock()
@@ -93,25 +99,58 @@ class MailApp:
         # Загружаем домены mail.tm в фоне
         threading.Thread(target=self.load_mail_tm_domains, daemon=True).start()
 
+        # Инициализация Faker
+        self.fake = Faker("en_US")
+
+        # ======== BUILD UI ========
+        self._build_ui()
+
+        print(f"[*] Используемый файл аккаунтов: {ACCOUNTS_FILE}")
+
+        # Применяем тему
+        self.set_theme("light")
+
+        # Загружаем аккаунты
+        self.load_accounts_from_file()
+
+        # Генерируем случайные данные
+        self.generate_random_person()
+
+        # Запуск цикла автообновления
+        self.start_auto_refresh()
+
+        # Регистрация горячих клавиш
+        self._setup_hotkeys()
+
+    def _build_ui(self):
+        """Построение всего интерфейса."""
+        colors = THEMES["light"]
+
         # Основной контейнер
-        self.root_container = tk.Frame(root, bg="#f0f0f0")
+        self.root_container = tk.Frame(self.root, bg=colors["bg"])
         self.root_container.pack(fill=tk.BOTH, expand=True)
 
-        self.status_var = tk.StringVar()
-        self.status_var.set("Готов к работе")
+        # Статус бар (внизу)
+        self.status_var = tk.StringVar(value="Готов к работе")
         self.status_bar = tk.Label(
             self.root_container,
             textvariable=self.status_var,
-            bd=1,
+            bd=0,
             relief=tk.FLAT,
             anchor=tk.W,
             font=FONT_SMALL,
+            padx=self.PAD_X,
+            pady=4,
         )
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-        # Стили
+        # Тонкий разделитель над статус-баром
+        tk.Frame(self.root_container, bg=colors["separator"], height=1).pack(
+            side=tk.BOTTOM, fill=tk.X
+        )
+
+        # Стили Treeview
         style = ttk.Style()
-        style.configure("Treeview", rowheight=25)
         available_themes = style.theme_names()
         default_design = (
             "default" if "default" in available_themes else style.theme_use()
@@ -121,164 +160,148 @@ class MailApp:
         except Exception:
             default_design = style.theme_use()
         self.design_var = tk.StringVar(value=default_design)
+        style.configure("Treeview", rowheight=28)
 
-        # --- Сплиттер (PanedWindow) ---
+        # --- Сплиттер ---
         self.paned = tk.PanedWindow(
-            self.root_container, orient=tk.HORIZONTAL, sashwidth=4, bg="#dcdcdc"
+            self.root_container, orient=tk.HORIZONTAL, sashwidth=2,
+            bg=colors["separator"], bd=0
         )
         self.paned.pack(fill=tk.BOTH, expand=True)
 
-        # --- ЛЕВАЯ ПАНЕЛЬ (аккаунты) ---
-        self.left_panel = tk.Frame(self.paned, width=260, bg="#f0f0f0")
-        self.paned.add(self.left_panel, minsize=200)
+        # --- ЛЕВАЯ ПАНЕЛЬ ---
+        self._build_left_panel(colors)
+
+        # --- ПРАВАЯ ПАНЕЛЬ ---
+        self._build_right_panel(colors)
+
+    def _build_left_panel(self, colors):
+        """Построение левой панели (аккаунты + инструменты)."""
+        self.left_panel = tk.Frame(self.paned, width=280, bg=colors["panel_bg"])
+        self.paned.add(self.left_panel, minsize=240)
         self.left_panel.grid_columnconfigure(0, weight=1)
-        self.left_panel.grid_rowconfigure(4, weight=1)
 
-        # Заголовок левой панели (тема)
-        self.left_header = tk.Frame(self.left_panel, bg="#f0f0f0")
-        self.left_header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 0))
+        row = 0
 
-        # Тема (светлая/темная)
-        self.lbl_theme = tk.Label(
-            self.left_header, text="Тема", bg="#f0f0f0", font=FONT_SMALL
+        # ---- HEADER: Лого + Тема ----
+        self.left_header = tk.Frame(self.left_panel, bg=colors["panel_bg"])
+        self.left_header.grid(row=row, column=0, sticky="ew", padx=self.PAD_X,
+                              pady=(self.PAD_X, 4))
+        row += 1
+
+        self.lbl_app_title = tk.Label(
+            self.left_header, text="Mail.tm", font=("Segoe UI", 16, "bold"),
+            bg=colors["panel_bg"], fg=colors["accent"]
         )
-        self.lbl_theme.pack(side=tk.LEFT)
-        self.theme_toggle = ThemedCheckbox(
-            self.left_header,
-            on_toggle=self.on_theme_toggle_click,
-            size=28,
-            checked=False,
+        self.lbl_app_title.pack(side=tk.LEFT)
+
+        # Тема toggle (справа в header)
+        self.theme_frame = tk.Frame(self.left_header, bg=colors["panel_bg"])
+        self.theme_frame.pack(side=tk.RIGHT)
+
+        self.lbl_theme_icon = tk.Label(
+            self.theme_frame, text="☀", font=("Segoe UI", 11),
+            bg=colors["panel_bg"], fg=colors["muted"]
         )
-        self.theme_toggle.pack(side=tk.LEFT, padx=(2, 10))
+        self.lbl_theme_icon.pack(side=tk.LEFT, padx=(0, 4))
 
-        # Кнопка создания
-        self.btn_create = tk.Button(
-            self.left_panel,
-            text="Создать аккаунт",
-            bg="#2563eb",
-            fg="white",
-            font=FONT_BOLD,
-            command=self.start_create_account,
+        self.theme_toggle = AnimatedToggle(
+            self.theme_frame, on_toggle=self.on_theme_toggle_click,
+            width=44, height=22, bg_on=colors["accent"], bg_off="#cbd5e0"
         )
-        self.btn_create.grid(row=1, column=0, sticky="ew", padx=10, pady=10)
+        self.theme_toggle.pack(side=tk.LEFT)
 
-        # Список аккаунтов
-        self.lbl_saved = tk.Label(
-            self.left_panel, text="Сохраненные аккаунты", bg="#f0f0f0", font=FONT_BOLD
+        # Pin button
+        self.btn_pin = HoverButton(
+            self.left_header, text="📌", font=("Segoe UI", 11),
+            bg=colors["panel_bg"], fg=colors["muted"],
+            hover_bg=colors["btn_hover"], hover_fg=colors["fg"],
+            command=self.toggle_pin, padx=4, pady=2,
         )
-        self.lbl_saved.grid(row=2, column=0, sticky="ew", padx=10, pady=(10, 0))
+        self.btn_pin.pack(side=tk.RIGHT, padx=(0, 6))
 
-        # Панель кнопок файла
-        self.file_btn_frame = tk.Frame(self.left_panel, bg="#f0f0f0")
-        self.file_btn_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 5))
+        # ---- КНОПКА СОЗДАНИЯ ----
+        self.btn_create = HoverButton(
+            self.left_panel, text="+ Создать аккаунт",
+            bg=colors["accent"], fg=colors["accent_fg"],
+            hover_bg=colors["accent_hover"], hover_fg=colors["accent_fg"],
+            font=FONT_BOLD, command=self.start_create_account, pady=8,
+        )
+        self.btn_create.grid(row=row, column=0, sticky="ew",
+                             padx=self.PAD_X, pady=(4, 8))
+        row += 1
 
-        # Кнопка обновления списка
-        self.btn_reload = tk.Button(
-            self.file_btn_frame,
-            text="Обновить",
-            font=FONT_SMALL,
+        # ---- СЕКЦИЯ: Аккаунты ----
+        self.section_accounts = SectionLabel(
+            self.left_panel, text="АККАУНТЫ", font=FONT_SECTION,
+            bg=colors["panel_bg"], fg=colors["muted"],
+            line_color=colors["separator"]
+        )
+        self.section_accounts.grid(row=row, column=0, sticky="ew",
+                                   padx=self.PAD_X, pady=(0, 4))
+        row += 1
+
+        # Кнопки файлов (строка)
+        self.file_btn_frame = tk.Frame(self.left_panel, bg=colors["panel_bg"])
+        self.file_btn_frame.grid(row=row, column=0, sticky="ew",
+                                 padx=self.PAD_X, pady=(0, 4))
+        row += 1
+
+        self.btn_reload = HoverButton(
+            self.file_btn_frame, text="Обновить", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
             command=self.load_accounts_from_file,
         )
         self.btn_reload.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
 
-        # Кнопка открытия файла
-        self.btn_open_file = tk.Button(
-            self.file_btn_frame,
-            text="Файл",
-            font=FONT_SMALL,
+        self.btn_open_file = HoverButton(
+            self.file_btn_frame, text="Файл", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
             command=self.open_accounts_file,
         )
-        self.btn_open_file.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2, 0))
+        self.btn_open_file.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
-        # Кнопка открытия Excel файла
-        self.btn_open_excel = tk.Button(
-            self.file_btn_frame,
-            text="Excel",
-            font=FONT_SMALL,
+        self.btn_open_excel = HoverButton(
+            self.file_btn_frame, text="Excel", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
             command=self.open_excel_file,
         )
-        self.btn_open_excel.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2, 0))
+        self.btn_open_excel.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
-        # Кнопка проверки бана OpenAI
-        self.btn_check_ban = tk.Button(
-            self.file_btn_frame,
-            text="🚫 Бан",
-            font=FONT_SMALL,
+        self.btn_check_ban = HoverButton(
+            self.file_btn_frame, text="Бан", font=FONT_SMALL,
+            bg=colors["danger"], fg="white",
+            hover_bg=colors["danger_hover"], hover_fg="white",
             command=self.start_ban_check,
-            bg="#ef4444",
-            fg="white",
         )
         self.btn_check_ban.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(2, 0))
 
-        # Кнопки управления аккаунтом
-        self.btn_frame = tk.Frame(self.left_panel, bg="#f0f0f0")
-        self.btn_frame.grid(row=6, column=0, sticky="ew", padx=10, pady=10)
+        # ---- СПИСОК АККАУНТОВ (с scrollbar) ----
+        acc_frame = tk.Frame(self.left_panel, bg=colors["panel_bg"])
+        acc_frame.grid(row=row, column=0, sticky="nsew",
+                       padx=self.PAD_X, pady=(0, 4))
+        self.left_panel.grid_rowconfigure(row, weight=1)
+        row += 1
 
-        self.btn_copy_email = tk.Button(
-            self.btn_frame, text="Email", command=self.copy_email, font=FONT_SMALL
+        self.acc_scrollbar = tk.Scrollbar(acc_frame, orient=tk.VERTICAL)
+        self.acc_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.acc_listbox = tk.Listbox(
+            acc_frame, height=12, exportselection=False,
+            font=FONT_SMALL, activestyle="none",
+            yscrollcommand=self.acc_scrollbar.set,
+            relief=tk.FLAT, borderwidth=0, highlightthickness=1,
+            highlightcolor=colors["accent"], highlightbackground=colors["border"],
         )
-        self.btn_copy_email.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-
-        # Кнопка копирования пароля OpenAI
-        self.btn_copy_pass_openai = tk.Button(
-            self.btn_frame,
-            text="🔑 OpenAI",
-            command=self.copy_pass_openai,
-            font=FONT_SMALL,
-        )
-        self.btn_copy_pass_openai.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-
-        # Кнопка копирования пароля от почты
-        self.btn_copy_pass = tk.Button(
-            self.btn_frame, text="📧 Почта", command=self.copy_pass, font=FONT_SMALL
-        )
-        self.btn_copy_pass.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-
-        # Кнопка для генерации SK данных
-        self.btn_sk = tk.Button(
-            self.btn_frame,
-            text="SK Info",
-            command=self._show_sk_window,
-            font=FONT_SMALL,
-        )
-        self.btn_sk.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-
-        # Кнопка для генерации IN данных (Индия)
-        self.btn_in = tk.Button(
-            self.btn_frame,
-            text="IN Info",
-            command=self._show_in_window,
-            font=FONT_SMALL,
-        )
-        self.btn_in.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-
-        # Кнопка для игры в Сапер
-        self.btn_minesweeper = tk.Button(
-            self.btn_frame,
-            text="💣",
-            command=self._show_minesweeper,
-            font=("Segoe UI", 12),
-            width=3,
-        )
-        self.btn_minesweeper.pack(side=tk.LEFT, padx=2)
-
-        # Кнопка настроек горячих клавиш
-        self.btn_hotkey_settings = tk.Button(
-            self.btn_frame,
-            text="⚙",
-            command=self._show_hotkey_settings,
-            font=("Segoe UI", 12),
-            width=3,
-        )
-        self.btn_hotkey_settings.pack(side=tk.LEFT, padx=2)
-
-        # Список аккаунтов
-        self.acc_listbox = tk.Listbox(self.left_panel, height=20, exportselection=False)
-        self.acc_listbox.grid(row=4, column=0, sticky="nsew", padx=10, pady=5)
+        self.acc_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.acc_scrollbar.config(command=self.acc_listbox.yview)
         self.acc_listbox.bind("<<ListboxSelect>>", self.on_account_select)
 
-        # Контекстное меню для аккаунтов
-        self.context_menu = tk.Menu(root, tearoff=0)
+        # Контекстное меню
+        self.context_menu = tk.Menu(self.root, tearoff=0)
         self.context_menu.add_command(
             label="Статус: Не зарегистрирован",
             command=lambda: self.set_account_status("not_registered"),
@@ -288,150 +311,240 @@ class MailApp:
             command=lambda: self.set_account_status("registered"),
         )
         self.context_menu.add_command(
-            label="Статус: Plus", command=lambda: self.set_account_status("plus")
+            label="Статус: Plus",
+            command=lambda: self.set_account_status("plus"),
         )
         self.context_menu.add_command(
-            label="Статус: Banned 🚫", command=lambda: self.set_account_status("banned")
+            label="Статус: Banned",
+            command=lambda: self.set_account_status("banned"),
         )
         self.context_menu.add_command(
-            label="Статус: Неверный пароль 🔒",
+            label="Статус: Неверный пароль",
             command=lambda: self.set_account_status("invalid_password"),
         )
-
         self.acc_listbox.bind("<Button-3>", self.show_context_menu)
 
-        # Загружаем сохраненные аккаунты сразу
-        self.load_accounts_from_file()
-
-        # --- ПАНЕЛЬ СЛУЧАЙНЫХ ДАННЫХ ---
-        self.person_frame = tk.LabelFrame(
-            self.left_panel, text="👤 Случайные данные", font=FONT_BOLD, bg="#f0f0f0"
+        # ---- СЕКЦИЯ: Действия ----
+        self.section_actions = SectionLabel(
+            self.left_panel, text="ДЕЙСТВИЯ", font=FONT_SECTION,
+            bg=colors["panel_bg"], fg=colors["muted"],
+            line_color=colors["separator"]
         )
-        self.person_frame.grid(row=5, column=0, sticky="ew", padx=10, pady=(5, 10))
+        self.section_actions.grid(row=row, column=0, sticky="ew",
+                                  padx=self.PAD_X, pady=(4, 4))
+        row += 1
 
-        # Инициализация Faker (английский)
-        self.fake = Faker("en_US")
+        # Кнопки копирования
+        self.btn_frame = tk.Frame(self.left_panel, bg=colors["panel_bg"])
+        self.btn_frame.grid(row=row, column=0, sticky="ew",
+                            padx=self.PAD_X, pady=(0, 2))
+        row += 1
 
-        # Переменные для случайных данных
+        self.btn_copy_email = HoverButton(
+            self.btn_frame, text="Email", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.copy_email,
+        )
+        self.btn_copy_email.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
+
+        self.btn_copy_pass_openai = HoverButton(
+            self.btn_frame, text="OpenAI", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.copy_pass_openai,
+        )
+        self.btn_copy_pass_openai.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        self.btn_copy_pass = HoverButton(
+            self.btn_frame, text="Почта", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.copy_pass,
+        )
+        self.btn_copy_pass.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
+
+        # Кнопки инструментов
+        self.tools_frame = tk.Frame(self.left_panel, bg=colors["panel_bg"])
+        self.tools_frame.grid(row=row, column=0, sticky="ew",
+                              padx=self.PAD_X, pady=(2, 4))
+        row += 1
+
+        self.btn_sk = HoverButton(
+            self.tools_frame, text="SK", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self._show_sk_window,
+        )
+        self.btn_sk.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
+
+        self.btn_in = HoverButton(
+            self.tools_frame, text="IN", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self._show_in_window,
+        )
+        self.btn_in.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        self.btn_minesweeper = HoverButton(
+            self.tools_frame, text="Сапёр", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self._show_minesweeper,
+        )
+        self.btn_minesweeper.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
+        self.btn_hotkey_settings = HoverButton(
+            self.tools_frame, text="Настройки", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self._show_hotkey_settings,
+        )
+        self.btn_hotkey_settings.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
+
+        # ---- СЕКЦИЯ: Генератор данных ----
+        self.section_gen = SectionLabel(
+            self.left_panel, text="ГЕНЕРАТОР", font=FONT_SECTION,
+            bg=colors["panel_bg"], fg=colors["muted"],
+            line_color=colors["separator"]
+        )
+        self.section_gen.grid(row=row, column=0, sticky="ew",
+                              padx=self.PAD_X, pady=(4, 4))
+        row += 1
+
+        self.person_frame = tk.Frame(self.left_panel, bg=colors["panel_bg"])
+        self.person_frame.grid(row=row, column=0, sticky="ew",
+                               padx=self.PAD_X, pady=(0, 8))
+        row += 1
+
         self.random_name_var = tk.StringVar()
         self.random_birthdate_var = tk.StringVar()
 
-        # Имя
-        name_row = tk.Frame(self.person_frame, bg="#f0f0f0")
-        name_row.pack(fill=tk.X, padx=5, pady=2)
+        # Name row
+        name_row = tk.Frame(self.person_frame, bg=colors["panel_bg"])
+        name_row.pack(fill=tk.X, pady=2)
         tk.Label(
-            name_row, text="Name:", font=FONT_SMALL, bg="#f0f0f0", width=8, anchor="w"
+            name_row, text="Name", font=FONT_SMALL,
+            bg=colors["panel_bg"], fg=colors["muted"], width=6, anchor="w"
         ).pack(side=tk.LEFT)
         self.entry_random_name = tk.Entry(
-            name_row,
-            textvariable=self.random_name_var,
-            font=FONT_SMALL,
-            state="readonly",
-            width=18,
+            name_row, textvariable=self.random_name_var, font=FONT_SMALL,
+            state="readonly", width=16, relief=tk.FLAT, bd=0,
+            highlightthickness=1,
         )
-        self.entry_random_name.pack(side=tk.LEFT, padx=2)
-        self.btn_copy_random_name = tk.Button(
-            name_row, text="📋", command=self.copy_random_name, font=FONT_SMALL, width=2
+        self.entry_random_name.pack(side=tk.LEFT, padx=4, fill=tk.X, expand=True)
+        self.btn_copy_random_name = HoverButton(
+            name_row, text="Копировать", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.copy_random_name, padx=6, pady=2,
         )
-        self.btn_copy_random_name.pack(side=tk.LEFT, padx=2)
+        self.btn_copy_random_name.pack(side=tk.LEFT, padx=(2, 0))
 
-        # Дата рождения
-        bdate_row = tk.Frame(self.person_frame, bg="#f0f0f0")
-        bdate_row.pack(fill=tk.X, padx=5, pady=2)
+        # Birthday row
+        bdate_row = tk.Frame(self.person_frame, bg=colors["panel_bg"])
+        bdate_row.pack(fill=tk.X, pady=2)
         tk.Label(
-            bdate_row, text="Дата:", font=FONT_SMALL, bg="#f0f0f0", width=8, anchor="w"
+            bdate_row, text="Дата", font=FONT_SMALL,
+            bg=colors["panel_bg"], fg=colors["muted"], width=6, anchor="w"
         ).pack(side=tk.LEFT)
         self.entry_random_bdate = tk.Entry(
-            bdate_row,
-            textvariable=self.random_birthdate_var,
-            font=FONT_SMALL,
-            state="readonly",
-            width=18,
+            bdate_row, textvariable=self.random_birthdate_var, font=FONT_SMALL,
+            state="readonly", width=16, relief=tk.FLAT, bd=0,
+            highlightthickness=1,
         )
-        self.entry_random_bdate.pack(side=tk.LEFT, padx=2)
-        self.btn_copy_random_bdate = tk.Button(
-            bdate_row,
-            text="📋",
-            command=self.copy_random_birthdate,
-            font=FONT_SMALL,
-            width=2,
+        self.entry_random_bdate.pack(side=tk.LEFT, padx=4, fill=tk.X, expand=True)
+        self.btn_copy_random_bdate = HoverButton(
+            bdate_row, text="Копировать", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.copy_random_birthdate, padx=6, pady=2,
         )
-        self.btn_copy_random_bdate.pack(side=tk.LEFT, padx=2)
+        self.btn_copy_random_bdate.pack(side=tk.LEFT, padx=(2, 0))
 
         # Кнопка генерации
-        self.btn_generate_person = tk.Button(
-            self.person_frame,
-            text="🔄 Новые данные",
-            command=self.generate_random_person,
-            font=FONT_SMALL,
+        self.btn_generate_person = HoverButton(
+            self.person_frame, text="Новые данные", font=FONT_SMALL,
+            bg=colors["accent"], fg=colors["accent_fg"],
+            hover_bg=colors["accent_hover"], hover_fg=colors["accent_fg"],
+            command=self.generate_random_person, pady=4,
         )
-        self.btn_generate_person.pack(fill=tk.X, padx=5, pady=5)
+        self.btn_generate_person.pack(fill=tk.X, pady=(6, 0))
 
-        # Генерируем случайные данные при старте
-        self.generate_random_person()
+    def _build_right_panel(self, colors):
+        """Построение правой панели (письма)."""
+        self.right_panel = tk.Frame(self.paned, bg=colors["bg"])
+        self.paned.add(self.right_panel, minsize=450)
 
-        # --- ПРАВАЯ ПАНЕЛЬ (ПИСЬМА) ---
-        self.right_panel = tk.Frame(self.paned)
-        self.paned.add(self.right_panel, minsize=400)
-
-        # Заголовок текущей почты
-        self.header_frame = tk.Frame(self.right_panel, bg="#ddd")
+        # ---- HEADER ----
+        self.header_frame = tk.Frame(self.right_panel, bg=colors["header_bg"])
         self.header_frame.pack(fill=tk.X)
 
+        # Аккаунт-лейбл
         self.lbl_current_email = tk.Label(
             self.header_frame,
             text="Выберите аккаунт слева",
             font=FONT_TITLE,
-            bg="#ddd",
-            pady=10,
+            bg=colors["header_bg"],
+            fg=colors["fg"],
+            pady=12,
         )
-        self.lbl_current_email.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
-
-        self.btn_refresh = tk.Button(
-            self.header_frame,
-            text="Обновить",
-            command=self.on_manual_refresh,
-            bg="#2196F3",
-            fg="white",
-            font=FONT_SMALL,
-        )
-        self.btn_refresh.pack(side=tk.RIGHT, padx=10)
+        self.lbl_current_email.pack(side=tk.LEFT, padx=self.PAD_X, fill=tk.X, expand=True)
 
         # Кнопки статуса
-        self.status_frame = tk.Frame(self.header_frame, bg="#ddd")
-        self.status_frame.pack(side=tk.RIGHT, padx=5)
+        self.status_frame = tk.Frame(self.header_frame, bg=colors["header_bg"])
+        self.status_frame.pack(side=tk.RIGHT, padx=(0, 4))
 
-        self.btn_nr = tk.Button(
-            self.status_frame,
-            text="Не рег",
-            bg="white",
-            font=FONT_SMALL,
+        self.btn_nr = HoverButton(
+            self.status_frame, text="Не рег", font=FONT_SMALL,
+            bg=STATUS_COLORS["not_registered"]["light"],
+            fg=colors["btn_fg"],
+            hover_bg="#e2e8f0",
             command=lambda: self.set_account_status("not_registered"),
+            padx=6, pady=3,
         )
-        self.btn_nr.pack(side=tk.LEFT, padx=2)
+        self.btn_nr.pack(side=tk.LEFT, padx=1)
 
-        self.btn_reg = tk.Button(
-            self.status_frame,
-            text="Рег",
-            bg="#d9e1f2",
-            font=FONT_SMALL,
+        self.btn_reg = HoverButton(
+            self.status_frame, text="Рег", font=FONT_SMALL,
+            bg=STATUS_COLORS["registered"]["light"],
+            fg=colors["btn_fg"],
+            hover_bg="#bfdbfe",
             command=lambda: self.set_account_status("registered"),
+            padx=6, pady=3,
         )
-        self.btn_reg.pack(side=tk.LEFT, padx=2)
+        self.btn_reg.pack(side=tk.LEFT, padx=1)
 
-        self.btn_plus = tk.Button(
-            self.status_frame,
-            text="Plus",
-            bg="#46bdc6",
-            font=FONT_SMALL,
+        self.btn_plus = HoverButton(
+            self.status_frame, text="Plus", font=FONT_SMALL,
+            bg=STATUS_COLORS["plus"]["light"],
+            fg=colors["btn_fg"],
+            hover_bg="#9ae6b4",
             command=lambda: self.set_account_status("plus"),
+            padx=6, pady=3,
         )
-        self.btn_plus.pack(side=tk.LEFT, padx=2)
+        self.btn_plus.pack(side=tk.LEFT, padx=1)
 
-        # Список писем (Treeview)
+        # Кнопка обновления
+        self.btn_refresh = HoverButton(
+            self.header_frame, text="Обновить", font=FONT_SMALL,
+            bg=colors["accent"], fg=colors["accent_fg"],
+            hover_bg=colors["accent_hover"], hover_fg=colors["accent_fg"],
+            command=self.on_manual_refresh,
+            padx=12, pady=4,
+        )
+        self.btn_refresh.pack(side=tk.RIGHT, padx=(4, self.PAD_X))
+
+        # Разделитель под header
+        tk.Frame(self.right_panel, bg=colors["separator"], height=1).pack(fill=tk.X)
+
+        # ---- СПИСОК ПИСЕМ ----
+        tree_frame = tk.Frame(self.right_panel, bg=colors["bg"])
+        tree_frame.pack(fill=tk.X, padx=self.PAD_X, pady=(8, 0))
+
         columns = ("sender", "subject", "date", "msg_id")
         self.tree = ttk.Treeview(
-            self.right_panel,
+            tree_frame,
             columns=columns,
             displaycolumns=("sender", "subject", "date"),
             show="headings",
@@ -440,52 +553,63 @@ class MailApp:
         self.tree.heading("sender", text="От кого")
         self.tree.heading("subject", text="Тема")
         self.tree.heading("date", text="Время")
-        self.tree.column("sender", width=150)
-        self.tree.column("subject", width=300)
-        self.tree.column("date", width=110, anchor="center")
+        self.tree.column("sender", width=150, minwidth=100)
+        self.tree.column("subject", width=300, minwidth=150)
+        self.tree.column("date", width=80, anchor="center", minwidth=70)
         self.tree.column("msg_id", width=0, stretch=False)
-        self.tree.pack(fill=tk.X, padx=10, pady=10)
+
+        tree_scroll = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL,
+                                    command=self.tree.yview)
+        self.tree.configure(yscrollcommand=tree_scroll.set)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.bind("<<TreeviewSelect>>", self.on_message_select)
 
-        # Область просмотра письма
-        self.lbl_msg_title = tk.Label(
-            self.right_panel, text="Содержание письма:", anchor="w", font=FONT_BOLD
-        )
-        self.lbl_msg_title.pack(fill=tk.X, padx=10)
+        # ---- СОДЕРЖАНИЕ ПИСЬМА ----
+        msg_header = tk.Frame(self.right_panel, bg=colors["bg"])
+        msg_header.pack(fill=tk.X, padx=self.PAD_X, pady=(8, 0))
 
-        # Кнопка копирования кода
-        self.btn_copy_code = tk.Button(
-            self.right_panel,
-            text="Копировать код",
-            bg="#FF9800",
-            fg="white",
+        self.lbl_msg_title = tk.Label(
+            msg_header, text="Содержание письма", anchor="w",
+            font=FONT_BOLD, bg=colors["bg"], fg=colors["fg"],
+        )
+        self.lbl_msg_title.pack(side=tk.LEFT)
+
+        # Кнопка копирования кода (скрыта по умолчанию)
+        self.btn_copy_code = HoverButton(
+            self.right_panel, text="Копировать код",
+            bg=colors["warning"], fg="#1a1a2e",
+            hover_bg="#f6ad55", hover_fg="#1a1a2e",
             font=FONT_BOLD,
         )
-        self.btn_copy_code.pack(fill=tk.X, padx=10, pady=5)
+        self.btn_copy_code.pack(fill=tk.X, padx=self.PAD_X, pady=4)
         self.btn_copy_code.pack_forget()
 
+        # Текст письма
+        msg_text_frame = tk.Frame(self.right_panel, bg=colors["bg"])
+        msg_text_frame.pack(fill=tk.BOTH, expand=True, padx=self.PAD_X,
+                            pady=(4, self.PAD_X))
+
+        self.msg_scrollbar = tk.Scrollbar(msg_text_frame, orient=tk.VERTICAL)
+        self.msg_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
         self.msg_text = tk.Text(
-            self.right_panel, wrap=tk.WORD, height=15, font=FONT_BASE
+            msg_text_frame, wrap=tk.WORD, height=10, font=FONT_BASE,
+            relief=tk.FLAT, borderwidth=0,
+            highlightthickness=1,
+            yscrollcommand=self.msg_scrollbar.set,
         )
-        self.msg_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        self.msg_text.insert(tk.END, "Выберите письмо слева, чтобы увидеть содержимое.")
+        self.msg_text.pack(fill=tk.BOTH, expand=True)
+        self.msg_scrollbar.config(command=self.msg_text.yview)
+        self.msg_text.insert(tk.END, "Выберите письмо, чтобы увидеть содержимое.")
 
-        print(f"[*] Используемый файл аккаунтов: {ACCOUNTS_FILE}")
-
-        # Current theme
-        self.set_theme("light")
-
-        # Запуск цикла автообновления
-        self.start_auto_refresh()
-
-        # Регистрация горячих клавиш
-        self._setup_hotkeys()
+    # ================================================================
+    #  NETWORKING
+    # ================================================================
 
     def _create_http_session(self):
         """Создание HTTP сессии с настройками переподключения для устойчивости к смене VPN."""
         session = requests.Session()
-
-        # Настройка повторных попыток при ошибках соединения
         retry_strategy = Retry(
             total=3,
             backoff_factor=0.5,
@@ -493,17 +617,14 @@ class MailApp:
             allowed_methods=["HEAD", "GET", "POST", "OPTIONS"],
             raise_on_status=False,
         )
-
         adapter = HTTPAdapter(
             max_retries=retry_strategy,
-            pool_connections=1,  # Минимальный пул для быстрого переподключения
+            pool_connections=1,
             pool_maxsize=1,
             pool_block=False,
         )
-
         session.mount("http://", adapter)
         session.mount("https://", adapter)
-
         return session
 
     def _reset_http_session(self):
@@ -516,18 +637,7 @@ class MailApp:
         self.http_session = self._create_http_session()
 
     def _make_request(self, method, url, retry_auth=True, **kwargs):
-        """
-        Выполнить HTTP запрос с обработкой ошибок сети и переподключением.
-
-        Args:
-            method: HTTP метод ('get', 'post')
-            url: URL для запроса
-            retry_auth: Если True, попытаться переавторизоваться при ошибке
-            **kwargs: Дополнительные параметры для requests
-
-        Returns:
-            Response объект или None при ошибке
-        """
+        """Выполнить HTTP запрос с обработкой ошибок сети и переподключением."""
         try:
             response = getattr(self.http_session, method)(url, timeout=10, **kwargs)
             return response
@@ -538,21 +648,15 @@ class MailApp:
             OSError,
         ) as e:
             print(f"[Network] Connection error: {e}")
-
-            # Сбрасываем сессию и пробуем снова
             self._reset_http_session()
-
             try:
                 response = getattr(self.http_session, method)(url, timeout=10, **kwargs)
                 return response
             except Exception as e2:
                 print(f"[Network] Retry failed: {e2}")
-
-                # Если есть сохранённые учётные данные и нужна переавторизация
                 if retry_auth and self.current_email and self.current_password:
                     print("[Network] Attempting re-authentication...")
                     self._try_reauth()
-
                 return None
         except Exception as e:
             print(f"[Network] Unexpected error: {e}")
@@ -562,9 +666,7 @@ class MailApp:
         """Попытка переавторизации при потере соединения."""
         if not self.current_email or not self.current_password:
             return False
-
         try:
-            # Сбрасываем текущее состояние
             self.current_token = None
             if self.imap_client:
                 try:
@@ -572,8 +674,6 @@ class MailApp:
                 except Exception:
                     pass
                 self.imap_client = None
-
-            # Запускаем переавторизацию в отдельном потоке
             self.root.after(
                 0, lambda: self.update_status("Переподключение после смены сети...")
             )
@@ -586,6 +686,10 @@ class MailApp:
         except Exception as e:
             print(f"[Reauth] Failed: {e}")
             return False
+
+    # ================================================================
+    #  HOTKEYS
+    # ================================================================
 
     def _setup_hotkeys(self):
         """Настройка глобальных горячих клавиш."""
@@ -602,13 +706,12 @@ class MailApp:
         )
         self.hotkey_settings.register_all()
 
-    def paste_accounts_from_clipboard(self):
-        """Вставить аккаунты из буфера обмена.
+    # ================================================================
+    #  CLIPBOARD OPERATIONS
+    # ================================================================
 
-        Поддерживаемые форматы:
-        1. Новый: email:password_openai;password_mail
-        2. Старый: email:password или email / password
-        """
+    def paste_accounts_from_clipboard(self):
+        """Вставить аккаунты из буфера обмена."""
         try:
             clipboard_text = pyperclip.paste()
             if not clipboard_text:
@@ -627,7 +730,6 @@ class MailApp:
                 password_openai = ""
                 password_mail = ""
 
-                # Parse different formats
                 if " / " in line:
                     parts = line.split(" / ", 1)
                     email = parts[0].strip()
@@ -663,7 +765,6 @@ class MailApp:
                         password_mail = passwords
 
                 if email and (password_openai or password_mail) and "@" in email:
-                    # Check if already exists
                     exists = any(acc["email"] == email for acc in self.accounts_data)
                     if not exists:
                         self.accounts_data.append(
@@ -671,12 +772,11 @@ class MailApp:
                                 "email": email,
                                 "password_openai": password_openai,
                                 "password_mail": password_mail,
-                                "password": password_mail,  # Для совместимости
+                                "password": password_mail,
                                 "status": "not_registered",
                             }
                         )
-                        display_text = email
-                        self.acc_listbox.insert(tk.END, display_text)
+                        self.acc_listbox.insert(tk.END, email)
                         added_count += 1
 
             if added_count > 0:
@@ -702,7 +802,6 @@ class MailApp:
             password_openai = acc.get("password_openai", acc.get("password", ""))
             password_mail = acc.get("password_mail", acc.get("password", ""))
 
-            # Формируем строку в формате email:password_openai;password_mail
             if password_openai != password_mail:
                 full_text = f"{acc['email']}:{password_openai};{password_mail}"
             else:
@@ -711,30 +810,43 @@ class MailApp:
             pyperclip.copy(full_text)
             self.update_status(f"Скопировано: {acc['email']}:***")
 
-    def _show_hotkey_settings(self):
-        """Открыть окно настроек горячих клавиш."""
+    def copy_email(self):
+        """Копировать email выбранного аккаунта."""
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            self.update_status("Выберите аккаунт для копирования")
+            return
+        idx = selection[0]
+        if idx < len(self.accounts_data):
+            acc = self.accounts_data[idx]
+            pyperclip.copy(acc["email"])
+            self.update_status(f"Скопирован email: {acc['email']}")
 
-        def on_save(new_hotkeys):
-            self.hotkey_settings.register_all()
+    def copy_pass_openai(self):
+        """Копировать пароль OpenAI выбранного аккаунта."""
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            self.update_status("Выберите аккаунт для копирования")
+            return
+        idx = selection[0]
+        if idx < len(self.accounts_data):
+            acc = self.accounts_data[idx]
+            password = acc.get("password_openai", acc.get("password", ""))
+            pyperclip.copy(password)
+            self.update_status(f"Скопирован пароль OpenAI для: {acc['email']}")
 
-        theme_name = self.params.get("theme", "light")
-        show_settings_window(self.root, theme_name, on_save=on_save)
-
-    def generate_random_person(self):
-        """Генерация случайных данных о человеке."""
-        # Генерируем имя (только имя, без фамилии)
-        name = self.fake.first_name()
-        self.random_name_var.set(name)
-
-        # Генерируем дату рождения (с 1975 по 2004 год)
-        start_date = datetime(1975, 1, 1)
-        end_date = datetime(2004, 12, 31)
-        days_between = (end_date - start_date).days
-        random_days = random.randint(0, days_between)
-        birthdate = start_date + timedelta(days=random_days)
-        self.random_birthdate_var.set(birthdate.strftime("%d.%m.%Y"))
-
-        self.update_status(f"Сгенерировано: {name}")
+    def copy_pass(self):
+        """Копировать пароль от почты выбранного аккаунта."""
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            self.update_status("Выберите аккаунт для копирования")
+            return
+        idx = selection[0]
+        if idx < len(self.accounts_data):
+            acc = self.accounts_data[idx]
+            password = acc.get("password_mail", acc.get("password", ""))
+            pyperclip.copy(password)
+            self.update_status(f"Скопирован пароль почты для: {acc['email']}")
 
     def copy_random_name(self):
         """Копировать случайное имя."""
@@ -750,81 +862,73 @@ class MailApp:
             pyperclip.copy(bdate)
             self.update_status(f"Скопирована дата: {bdate}")
 
-    def copy_email(self):
-        """Копировать email выбранного аккаунта."""
-        selection = self.acc_listbox.curselection()
-        if not selection:
-            self.update_status("Выберите аккаунт для копирования")
-            return
+    def copy_code_to_clipboard(self, code):
+        """Копирование кода в буфер."""
+        pyperclip.copy(code)
+        self.status_var.set(f"Код {code} скопирован!")
 
-        idx = selection[0]
-        if idx < len(self.accounts_data):
-            acc = self.accounts_data[idx]
-            pyperclip.copy(acc["email"])
-            self.update_status(f"Скопирован email: {acc['email']}")
-
-    def copy_pass_openai(self):
-        """Копировать пароль OpenAI выбранного аккаунта."""
-        selection = self.acc_listbox.curselection()
-        if not selection:
-            self.update_status("Выберите аккаунт для копирования")
-            return
-
-        idx = selection[0]
-        if idx < len(self.accounts_data):
-            acc = self.accounts_data[idx]
-            password = acc.get("password_openai", acc.get("password", ""))
-            pyperclip.copy(password)
-            self.update_status(f"Скопирован пароль OpenAI для: {acc['email']}")
-
-    def copy_pass(self):
-        """Копировать пароль от почты выбранного аккаунта."""
-        selection = self.acc_listbox.curselection()
-        if not selection:
-            self.update_status("Выберите аккаунт для копирования")
-            return
-
-        idx = selection[0]
-        if idx < len(self.accounts_data):
-            acc = self.accounts_data[idx]
-            password = acc.get("password_mail", acc.get("password", ""))
-            pyperclip.copy(password)
-            self.update_status(f"Скопирован пароль почты для: {acc['email']}")
+    # ================================================================
+    #  WINDOW HELPERS
+    # ================================================================
 
     def toggle_pin(self):
-        """Переключение режима 'Поверх всех окон'"""
+        """Переключение режима 'Поверх всех окон'."""
         self.is_pinned = not self.is_pinned
         self.root.wm_attributes("-topmost", self.is_pinned)
+        colors = THEMES[self.params.get("theme", "light")]
+        if self.is_pinned:
+            self.btn_pin.update_colors(
+                bg=colors["accent"], fg=colors["accent_fg"],
+                hover_bg=colors["accent_hover"], hover_fg=colors["accent_fg"]
+            )
+        else:
+            self.btn_pin.update_colors(
+                bg=colors["panel_bg"], fg=colors["muted"],
+                hover_bg=colors["btn_hover"], hover_fg=colors["fg"]
+            )
 
-    def load_mail_tm_domains(self):
-        """Загрузка доменов mail.tm"""
-        try:
-            res = self._make_request("get", f"{API_URL}/domains", retry_auth=False)
-            if res and res.status_code == 200:
-                data = res.json()["hydra:member"]
-                self.mail_tm_domains = [d["domain"] for d in data]
-                print(f"[*] Loaded {len(self.mail_tm_domains)} mail.tm domains")
-        except:
-            pass
+    def _show_hotkey_settings(self):
+        """Открыть окно настроек горячих клавиш."""
+        def on_save(new_hotkeys):
+            self.hotkey_settings.register_all()
+        theme_name = self.params.get("theme", "light")
+        show_settings_window(self.root, theme_name, on_save=on_save)
 
     def _show_sk_window(self):
-        """Открывает окно генератора данных Южной Кореи"""
         theme_name = self.params.get("theme", "light")
         show_sk_window(self.root, theme_name)
 
     def _show_in_window(self):
-        """Открывает окно генератора данных Индии"""
         theme_name = self.params.get("theme", "light")
         show_in_window(self.root, theme_name)
 
     def _show_minesweeper(self):
-        """Открывает окно игры Сапер"""
         theme_name = self.params.get("theme", "light")
         show_minesweeper(self.root, theme_name)
 
-    def play_notification_sound(self, count=1):
-        """Проигрывает звук при появлении новых писем"""
+    # ================================================================
+    #  RANDOM DATA GENERATION
+    # ================================================================
 
+    def generate_random_person(self):
+        """Генерация случайных данных о человеке."""
+        name = self.fake.first_name()
+        self.random_name_var.set(name)
+
+        start_date = datetime(1975, 1, 1)
+        end_date = datetime(2004, 12, 31)
+        days_between = (end_date - start_date).days
+        random_days = random.randint(0, days_between)
+        birthdate = start_date + timedelta(days=random_days)
+        self.random_birthdate_var.set(birthdate.strftime("%d.%m.%Y"))
+        self.update_status(f"Сгенерировано: {name}")
+
+    # ================================================================
+    #  SOUND
+    # ================================================================
+
+    def play_notification_sound(self, count=1):
+        """Проигрывает звук при появлении новых писем."""
         def _beep():
             for _ in range(max(1, count)):
                 try:
@@ -835,15 +939,22 @@ class MailApp:
                 except Exception:
                     pass
                 time.sleep(0.1)
-
         threading.Thread(target=_beep, daemon=True).start()
 
+    # ================================================================
+    #  STATUS
+    # ================================================================
+
     def update_status(self, text):
-        """Безопасное обновление статуса из другого потока"""
+        """Безопасное обновление статуса из другого потока."""
         self.root.after(0, lambda: self.status_var.set(text))
 
+    # ================================================================
+    #  FILE OPERATIONS
+    # ================================================================
+
     def open_accounts_file(self):
-        """Открывает файл аккаунтов в системном редакторе"""
+        """Открывает файл аккаунтов в системном редакторе."""
         try:
             if not os.path.exists(ACCOUNTS_FILE):
                 with open(ACCOUNTS_FILE, "w") as f:
@@ -853,7 +964,7 @@ class MailApp:
             messagebox.showerror("Ошибка", f"Не удалось открыть файл:\n{e}")
 
     def open_excel_file(self):
-        """Открывает Excel файл аккаунтов"""
+        """Открывает Excel файл аккаунтов."""
         try:
             if not os.path.exists(EXCEL_FILE):
                 self.save_accounts_to_excel()
@@ -861,13 +972,16 @@ class MailApp:
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось открыть Excel файл:\n{e}")
 
+    # ================================================================
+    #  BAN CHECK
+    # ================================================================
+
     def start_ban_check(self):
-        """Запуск проверки всех аккаунтов на бан OpenAI"""
+        """Запуск проверки всех аккаунтов на бан OpenAI."""
         if not self.accounts_data:
             messagebox.showwarning("Внимание", "Нет аккаунтов для проверки")
             return
 
-        # Подтверждение
         total = len(self.accounts_data)
         if not messagebox.askyesno(
             "Проверка бана",
@@ -877,108 +991,99 @@ class MailApp:
         ):
             return
 
-        self.btn_check_ban.config(state=tk.DISABLED, text="⏳ Проверка...")
+        self.btn_check_ban.config(state=tk.DISABLED)
+        self.btn_check_ban.config(text="Проверка...")
 
-        # Настройки многопоточности
         recommended_threads = min(20, max(4, (total + 7) // 8))
         self.ban_check_threads = max(1, min(total, recommended_threads))
         self.ban_check_lock = threading.Lock()
 
-        # Создаём окно прогресса
         self._create_progress_window(total)
-
         threading.Thread(target=self.ban_check_thread, daemon=True).start()
 
     def _create_progress_window(self, total):
-        """Создание окна с прогресс баром"""
+        """Создание окна с прогресс баром."""
         self.progress_window = tk.Toplevel(self.root)
         self.progress_window.title("Проверка на бан OpenAI")
-        self.progress_window.geometry("450x180")
+        self.progress_window.geometry("480x200")
         self.progress_window.resizable(False, False)
         self.progress_window.transient(self.root)
         self.progress_window.grab_set()
 
-        # Центрируем окно
         self.progress_window.update_idletasks()
-        x = self.root.winfo_x() + (self.root.winfo_width() - 450) // 2
-        y = self.root.winfo_y() + (self.root.winfo_height() - 180) // 2
+        x = self.root.winfo_x() + (self.root.winfo_width() - 480) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - 200) // 2
         self.progress_window.geometry(f"+{x}+{y}")
 
-        # Применяем тему
         theme = self.params.get("theme", "light")
         colors = THEMES[theme]
-        self.progress_window.config(bg=colors["bg"])
+        self.progress_window.config(bg=colors["panel_bg"])
 
-        # Заголовок
         self.progress_title = tk.Label(
             self.progress_window,
-            text="🔍 Проверка аккаунтов на бан...",
+            text="Проверка аккаунтов на бан...",
             font=FONT_BOLD,
-            bg=colors["bg"],
+            bg=colors["panel_bg"],
             fg=colors["fg"],
         )
-        self.progress_title.pack(pady=(15, 5))
+        self.progress_title.pack(pady=(20, 8))
 
-        # Текущий аккаунт
         self.progress_label = tk.Label(
             self.progress_window,
             text=f"Подготовка... 0/{total}",
             font=FONT_SMALL,
-            bg=colors["bg"],
-            fg=colors["fg"],
+            bg=colors["panel_bg"],
+            fg=colors["muted"],
         )
-        self.progress_label.pack(pady=5)
+        self.progress_label.pack(pady=4)
 
-        # Прогресс бар
         style = ttk.Style()
         style.configure(
             "ban.Horizontal.TProgressbar",
-            troughcolor=colors.get("list_bg", "#e5e7eb"),
-            background="#ef4444",
+            troughcolor=colors.get("entry_bg", "#e5e7eb"),
+            background=colors["danger"],
         )
-
         self.progress_bar = ttk.Progressbar(
             self.progress_window,
             orient="horizontal",
-            length=380,
+            length=420,
             mode="determinate",
             maximum=total,
             style="ban.Horizontal.TProgressbar",
         )
         self.progress_bar.pack(pady=10)
 
-        # Статистика
         self.progress_stats = tk.Label(
             self.progress_window,
             text="Забанено: 0 | Проверено: 0",
             font=FONT_SMALL,
-            bg=colors["bg"],
+            bg=colors["panel_bg"],
             fg=colors["fg"],
         )
-        self.progress_stats.pack(pady=5)
+        self.progress_stats.pack(pady=4)
 
-        # Кнопка отмены
         self.ban_check_cancelled = False
-        self.btn_cancel_ban = tk.Button(
+        self.btn_cancel_ban = HoverButton(
             self.progress_window,
             text="Отмена",
-            command=self._cancel_ban_check,
             font=FONT_SMALL,
-            bg="#6b7280",
-            fg="white",
+            bg=colors["btn_bg"],
+            fg=colors["btn_fg"],
+            hover_bg=colors["danger"],
+            hover_fg="white",
+            command=self._cancel_ban_check,
         )
-        self.btn_cancel_ban.pack(pady=10)
+        self.btn_cancel_ban.pack(pady=8)
 
-        # Обработка закрытия окна
         self.progress_window.protocol("WM_DELETE_WINDOW", self._cancel_ban_check)
 
     def _cancel_ban_check(self):
-        """Отмена проверки бана"""
+        """Отмена проверки бана."""
         self.ban_check_cancelled = True
         self.progress_label.config(text="Отмена...")
 
     def _update_progress(self, current, total, email, banned_count, checked_count):
-        """Обновление прогресс бара"""
+        """Обновление прогресс бара."""
         if hasattr(self, "progress_window") and self.progress_window.winfo_exists():
             self.progress_bar["value"] = current
             self.progress_label.config(
@@ -989,7 +1094,7 @@ class MailApp:
             )
 
     def _get_ban_thread_session(self):
-        """HTTP сессия для текущего потока проверки (с переиспользованием)."""
+        """HTTP сессия для текущего потока проверки."""
         session = getattr(self._ban_thread_local, "session", None)
         if session is not None:
             return session
@@ -1021,7 +1126,6 @@ class MailApp:
         with self._ban_thread_sessions_lock:
             sessions = self._ban_thread_sessions[:]
             self._ban_thread_sessions = []
-
         for session in sessions:
             try:
                 session.close()
@@ -1029,10 +1133,9 @@ class MailApp:
                 pass
 
     def _get_ban_imap_hosts(self, domain):
-        """Возвращает IMAP хосты в порядке приоритета (кеш + fallback)."""
+        """Возвращает IMAP хосты в порядке приоритета."""
         with self._ban_imap_host_lock:
             cached = self._ban_imap_host_cache.get(domain)
-
         candidates = [cached, "imap.firstmail.ltd", f"imap.{domain}"]
         hosts = []
         for host in candidates:
@@ -1046,25 +1149,22 @@ class MailApp:
             self._ban_imap_host_cache[domain] = host
 
     def ban_check_thread(self):
-        """Поток проверки всех аккаунтов на бан с многопоточностью"""
+        """Поток проверки всех аккаунтов на бан с многопоточностью."""
         banned_count = 0
         invalid_pass_count = 0
         checked_count = 0
         total = len(self.accounts_data)
         start_time = time.time()
 
-        # Функция проверки одного аккаунта
         def check_single_account(idx, account):
             email = account.get("email", "")
             password = account.get("password_mail", account.get("password", ""))
             old_status = account.get("status", "not_registered")
 
             if not email or not password:
-                return (idx, email, None, None, True)  # skip
-
-            # Пропускаем уже забаненные и с неверным паролем
+                return (idx, email, None, None, True)
             if old_status in ("banned", "invalid_password"):
-                return (idx, email, None, None, True)  # skip
+                return (idx, email, None, None, True)
 
             try:
                 result, reason = self._check_account_for_ban_threadsafe(email, password)
@@ -1072,18 +1172,14 @@ class MailApp:
             except Exception as e:
                 return (idx, email, "error", str(e), False)
 
-        # Используем ThreadPoolExecutor для параллельной проверки
         try:
             with ThreadPoolExecutor(max_workers=self.ban_check_threads) as executor:
-                # Запускаем все задачи
                 futures = {
                     executor.submit(check_single_account, idx, account): idx
                     for idx, account in enumerate(self.accounts_data)
                 }
 
-                # Обрабатываем результаты по мере завершения
                 for future in as_completed(futures):
-                    # Проверяем отмену
                     if hasattr(self, "ban_check_cancelled") and self.ban_check_cancelled:
                         executor.shutdown(wait=False, cancel_futures=True)
                         break
@@ -1095,7 +1191,6 @@ class MailApp:
                             checked_count += 1
                             continue
 
-                        # Потокобезопасное обновление статистики
                         with self.ban_check_lock:
                             if result == "banned":
                                 self.accounts_data[idx]["status"] = "banned"
@@ -1105,11 +1200,9 @@ class MailApp:
                                 self.accounts_data[idx]["status"] = "invalid_password"
                                 invalid_pass_count += 1
                                 print(f"[BAN] Invalid password: {email}")
-                            # result == "ok" или "error" - не меняем статус
 
                             checked_count += 1
 
-                        # Обновляем прогресс
                         self.root.after(
                             0,
                             lambda c=checked_count,
@@ -1128,7 +1221,6 @@ class MailApp:
             f"[BAN] Проверка завершена за {elapsed_time:.1f} сек ({total / max(elapsed_time, 0.1):.1f} акк/сек)"
         )
 
-        # Обновляем UI
         self.root.after(
             0,
             lambda: self._on_ban_check_complete(
@@ -1137,23 +1229,18 @@ class MailApp:
         )
 
     def _check_account_for_ban_threadsafe(self, email_addr, password):
-        """
-        Потокобезопасная проверка одного аккаунта на бан OpenAI.
-        Использует HTTP сессию текущего рабочего потока.
-        """
+        """Потокобезопасная проверка одного аккаунта на бан OpenAI."""
         session = self._get_ban_thread_session()
         domain = email_addr.split("@")[-1]
         is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
 
         if is_mail_tm:
             try:
-                # Получаем токен
                 payload = {"address": email_addr, "password": password}
                 res = session.post(f"{API_URL}/token", json=payload, timeout=(4, 8))
 
                 if res.status_code == 401:
                     return ("invalid_password", "wrong_credentials")
-
                 if res.status_code != 200:
                     return ("error", f"auth_failed_{res.status_code}")
 
@@ -1161,7 +1248,6 @@ class MailApp:
                 if not token:
                     return ("error", "no_token")
 
-                # Получаем список писем
                 headers = {"Authorization": f"Bearer {token}"}
                 res = session.get(f"{API_URL}/messages", headers=headers, timeout=(4, 8))
 
@@ -1170,7 +1256,6 @@ class MailApp:
 
                 messages = res.json().get("hydra:member", [])
 
-                # Проверяем каждое письмо на признаки бана
                 for msg in messages:
                     sender = msg.get("from", {}).get("address", "").lower()
                     subject = msg.get("subject", "").lower()
@@ -1218,115 +1303,18 @@ class MailApp:
             if imap_client:
                 imap_client.logout()
 
-    def _check_account_for_ban(self, email_addr, password):
-        """
-        Проверка одного аккаунта на бан OpenAI.
-
-        Returns:
-            tuple: (result, reason) где:
-                - result: "banned", "invalid_password", "ok", "error"
-                - reason: строка с описанием
-        """
-        domain = email_addr.split("@")[-1]
-        is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
-
-        # Проверяем через API mail.tm
-        if is_mail_tm:
-            try:
-                # Получаем токен
-                payload = {"address": email_addr, "password": password}
-                res = self._make_request(
-                    "post", f"{API_URL}/token", retry_auth=False, json=payload
-                )
-
-                if not res:
-                    return ("error", "network_error")
-
-                if res.status_code == 401:
-                    return ("invalid_password", "wrong_credentials")
-
-                if res.status_code != 200:
-                    return ("error", f"auth_failed_{res.status_code}")
-
-                token = res.json().get("token")
-                if not token:
-                    return ("error", "no_token")
-
-                # Получаем список писем
-                headers = {"Authorization": f"Bearer {token}"}
-                res = self._make_request(
-                    "get", f"{API_URL}/messages", retry_auth=False, headers=headers
-                )
-
-                if not res or res.status_code != 200:
-                    return ("error", "messages_failed")
-
-                messages = res.json().get("hydra:member", [])
-
-                # Проверяем каждое письмо на признаки бана
-                for msg in messages:
-                    sender = msg.get("from", {}).get("address", "").lower()
-                    subject = msg.get("subject", "").lower()
-
-                    # Проверяем отправителя и тему
-                    if "openai" in sender or "noreply@tm.openai.com" in sender:
-                        if "access deactivated" in subject or "deactivated" in subject:
-                            return ("banned", "access_deactivated")
-
-                    # Альтернативные проверки
-                    if "access deactivated" in subject and "openai" in sender:
-                        return ("banned", "access_deactivated")
-
-                return ("ok", "no_ban_found")
-
-            except Exception as e:
-                print(f"[BAN] API check error for {email_addr}: {e}")
-                return ("error", str(e))
-        else:
-            # Для не-mail.tm аккаунтов пробуем IMAP
-            try:
-                imap_client = IMAPClient(host=f"imap.{domain}")
-                login_success = imap_client.login(email_addr, password)
-
-                if not login_success:
-                    # Пробуем стандартный хост
-                    imap_client = IMAPClient(host="imap.firstmail.ltd")
-                    login_success = imap_client.login(email_addr, password)
-
-                    if not login_success:
-                        return ("invalid_password", "imap_login_failed")
-
-                messages = imap_client.get_messages(limit=50)
-                imap_client.logout()
-
-                for msg in messages:
-                    sender = msg.get("from", {}).get("address", "").lower()
-                    subject = msg.get("subject", "").lower()
-
-                    if "openai" in sender:
-                        if "access deactivated" in subject or "deactivated" in subject:
-                            return ("banned", "access_deactivated")
-
-                return ("ok", "no_ban_found")
-
-            except Exception as e:
-                print(f"[BAN] IMAP check error for {email_addr}: {e}")
-                return ("error", str(e))
-
     def _on_ban_check_complete(self, checked, banned, invalid_pass=0):
-        """Завершение проверки бана"""
-        # Закрываем окно прогресса
+        """Завершение проверки бана."""
         if hasattr(self, "progress_window") and self.progress_window.winfo_exists():
             self.progress_window.destroy()
 
-        # Сбрасываем флаг отмены
         self.ban_check_cancelled = False
 
-        self.btn_check_ban.config(state=tk.NORMAL, text="🚫 Бан")
+        self.btn_check_ban.config(state=tk.NORMAL, text="Бан")
         self.update_listbox_colors()
         self.save_accounts_to_file()
 
-        msg = f"Проверка завершена!\n\nПроверено: {checked}\n🚫 Забанено: {banned}\n🔒 Неверный пароль: {invalid_pass}"
+        msg = f"Проверка завершена!\n\nПроверено: {checked}\nЗабанено: {banned}\nНеверный пароль: {invalid_pass}"
         if banned > 0 or invalid_pass > 0:
             messagebox.showwarning("Результаты проверки", msg)
         else:
@@ -1336,8 +1324,12 @@ class MailApp:
             f"Проверка завершена. Забанено: {banned}, Неверный пароль: {invalid_pass}"
         )
 
+    # ================================================================
+    #  EXCEL
+    # ================================================================
+
     def save_accounts_to_excel(self):
-        """Сохраняет данные аккаунтов в Excel файл"""
+        """Сохраняет данные аккаунтов в Excel файл."""
         try:
             wb = Workbook()
             ws = wb.active
@@ -1397,14 +1389,12 @@ class MailApp:
         except Exception as e:
             print(f"Ошибка сохранения Excel: {e}")
 
-    def load_accounts_from_file(self):
-        """Загрузка аккаунтов из файла
+    # ================================================================
+    #  ACCOUNT LOADING / SAVING
+    # ================================================================
 
-        Поддерживаемые форматы:
-        1. Новый формат: email:password_openai;password_mail
-        2. Внутренний формат: email / password_openai;password_mail / status
-        3. Старый формат: email:password или email / password
-        """
+    def load_accounts_from_file(self):
+        """Загрузка аккаунтов из файла."""
         self.acc_listbox.delete(0, tk.END)
         self.accounts_data = []
 
@@ -1426,38 +1416,32 @@ class MailApp:
                     status = "not_registered"
 
                     if " / " in line:
-                        # Внутренний формат приложения: email / passwords / status
                         parts = line.split(" / ")
                         if len(parts) >= 2:
                             email = parts[0].strip()
                             passwords = parts[1].strip()
 
-                            # Проверяем, есть ли два пароля
                             if ";" in passwords:
                                 pwd_parts = passwords.split(";", 1)
                                 password_openai = pwd_parts[0].strip()
                                 password_mail = pwd_parts[1].strip()
                             else:
-                                # Старый формат - один пароль
                                 password_openai = passwords
                                 password_mail = passwords
 
                             if len(parts) >= 3:
                                 status = parts[2].strip()
                     elif ":" in line:
-                        # Новый формат или старый: email:password_openai;password_mail
                         parts = line.split(":", 1)
                         if len(parts) == 2:
                             email = parts[0].strip()
                             passwords = parts[1].strip()
 
-                            # Проверяем, есть ли два пароля
                             if ";" in passwords:
                                 pwd_parts = passwords.split(";", 1)
                                 password_openai = pwd_parts[0].strip()
                                 password_mail = pwd_parts[1].strip()
                             else:
-                                # Старый формат - один пароль
                                 password_openai = passwords
                                 password_mail = passwords
 
@@ -1469,14 +1453,11 @@ class MailApp:
                                 "email": email,
                                 "password_openai": password_openai,
                                 "password_mail": password_mail,
-                                "password": password_mail,  # Для совместимости с IMAP логином
+                                "password": password_mail,
                                 "status": status,
                             }
                         )
-
-                        # Отображаем только email в списке
-                        display_text = email
-                        self.acc_listbox.insert(tk.END, display_text)
+                        self.acc_listbox.insert(tk.END, email)
 
                 if needs_save:
                     self.save_accounts_to_file()
@@ -1496,14 +1477,39 @@ class MailApp:
         else:
             self.update_status("Файл accounts.txt не найден")
 
+    def save_accounts_to_file(self):
+        """Сохранение аккаунтов в файл."""
+        try:
+            with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
+                for item in self.accounts_data:
+                    password_openai = item.get(
+                        "password_openai", item.get("password", "")
+                    )
+                    password_mail = item.get("password_mail", item.get("password", ""))
+
+                    if password_openai != password_mail:
+                        passwords = f"{password_openai};{password_mail}"
+                    else:
+                        passwords = password_openai
+
+                    line = f"{item['email']} / {passwords} / {item['status']}\n"
+                    f.write(line)
+            self.save_accounts_to_excel()
+        except Exception as e:
+            messagebox.showerror("Ошибка сохранения", str(e))
+
+    # ================================================================
+    #  ACCOUNT CREATION
+    # ================================================================
+
     def start_create_account(self):
-        """Запуск создания аккаунта"""
+        """Запуск создания аккаунта."""
         self.btn_create.config(state=tk.DISABLED)
         self.update_status("Регистрация... (Подождите)")
         threading.Thread(target=self.create_account_thread, daemon=True).start()
 
     def create_account_thread(self):
-        """Поток создания аккаунта"""
+        """Поток создания аккаунта."""
         try:
             domain_res = self._make_request(
                 "get", f"{API_URL}/domains", retry_auth=False
@@ -1563,137 +1569,155 @@ class MailApp:
             self.root.after(0, lambda: self.btn_create.config(state=tk.NORMAL))
 
     def _on_account_created(self, email, password):
-        """Обработка созданного аккаунта
-
-        При создании аккаунта через API оба пароля одинаковые.
-        """
+        """Обработка созданного аккаунта."""
         self.accounts_data.append(
             {
                 "email": email,
                 "password_openai": password,
                 "password_mail": password,
-                "password": password,  # Для совместимости
+                "password": password,
                 "status": "not_registered",
             }
         )
 
-        # Отображаем только email в списке
-        display_text = email
-        self.acc_listbox.insert(tk.END, display_text)
+        self.acc_listbox.insert(tk.END, email)
         self.update_listbox_colors()
 
         self.acc_listbox.selection_clear(0, tk.END)
         self.acc_listbox.selection_set(tk.END)
 
         self.save_accounts_to_file()
-
         self.status_var.set(f"Создан: {email}")
         self.on_account_select(None)
 
+    # ================================================================
+    #  DOMAIN LOADING
+    # ================================================================
+
+    def load_mail_tm_domains(self):
+        """Загрузка доменов mail.tm."""
+        try:
+            res = self._make_request("get", f"{API_URL}/domains", retry_auth=False)
+            if res and res.status_code == 200:
+                data = res.json()["hydra:member"]
+                self.mail_tm_domains = [d["domain"] for d in data]
+                print(f"[*] Loaded {len(self.mail_tm_domains)} mail.tm domains")
+        except:
+            pass
+
+    # ================================================================
+    #  THEME
+    # ================================================================
+
     def on_theme_toggle_click(self, is_on):
-        """Обработка переключения темы"""
+        """Обработка переключения темы."""
         self.set_theme("dark" if is_on else "light")
 
     def set_theme(self, theme_name):
-        """Установка темы оформления"""
+        """Установка темы оформления."""
         self.params["theme"] = theme_name
         colors = THEMES[theme_name]
-        accent_bg = colors.get("accent", colors["btn_bg"])
-        accent_fg = colors.get("accent_fg", colors["btn_fg"])
+        accent_bg = colors["accent"]
+        accent_fg = colors["accent_fg"]
+
+        # Theme toggle state
         if hasattr(self, "theme_toggle"):
-            self.theme_toggle.set_checked(theme_name == "dark")
-            self.theme_toggle.set_theme(colors, accent_bg)
+            self.theme_toggle.set_state(theme_name == "dark")
+            self.theme_toggle.config(bg=colors["panel_bg"])
+            self.theme_toggle.bg_on = colors["accent"]
+
+        # Theme icon
+        if hasattr(self, "lbl_theme_icon"):
+            self.lbl_theme_icon.config(
+                text="🌙" if theme_name == "dark" else "☀",
+                bg=colors["panel_bg"], fg=colors["muted"]
+            )
 
         # Root
         self.root.config(bg=colors["bg"])
-        self.paned.config(bg=colors["header_bg"])
+        self.root_container.config(bg=colors["bg"])
+        self.paned.config(bg=colors["separator"])
         self.status_bar.config(bg=colors["status_bg"], fg=colors["status_fg"])
-        if hasattr(self, "root_container"):
-            self.root_container.config(bg=colors["bg"])
 
-        # Left Panel Components
+        # App title
+        if hasattr(self, "lbl_app_title"):
+            self.lbl_app_title.config(bg=colors["panel_bg"], fg=colors["accent"])
+
+        # Left Panel
         self.left_panel.config(bg=colors["panel_bg"])
         self.left_header.config(bg=colors["panel_bg"])
+        if hasattr(self, "theme_frame"):
+            self.theme_frame.config(bg=colors["panel_bg"])
 
-        for widget in self.left_header.winfo_children():
-            if isinstance(widget, tk.Label):
-                widget.config(bg=colors["panel_bg"], fg=colors["fg"])
-            elif isinstance(widget, tk.Checkbutton):
-                widget.config(
-                    bg=colors["panel_bg"],
-                    fg=colors["fg"],
-                    activebackground=colors["panel_bg"],
-                    activeforeground=colors["fg"],
-                    selectcolor=accent_bg,
+        # Pin button
+        if hasattr(self, "btn_pin"):
+            if self.is_pinned:
+                self.btn_pin.update_colors(
+                    bg=colors["accent"], fg=colors["accent_fg"],
+                    hover_bg=colors["accent_hover"], hover_fg=colors["accent_fg"]
+                )
+            else:
+                self.btn_pin.update_colors(
+                    bg=colors["panel_bg"], fg=colors["muted"],
+                    hover_bg=colors["btn_hover"], hover_fg=colors["fg"]
                 )
 
-        self.lbl_saved.config(bg=colors["panel_bg"], fg=colors["fg"])
+        # Create button
+        self.btn_create.update_colors(
+            bg=colors["accent"], fg=accent_fg,
+            hover_bg=colors["accent_hover"], hover_fg=accent_fg,
+        )
+
+        # Section labels
+        for section in [self.section_accounts, self.section_actions, self.section_gen]:
+            section.update_colors(colors["panel_bg"], colors["muted"],
+                                  colors["separator"])
+
+        # File buttons frame
         self.file_btn_frame.config(bg=colors["panel_bg"])
         self.btn_frame.config(bg=colors["panel_bg"])
+        self.tools_frame.config(bg=colors["panel_bg"])
 
-        # Person frame (random data)
-        if hasattr(self, "person_frame"):
-            self.person_frame.config(bg=colors["panel_bg"], fg=colors["fg"])
-            for child in self.person_frame.winfo_children():
-                if isinstance(child, tk.Frame):
-                    child.config(bg=colors["panel_bg"])
-                    for subchild in child.winfo_children():
-                        if isinstance(subchild, tk.Label):
-                            subchild.config(bg=colors["panel_bg"], fg=colors["fg"])
-                        elif isinstance(subchild, tk.Entry):
-                            subchild.config(
-                                readonlybackground=colors["entry_bg"],
-                                fg=colors["entry_fg"],
-                            )
-                        elif isinstance(subchild, tk.Button):
-                            subchild.config(
-                                bg=colors["btn_bg"],
-                                fg=colors["btn_fg"],
-                                activebackground=colors["btn_bg"],
-                                activeforeground=colors["btn_fg"],
-                            )
-                elif isinstance(child, tk.Button):
-                    child.config(
-                        bg=colors["btn_bg"],
-                        fg=colors["btn_fg"],
-                        activebackground=colors["btn_bg"],
-                        activeforeground=colors["btn_fg"],
-                    )
-
-        # Buttons (Generic)
+        # Generic buttons (left panel)
         generic_btns = [
-            self.btn_reload,
-            self.btn_open_file,
-            self.btn_open_excel,
-            self.btn_copy_email,
-            self.btn_copy_pass_openai,
-            self.btn_copy_pass,
-            self.btn_sk,
-            self.btn_in,
-            self.btn_minesweeper,
-            self.btn_hotkey_settings,
+            self.btn_reload, self.btn_open_file, self.btn_open_excel,
+            self.btn_copy_email, self.btn_copy_pass_openai, self.btn_copy_pass,
+            self.btn_sk, self.btn_in, self.btn_minesweeper, self.btn_hotkey_settings,
+            self.btn_copy_random_name, self.btn_copy_random_bdate,
         ]
         for btn in generic_btns:
-            btn.config(
-                bg=colors["btn_bg"],
-                fg=colors["btn_fg"],
-                activebackground=colors["btn_bg"],
-                activeforeground=colors["btn_fg"],
-                relief=tk.FLAT,
-                bd=0,
+            btn.update_colors(
+                bg=colors["btn_bg"], fg=colors["btn_fg"],
+                hover_bg=colors["btn_hover"],
             )
 
-        # Primary buttons
-        primary_btns = [self.btn_create, self.btn_refresh, self.btn_copy_code]
-        for btn in primary_btns:
-            btn.config(
-                bg=accent_bg,
-                fg=accent_fg,
-                activebackground=accent_bg,
-                activeforeground=accent_fg,
-                relief=tk.FLAT,
-                bd=0,
-            )
+        # Ban button
+        self.btn_check_ban.update_colors(
+            bg=colors["danger"], fg="white",
+            hover_bg=colors["danger_hover"], hover_fg="white",
+        )
+
+        # Generate button
+        self.btn_generate_person.update_colors(
+            bg=colors["accent"], fg=accent_fg,
+            hover_bg=colors["accent_hover"], hover_fg=accent_fg,
+        )
+
+        # Person frame
+        self.person_frame.config(bg=colors["panel_bg"])
+        for child in self.person_frame.winfo_children():
+            if isinstance(child, tk.Frame):
+                child.config(bg=colors["panel_bg"])
+                for subchild in child.winfo_children():
+                    if isinstance(subchild, tk.Label):
+                        subchild.config(bg=colors["panel_bg"], fg=colors["muted"])
+                    elif isinstance(subchild, tk.Entry):
+                        subchild.config(
+                            readonlybackground=colors["entry_bg"],
+                            fg=colors["entry_fg"],
+                            highlightbackground=colors["border"],
+                            highlightcolor=colors["accent"],
+                        )
 
         # Listbox
         self.acc_listbox.config(
@@ -1703,47 +1727,47 @@ class MailApp:
             selectforeground=accent_fg,
             relief=tk.FLAT,
             borderwidth=0,
-            highlightthickness=0,
+            highlightthickness=1,
+            highlightbackground=colors["border"],
+            highlightcolor=colors["accent"],
         )
         self.update_listbox_colors()
 
-        # Right Panel Components
+        # Right Panel
         self.right_panel.config(bg=colors["bg"])
         self.header_frame.config(bg=colors["header_bg"])
         self.status_frame.config(bg=colors["header_bg"])
-
         self.lbl_current_email.config(bg=colors["header_bg"], fg=colors["fg"])
         self.lbl_msg_title.config(bg=colors["bg"], fg=colors["fg"])
-        self.btn_refresh.config(
-            bg=accent_bg,
-            fg=accent_fg,
-            activebackground=accent_bg,
-            activeforeground=accent_fg,
+
+        # Refresh button
+        self.btn_refresh.update_colors(
+            bg=accent_bg, fg=accent_fg,
+            hover_bg=colors["accent_hover"], hover_fg=accent_fg,
         )
-        status_btn_fg = "#0b1220" if theme_name == "light" else "#e2e8f0"
-        self.btn_nr.config(
+
+        # Copy code button
+        self.btn_copy_code.update_colors(
+            bg=colors["warning"], fg="#1a1a2e",
+            hover_bg="#f6ad55", hover_fg="#1a1a2e",
+        )
+
+        # Status buttons
+        status_btn_fg = colors["btn_fg"]
+        self.btn_nr.update_colors(
             bg=STATUS_COLORS["not_registered"][theme_name],
             fg=status_btn_fg,
-            activebackground=STATUS_COLORS["not_registered"][theme_name],
-            activeforeground=status_btn_fg,
-            relief=tk.FLAT,
-            bd=0,
+            hover_bg=colors["btn_hover"],
         )
-        self.btn_reg.config(
+        self.btn_reg.update_colors(
             bg=STATUS_COLORS["registered"][theme_name],
             fg=status_btn_fg,
-            activebackground=STATUS_COLORS["registered"][theme_name],
-            activeforeground=status_btn_fg,
-            relief=tk.FLAT,
-            bd=0,
+            hover_bg="#bfdbfe" if theme_name == "light" else "#2b6cb0",
         )
-        self.btn_plus.config(
+        self.btn_plus.update_colors(
             bg=STATUS_COLORS["plus"][theme_name],
             fg=status_btn_fg,
-            activebackground=STATUS_COLORS["plus"][theme_name],
-            activeforeground=status_btn_fg,
-            relief=tk.FLAT,
-            bd=0,
+            hover_bg="#9ae6b4" if theme_name == "light" else "#276749",
         )
 
         # Text
@@ -1752,8 +1776,10 @@ class MailApp:
             fg=colors["text_fg"],
             insertbackground=colors["fg"],
             relief=tk.FLAT,
-            borderwidth=1,
-            highlightthickness=0,
+            borderwidth=0,
+            highlightthickness=1,
+            highlightbackground=colors["border"],
+            highlightcolor=colors["accent"],
         )
 
         # Treeview Style
@@ -1777,14 +1803,15 @@ class MailApp:
             background=colors["list_bg"],
             foreground=colors["list_fg"],
             fieldbackground=colors["list_bg"],
-            rowheight=25,
+            rowheight=28,
             borderwidth=0,
         )
         style.configure(
             "Treeview.Heading",
-            background=accent_bg,
-            foreground=accent_fg,
+            background=colors["header_bg"],
+            foreground=colors["fg"],
             relief="flat",
+            font=FONT_SMALL,
         )
         style.map(
             "Treeview",
@@ -1792,11 +1819,8 @@ class MailApp:
             foreground=[("selected", accent_fg)],
         )
 
-        if hasattr(self, "lbl_theme"):
-            self.lbl_theme.config(bg=colors["panel_bg"], fg=colors["fg"])
-
     def on_design_change(self, event=None):
-        """Изменение дизайна (ttk theme)"""
+        """Изменение дизайна (ttk theme)."""
         selected = self.design_var.get()
         style = ttk.Style()
         try:
@@ -1804,27 +1828,25 @@ class MailApp:
             self.update_status(f"Дизайн изменен: {selected}")
         except Exception as e:
             self.update_status(f"Ошибка смены дизайна: {e}")
-
         self.set_theme(self.params.get("theme", "light"))
 
     def update_listbox_colors(self):
-        """Обновление цветов списка аккаунтов"""
+        """Обновление цветов списка аккаунтов."""
         theme = self.params.get("theme", "light")
+        colors = THEMES[theme]
         for i in range(self.acc_listbox.size()):
             if i < len(self.accounts_data):
                 status = self.accounts_data[i].get("status", "not_registered")
-                color = STATUS_COLORS.get(status, {}).get(theme, "white")
-                if theme == "dark":
-                    fg_color = "#e2e8f0"
-                else:
-                    fg_color = "#111827"
-                    if status in ("registered", "plus"):
-                        fg_color = "#0b1220"
-
+                color = STATUS_COLORS.get(status, {}).get(theme, colors["list_bg"])
+                fg_color = colors["list_fg"]
                 self.acc_listbox.itemconfig(i, {"bg": color, "fg": fg_color})
 
+    # ================================================================
+    #  ACCOUNT SELECTION / EMAIL
+    # ================================================================
+
     def on_account_select(self, event):
-        """Выбор аккаунта"""
+        """Выбор аккаунта."""
         selection = self.acc_listbox.curselection()
         if not selection:
             return
@@ -1833,16 +1855,14 @@ class MailApp:
         if idx >= len(self.accounts_data):
             return
 
-        # Получаем данные аккаунта из accounts_data
         acc = self.accounts_data[idx]
         email = acc.get("email", "")
-        # Для авторизации используем пароль от почты
         password = acc.get("password_mail", acc.get("password", ""))
 
         if not email or not password:
             return
 
-        self.lbl_current_email.config(text=f"Аккаунт: {email}")
+        self.lbl_current_email.config(text=email)
         self.last_message_ids = set()
 
         for item in self.tree.get_children():
@@ -1857,7 +1877,7 @@ class MailApp:
         ).start()
 
     def login_thread(self, email_addr, password):
-        """Поток авторизации"""
+        """Поток авторизации."""
         domain = email_addr.split("@")[-1]
         self.current_token = None
         if self.imap_client:
@@ -1867,15 +1887,11 @@ class MailApp:
                 pass
             self.imap_client = None
 
-        # Сохраняем учётные данные для переподключения при смене VPN
         self.current_email = email_addr
         self.current_password = password
-
-        # Сбрасываем HTTP сессию для чистого подключения
         self._reset_http_session()
 
         is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
-
         success = False
 
         if is_mail_tm:
@@ -1923,14 +1939,14 @@ class MailApp:
             self.imap_client = None
 
     def on_manual_refresh(self):
-        """Ручное обновление писем"""
+        """Ручное обновление писем."""
         self.update_status("Обновление писем...")
         threading.Thread(
             target=lambda: self.refresh_inbox_thread(show_loading=True), daemon=True
         ).start()
 
     def start_auto_refresh(self):
-        """Запускает таймер автообновления"""
+        """Запускает таймер автообновления."""
         if self.stop_threads:
             return
 
@@ -1943,7 +1959,7 @@ class MailApp:
         self.root.after(self.refresh_interval_ms, self.start_auto_refresh)
 
     def refresh_inbox_thread(self, show_loading=False):
-        """Поток обновления писем"""
+        """Поток обновления писем."""
         if self.is_refreshing:
             return
         if self.account_type == "api" and not self.current_token:
@@ -1952,7 +1968,6 @@ class MailApp:
             return
 
         self.is_refreshing = True
-        # Показываем загрузку только при ручном обновлении
         if show_loading:
             self.root.after(0, self.show_inbox_loading_state)
             self.root.after(0, self.show_loading_messages_text)
@@ -1965,7 +1980,6 @@ class MailApp:
                     "get", f"{API_URL}/messages", retry_auth=True, headers=headers
                 )
                 if res is None:
-                    # Сетевая ошибка - переподключение будет запущено автоматически
                     self.root.after(
                         0,
                         lambda: self.update_status(
@@ -1976,7 +1990,6 @@ class MailApp:
                     messages = res.json()["hydra:member"]
                     should_update_ui = True
                 elif res.status_code == 401:
-                    # Токен недействителен - переавторизуемся
                     self.root.after(
                         0,
                         lambda: self.update_status(
@@ -1997,7 +2010,6 @@ class MailApp:
                     should_update_ui = True
                 except Exception as imap_err:
                     print(f"IMAP error: {imap_err}")
-                    # IMAP соединение разорвано - переподключаемся
                     self.root.after(
                         0,
                         lambda: self.update_status(
@@ -2014,8 +2026,7 @@ class MailApp:
             self.is_refreshing = False
 
     def _update_inbox_ui(self, messages):
-        """Обновление таблицы писем"""
-        # Сохраняем выбранное письмо
+        """Обновление таблицы писем."""
         selected = self.tree.selection()
         selected_id = None
         if selected:
@@ -2023,7 +2034,6 @@ class MailApp:
             if len(values) >= 4:
                 selected_id = values[3]
 
-        # Очищаем список
         for item in self.tree.get_children():
             self.tree.delete(item)
 
@@ -2046,16 +2056,13 @@ class MailApp:
             )
             seen_ids.add(msg_id)
 
-            # Восстанавливаем выделение
             if selected_id and msg_id == selected_id:
                 new_selection = item_id
 
-        # Восстанавливаем выделение и прокрутку
         if new_selection:
             self.tree.selection_set(new_selection)
             self.tree.see(new_selection)
 
-        # Очищаем текст только если нет писем И не было выбрано письмо
         if not messages and not selected_id:
             self.msg_text.delete(1.0, tk.END)
             self.msg_text.insert(tk.END, "Нет новых писем.")
@@ -2066,11 +2073,11 @@ class MailApp:
         self.last_message_ids = seen_ids
 
         self.status_var.set(
-            f"Обновлено: {datetime.now().strftime('%H:%M:%S')} • писем: {len(messages)}"
+            f"Обновлено: {datetime.now().strftime('%H:%M:%S')} | Писем: {len(messages)}"
         )
 
     def show_inbox_loading_state(self):
-        """Показываем индикатор загрузки"""
+        """Показываем индикатор загрузки."""
         try:
             for item in self.tree.get_children():
                 self.tree.delete(item)
@@ -2079,7 +2086,7 @@ class MailApp:
             pass
 
     def show_loading_messages_text(self):
-        """Показываем текст загрузки"""
+        """Показываем текст загрузки."""
         try:
             if self.tree.selection():
                 return
@@ -2090,7 +2097,7 @@ class MailApp:
             pass
 
     def on_message_select(self, event):
-        """Выбор письма"""
+        """Выбор письма."""
         selected_item = self.tree.selection()
         if not selected_item:
             return
@@ -2104,7 +2111,6 @@ class MailApp:
         subject = values[1]
 
         self.btn_copy_code.pack_forget()
-
         self.msg_text.delete(1.0, tk.END)
         self.msg_text.insert(tk.END, "Загрузка...")
 
@@ -2113,7 +2119,7 @@ class MailApp:
         ).start()
 
     def load_message_thread(self, msg_id, sender=None, subject=None):
-        """Поток загрузки письма"""
+        """Поток загрузки письма."""
         if self.account_type == "api" and not self.current_token:
             return
         if self.account_type == "imap" and not self.imap_client:
@@ -2181,34 +2187,31 @@ class MailApp:
             self.root.after(0, lambda: self.msg_text.insert(tk.END, f"\nError: {e}"))
 
     def _show_message_content(self, data, text, is_imap=False):
-        """Отображение содержимого письма"""
+        """Отображение содержимого письма."""
         self.btn_copy_code.pack_forget()
-
         self.msg_text.delete(1.0, tk.END)
+
         sender = data.get("from", {}).get("address", "Неизвестно")
         subject = data.get("subject", "(без темы)")
         self.msg_text.insert(tk.END, f"От: {sender}\n")
         self.msg_text.insert(tk.END, f"Тема: {subject}\n")
-
-        self.msg_text.insert(tk.END, "-" * 50 + "\n\n")
+        self.msg_text.insert(tk.END, "\u2500" * 50 + "\n\n")
         self.msg_text.insert(tk.END, text)
 
         match = re.search(r"\b(\d{6})\b", text)
         if match:
             code = match.group(1)
             self.btn_copy_code.config(
-                text=f"📋 Скопировать код: {code}",
+                text=f"Скопировать код: {code}",
                 command=lambda: self.copy_code_to_clipboard(code),
             )
-            self.btn_copy_code.pack(before=self.msg_text, fill=tk.X, padx=10, pady=5)
-
-    def copy_code_to_clipboard(self, code):
-        """Копирование кода в буфер"""
-        pyperclip.copy(code)
-        self.status_var.set(f"Код {code} скопирован в буфер!")
+            self.btn_copy_code.pack(
+                before=self.msg_text.master, fill=tk.X,
+                padx=self.PAD_X, pady=4
+            )
 
     def show_context_menu(self, event):
-        """Показ контекстного меню"""
+        """Показ контекстного меню."""
         try:
             self.acc_listbox.selection_clear(0, tk.END)
             self.acc_listbox.selection_set(self.acc_listbox.nearest(event.y))
@@ -2218,41 +2221,13 @@ class MailApp:
             self.context_menu.grab_release()
 
     def set_account_status(self, status):
-        """Установка статуса аккаунта"""
+        """Установка статуса аккаунта."""
         selection = self.acc_listbox.curselection()
         if not selection:
             return
-
         idx = selection[0]
-
         if idx < len(self.accounts_data):
             self.accounts_data[idx]["status"] = status
             self.update_listbox_colors()
             self.save_accounts_to_file()
             self.update_status(f"Статус обновлен: {status}")
-
-    def save_accounts_to_file(self):
-        """Сохранение аккаунтов в файл
-
-        Формат: email / password_openai;password_mail / status
-        """
-        try:
-            with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
-                for item in self.accounts_data:
-                    # Формируем строку паролей
-                    password_openai = item.get(
-                        "password_openai", item.get("password", "")
-                    )
-                    password_mail = item.get("password_mail", item.get("password", ""))
-
-                    # Если пароли разные, сохраняем оба, иначе один
-                    if password_openai != password_mail:
-                        passwords = f"{password_openai};{password_mail}"
-                    else:
-                        passwords = password_openai
-
-                    line = f"{item['email']} / {passwords} / {item['status']}\n"
-                    f.write(line)
-            self.save_accounts_to_excel()
-        except Exception as e:
-            messagebox.showerror("Ошибка сохранения", str(e))

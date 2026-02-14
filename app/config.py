@@ -13,15 +13,16 @@ EXCEL_FILE = os.path.join(BASE_DIR, "accounts.xlsx")
 
 # --- ЦВЕТА СТАТУСОВ ---
 STATUS_COLORS = {
-    "not_registered": {"light": "#f8fafc", "dark": "#0f172a"},
-    "registered": {"light": "#d9e1f2", "dark": "#1e3a8a"},
-    "plus": {"light": "#46bdc6", "dark": "#134e4a"},
-    "banned": {"light": "#fecaca", "dark": "#7f1d1d"},
-    "invalid_password": {"light": "#e9d5ff", "dark": "#581c87"}
+    "not_registered": {"light": "#f7f8fa", "dark": "#1a202c"},
+    "registered": {"light": "#dbeafe", "dark": "#1e3a5f"},
+    "plus": {"light": "#c6f6d5", "dark": "#1c4532"},
+    "banned": {"light": "#fed7d7", "dark": "#742a2a"},
+    "invalid_password": {"light": "#e9d5ff", "dark": "#44337a"}
 }
 
 # --- ШРИФТЫ ---
 FONT_BASE = ("Segoe UI", 10)
 FONT_SMALL = ("Segoe UI", 9)
 FONT_BOLD = ("Segoe UI", 10, "bold")
-FONT_TITLE = ("Segoe UI", 12, "bold")
+FONT_TITLE = ("Segoe UI", 13, "bold")
+FONT_SECTION = ("Segoe UI", 9, "bold")
