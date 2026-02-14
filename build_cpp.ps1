@@ -58,7 +58,10 @@ if ($compiler.Source -match "mingw" -or $compiler.Name -eq "g++.exe") {
     $args += @("-static", "-static-libgcc", "-static-libstdc++")
 }
 
-$args += @($Source, "-o", $Output, "-lwinhttp")
+$args += @($Source, "-o", $Output, "-lwinhttp", "-lgdi32")
 & $compiler.Source @args
+if ($LASTEXITCODE -ne 0) {
+    throw "Compilation failed with exit code $LASTEXITCODE"
+}
 
 Write-Host "Build done: $Output"

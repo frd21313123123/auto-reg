@@ -23,6 +23,11 @@ python main.py
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build_cpp.ps1
 ```
 - Binary output: `build/auto_reg_cpp.exe`
+- Run:
+```
+build\auto_reg_cpp.exe          # GUI mode (default, interface similar to Python app)
+build\auto_reg_cpp.exe --cli    # Legacy console mode
+```
 
 ## Notes
 - Local data files `accounts.txt` and `accounts.xlsx` are ignored by git.

@@ -207,7 +207,7 @@ class MailApp:
 
         self.theme_toggle = AnimatedToggle(
             self.theme_frame, on_toggle=self.on_theme_toggle_click,
-            width=44, height=22, bg_on=colors["accent"], bg_off="#cbd5e0"
+            width=44, height=22, bg_on=colors["accent"], bg_off=colors["btn_bg"]
         )
         self.theme_toggle.pack(side=tk.LEFT)
 
@@ -536,19 +536,23 @@ class MailApp:
         self.btn_refresh.pack(side=tk.RIGHT, padx=(4, self.PAD_X))
 
         # Разделитель под header
-        tk.Frame(self.right_panel, bg=colors["separator"], height=1).pack(fill=tk.X)
+        self.header_separator = tk.Frame(
+            self.right_panel, bg=colors["separator"], height=1
+        )
+        self.header_separator.pack(fill=tk.X)
 
         # ---- СПИСОК ПИСЕМ ----
-        tree_frame = tk.Frame(self.right_panel, bg=colors["bg"])
-        tree_frame.pack(fill=tk.X, padx=self.PAD_X, pady=(8, 0))
+        self.tree_frame = tk.Frame(self.right_panel, bg=colors["bg"])
+        self.tree_frame.pack(fill=tk.X, padx=self.PAD_X, pady=(8, 0))
 
         columns = ("sender", "subject", "date", "msg_id")
         self.tree = ttk.Treeview(
-            tree_frame,
+            self.tree_frame,
             columns=columns,
             displaycolumns=("sender", "subject", "date"),
             show="headings",
             height=8,
+            style="Mail.Treeview",
         )
         self.tree.heading("sender", text="От кого")
         self.tree.heading("subject", text="Тема")
@@ -558,19 +562,20 @@ class MailApp:
         self.tree.column("date", width=80, anchor="center", minwidth=70)
         self.tree.column("msg_id", width=0, stretch=False)
 
-        tree_scroll = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL,
-                                    command=self.tree.yview)
-        self.tree.configure(yscrollcommand=tree_scroll.set)
+        self.tree_scrollbar = tk.Scrollbar(
+            self.tree_frame, orient=tk.VERTICAL, command=self.tree.yview
+        )
+        self.tree.configure(yscrollcommand=self.tree_scrollbar.set)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.bind("<<TreeviewSelect>>", self.on_message_select)
 
         # ---- СОДЕРЖАНИЕ ПИСЬМА ----
-        msg_header = tk.Frame(self.right_panel, bg=colors["bg"])
-        msg_header.pack(fill=tk.X, padx=self.PAD_X, pady=(8, 0))
+        self.msg_header = tk.Frame(self.right_panel, bg=colors["bg"])
+        self.msg_header.pack(fill=tk.X, padx=self.PAD_X, pady=(8, 0))
 
         self.lbl_msg_title = tk.Label(
-            msg_header, text="Содержание письма", anchor="w",
+            self.msg_header, text="Содержание письма", anchor="w",
             font=FONT_BOLD, bg=colors["bg"], fg=colors["fg"],
         )
         self.lbl_msg_title.pack(side=tk.LEFT)
@@ -586,15 +591,15 @@ class MailApp:
         self.btn_copy_code.pack_forget()
 
         # Текст письма
-        msg_text_frame = tk.Frame(self.right_panel, bg=colors["bg"])
-        msg_text_frame.pack(fill=tk.BOTH, expand=True, padx=self.PAD_X,
-                            pady=(4, self.PAD_X))
+        self.msg_text_frame = tk.Frame(self.right_panel, bg=colors["bg"])
+        self.msg_text_frame.pack(fill=tk.BOTH, expand=True, padx=self.PAD_X,
+                                 pady=(4, self.PAD_X))
 
-        self.msg_scrollbar = tk.Scrollbar(msg_text_frame, orient=tk.VERTICAL)
+        self.msg_scrollbar = tk.Scrollbar(self.msg_text_frame, orient=tk.VERTICAL)
         self.msg_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.msg_text = tk.Text(
-            msg_text_frame, wrap=tk.WORD, height=10, font=FONT_BASE,
+            self.msg_text_frame, wrap=tk.WORD, height=10, font=FONT_BASE,
             relief=tk.FLAT, borderwidth=0,
             highlightthickness=1,
             yscrollcommand=self.msg_scrollbar.set,
@@ -994,10 +999,12 @@ class MailApp:
         self.btn_check_ban.config(state=tk.DISABLED)
         self.btn_check_ban.config(text="Проверка...")
 
-        recommended_threads = min(20, max(4, (total + 7) // 8))
+        # Больше потоков — операции I/O-bound (сеть), CPU не загружен
+        recommended_threads = min(60, max(8, total // 3))
         self.ban_check_threads = max(1, min(total, recommended_threads))
         self.ban_check_lock = threading.Lock()
 
+        self._ban_start_time = time.time()
         self._create_progress_window(total)
         threading.Thread(target=self.ban_check_thread, daemon=True).start()
 
@@ -1086,31 +1093,36 @@ class MailApp:
         """Обновление прогресс бара."""
         if hasattr(self, "progress_window") and self.progress_window.winfo_exists():
             self.progress_bar["value"] = current
+            elapsed = time.time() - getattr(self, "_ban_start_time", time.time())
+            speed = checked_count / max(elapsed, 0.1)
+            remaining = (total - checked_count) / max(speed, 0.1)
             self.progress_label.config(
-                text=f"Проверка: {email[:35]}... ({current}/{total})"
+                text=f"{email[:30]}... ({current}/{total})"
             )
             self.progress_stats.config(
-                text=f"Забанено: {banned_count} | Проверено: {checked_count}"
+                text=f"Забанено: {banned_count} | Проверено: {checked_count} | "
+                     f"{speed:.1f} акк/с | ~{remaining:.0f}с"
             )
 
     def _get_ban_thread_session(self):
-        """HTTP сессия для текущего потока проверки."""
+        """HTTP сессия для текущего потока проверки (быстрая, минимальные retry)."""
         session = getattr(self._ban_thread_local, "session", None)
         if session is not None:
             return session
 
         session = requests.Session()
+        # Минимальные retry — не тратим время на повторы при бан-чеке
         retry_strategy = Retry(
-            total=2,
-            backoff_factor=0.3,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "POST", "OPTIONS"],
+            total=1,
+            backoff_factor=0.1,
+            status_forcelist=[502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST"],
             raise_on_status=False,
         )
         adapter = HTTPAdapter(
             max_retries=retry_strategy,
-            pool_connections=1,
-            pool_maxsize=1,
+            pool_connections=2,
+            pool_maxsize=2,
             pool_block=False,
         )
         session.mount("http://", adapter)
@@ -1155,22 +1167,23 @@ class MailApp:
         checked_count = 0
         total = len(self.accounts_data)
         start_time = time.time()
+        last_ui_update = 0.0  # throttle UI updates
 
         def check_single_account(idx, account):
-            email = account.get("email", "")
+            email_addr = account.get("email", "")
             password = account.get("password_mail", account.get("password", ""))
             old_status = account.get("status", "not_registered")
 
-            if not email or not password:
-                return (idx, email, None, None, True)
+            if not email_addr or not password:
+                return (idx, email_addr, None, None, True)
             if old_status in ("banned", "invalid_password"):
-                return (idx, email, None, None, True)
+                return (idx, email_addr, None, None, True)
 
             try:
-                result, reason = self._check_account_for_ban_threadsafe(email, password)
-                return (idx, email, result, reason, False)
+                result, reason = self._check_account_for_ban_threadsafe(email_addr, password)
+                return (idx, email_addr, result, reason, False)
             except Exception as e:
-                return (idx, email, "error", str(e), False)
+                return (idx, email_addr, "error", str(e), False)
 
         try:
             with ThreadPoolExecutor(max_workers=self.ban_check_threads) as executor:
@@ -1180,14 +1193,14 @@ class MailApp:
                 }
 
                 for future in as_completed(futures):
-                    if hasattr(self, "ban_check_cancelled") and self.ban_check_cancelled:
+                    if self.ban_check_cancelled:
                         executor.shutdown(wait=False, cancel_futures=True)
                         break
 
                     try:
-                        idx, email, result, reason, skipped = future.result()
+                        idx, email_addr, result, reason, skipped = future.result()
 
-                        if skipped or not email:
+                        if skipped or not email_addr:
                             checked_count += 1
                             continue
 
@@ -1195,20 +1208,22 @@ class MailApp:
                             if result == "banned":
                                 self.accounts_data[idx]["status"] = "banned"
                                 banned_count += 1
-                                print(f"[BAN] Account banned: {email}")
                             elif result == "invalid_password":
                                 self.accounts_data[idx]["status"] = "invalid_password"
                                 invalid_pass_count += 1
-                                print(f"[BAN] Invalid password: {email}")
 
                             checked_count += 1
 
-                        self.root.after(
-                            0,
-                            lambda c=checked_count,
-                            e=email,
-                            b=banned_count: self._update_progress(c, total, e, b, c),
-                        )
+                        # Обновляем UI не чаще чем раз в 150мс
+                        now = time.monotonic()
+                        if now - last_ui_update > 0.15:
+                            last_ui_update = now
+                            self.root.after(
+                                0,
+                                lambda c=checked_count,
+                                e=email_addr,
+                                b=banned_count: self._update_progress(c, total, e, b, c),
+                            )
 
                     except Exception as e:
                         print(f"[BAN] Future error: {e}")
@@ -1217,9 +1232,8 @@ class MailApp:
             self._close_ban_thread_sessions()
 
         elapsed_time = time.time() - start_time
-        print(
-            f"[BAN] Проверка завершена за {elapsed_time:.1f} сек ({total / max(elapsed_time, 0.1):.1f} акк/сек)"
-        )
+        speed = total / max(elapsed_time, 0.1)
+        print(f"[BAN] Завершено за {elapsed_time:.1f}с ({speed:.1f} акк/с)")
 
         self.root.after(
             0,
@@ -1237,7 +1251,8 @@ class MailApp:
         if is_mail_tm:
             try:
                 payload = {"address": email_addr, "password": password}
-                res = session.post(f"{API_URL}/token", json=payload, timeout=(4, 8))
+                # Короткие таймауты: 3с connect, 5с read
+                res = session.post(f"{API_URL}/token", json=payload, timeout=(3, 5))
 
                 if res.status_code == 401:
                     return ("invalid_password", "wrong_credentials")
@@ -1249,7 +1264,7 @@ class MailApp:
                     return ("error", "no_token")
 
                 headers = {"Authorization": f"Bearer {token}"}
-                res = session.get(f"{API_URL}/messages", headers=headers, timeout=(4, 8))
+                res = session.get(f"{API_URL}/messages", headers=headers, timeout=(3, 5))
 
                 if res.status_code != 200:
                     return ("error", "messages_failed")
@@ -1260,11 +1275,8 @@ class MailApp:
                     sender = msg.get("from", {}).get("address", "").lower()
                     subject = msg.get("subject", "").lower()
 
-                    if "openai" in sender or "noreply@tm.openai.com" in sender:
-                        if "access deactivated" in subject or "deactivated" in subject:
-                            return ("banned", "access_deactivated")
-
-                    if "access deactivated" in subject and "openai" in sender:
+                    if ("openai" in sender or "noreply@tm.openai.com" in sender) and \
+                       ("access deactivated" in subject or "deactivated" in subject):
                         return ("banned", "access_deactivated")
 
                 return ("ok", "no_ban_found")
@@ -1272,11 +1284,11 @@ class MailApp:
             except requests.exceptions.RequestException as e:
                 return ("error", str(e))
 
-        # IMAP проверка
+        # IMAP проверка — короткий таймаут
         imap_client = None
         try:
             for host in self._get_ban_imap_hosts(domain):
-                client = IMAPClient(host=host, timeout=8)
+                client = IMAPClient(host=host, timeout=5)
                 if client.login(email_addr, password):
                     imap_client = client
                     self._remember_ban_imap_host(domain, host)
@@ -1285,15 +1297,16 @@ class MailApp:
             if not imap_client:
                 return ("invalid_password", "imap_login_failed")
 
-            messages = imap_client.get_messages(limit=30)
+            # Проверяем только 15 последних — бан-письмо обычно среди свежих
+            messages = imap_client.get_messages(limit=15)
 
             for msg in messages:
                 sender = msg.get("from", {}).get("address", "").lower()
                 subject = msg.get("subject", "").lower()
 
-                if "openai" in sender:
-                    if "access deactivated" in subject or "deactivated" in subject:
-                        return ("banned", "access_deactivated")
+                if "openai" in sender and \
+                   ("access deactivated" in subject or "deactivated" in subject):
+                    return ("banned", "access_deactivated")
 
             return ("ok", "no_ban_found")
 
@@ -1622,9 +1635,10 @@ class MailApp:
 
         # Theme toggle state
         if hasattr(self, "theme_toggle"):
-            self.theme_toggle.set_state(theme_name == "dark")
-            self.theme_toggle.config(bg=colors["panel_bg"])
             self.theme_toggle.bg_on = colors["accent"]
+            self.theme_toggle.bg_off = colors["btn_bg"]
+            self.theme_toggle.config(bg=colors["panel_bg"])
+            self.theme_toggle.set_state(theme_name == "dark")
 
         # Theme icon
         if hasattr(self, "lbl_theme_icon"):
@@ -1733,9 +1747,45 @@ class MailApp:
         )
         self.update_listbox_colors()
 
+        # Scrollbars
+        for scrollbar in [
+            getattr(self, "acc_scrollbar", None),
+            getattr(self, "tree_scrollbar", None),
+            getattr(self, "msg_scrollbar", None),
+        ]:
+            if not scrollbar:
+                continue
+            try:
+                scrollbar.config(
+                    bg=colors["btn_bg"],
+                    activebackground=colors["btn_hover"],
+                    troughcolor=colors["panel_bg"],
+                    relief=tk.FLAT,
+                    bd=0,
+                    width=12,
+                    highlightthickness=0,
+                )
+            except tk.TclError:
+                scrollbar.config(
+                    bg=colors["btn_bg"],
+                    activebackground=colors["btn_hover"],
+                    relief=tk.FLAT,
+                    bd=0,
+                    width=12,
+                    highlightthickness=0,
+                )
+
         # Right Panel
         self.right_panel.config(bg=colors["bg"])
         self.header_frame.config(bg=colors["header_bg"])
+        if hasattr(self, "header_separator"):
+            self.header_separator.config(bg=colors["separator"])
+        if hasattr(self, "tree_frame"):
+            self.tree_frame.config(bg=colors["bg"])
+        if hasattr(self, "msg_header"):
+            self.msg_header.config(bg=colors["bg"])
+        if hasattr(self, "msg_text_frame"):
+            self.msg_text_frame.config(bg=colors["bg"])
         self.status_frame.config(bg=colors["header_bg"])
         self.lbl_current_email.config(bg=colors["header_bg"], fg=colors["fg"])
         self.lbl_msg_title.config(bg=colors["bg"], fg=colors["fg"])
@@ -1762,12 +1812,12 @@ class MailApp:
         self.btn_reg.update_colors(
             bg=STATUS_COLORS["registered"][theme_name],
             fg=status_btn_fg,
-            hover_bg="#bfdbfe" if theme_name == "light" else "#2b6cb0",
+            hover_bg="#bfdbfe" if theme_name == "light" else "#25558f",
         )
         self.btn_plus.update_colors(
             bg=STATUS_COLORS["plus"][theme_name],
             fg=status_btn_fg,
-            hover_bg="#9ae6b4" if theme_name == "light" else "#276749",
+            hover_bg="#9ae6b4" if theme_name == "light" else "#236052",
         )
 
         # Text
@@ -1775,6 +1825,8 @@ class MailApp:
             bg=colors["text_bg"],
             fg=colors["text_fg"],
             insertbackground=colors["fg"],
+            selectbackground=accent_bg,
+            selectforeground=accent_fg,
             relief=tk.FLAT,
             borderwidth=0,
             highlightthickness=1,
@@ -1787,6 +1839,8 @@ class MailApp:
         selected_design = (
             self.design_var.get() if hasattr(self, "design_var") else style.theme_use()
         )
+        if theme_name == "dark" and "clam" in style.theme_names():
+            selected_design = "clam"
         if selected_design not in style.theme_names():
             selected_design = (
                 "default" if "default" in style.theme_names() else style.theme_use()
@@ -1799,25 +1853,33 @@ class MailApp:
             self.design_var.set(selected_design)
 
         style.configure(
-            "Treeview",
+            "Mail.Treeview",
             background=colors["list_bg"],
             foreground=colors["list_fg"],
             fieldbackground=colors["list_bg"],
             rowheight=28,
             borderwidth=0,
+            relief="flat",
         )
         style.configure(
-            "Treeview.Heading",
+            "Mail.Treeview.Heading",
             background=colors["header_bg"],
             foreground=colors["fg"],
             relief="flat",
             font=FONT_SMALL,
+            borderwidth=0,
         )
         style.map(
-            "Treeview",
+            "Mail.Treeview.Heading",
+            background=[("active", colors["header_bg"]), ("pressed", colors["header_bg"])],
+            foreground=[("active", colors["fg"]), ("pressed", colors["fg"])],
+        )
+        style.map(
+            "Mail.Treeview",
             background=[("selected", accent_bg)],
             foreground=[("selected", accent_fg)],
         )
+        self.tree.configure(style="Mail.Treeview")
 
     def on_design_change(self, event=None):
         """Изменение дизайна (ttk theme)."""

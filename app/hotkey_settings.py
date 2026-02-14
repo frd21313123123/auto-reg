@@ -10,9 +10,10 @@ import os
 import keyboard
 
 from .themes import THEMES
+from .config import BASE_DIR
 
 # Path for settings file
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "hotkeys.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "hotkeys.json")
 
 # Default hotkeys
 DEFAULT_HOTKEYS = {
