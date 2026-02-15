@@ -9,6 +9,9 @@ on:
     branches:
       - main
       - master
+  release:
+    types:
+      - published
   workflow_dispatch:
 
 jobs:
@@ -49,6 +52,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up MSVC toolchain
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build C++ executable
         run: powershell -NoProfile -ExecutionPolicy Bypass -File .\build_cpp.ps1
 
@@ -58,3 +64,35 @@ jobs:
           name: Auto-reg-cpp-windows-exe
           path: build/auto_reg_cpp.exe
           if-no-files-found: error
+
+  publish_release_assets:
+    if: github.event_name == 'release'
+    needs:
+      - build_python
+      - build_cpp
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Auto-reg.exe artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Auto-reg-windows-exe
+          path: release-assets
+
+      - name: Download auto_reg_cpp.exe artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Auto-reg-cpp-windows-exe
+          path: release-assets
+
+      - name: Upload binaries to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          files: |
+            release-assets/Auto-reg.exe
+            release-assets/auto_reg_cpp.exe

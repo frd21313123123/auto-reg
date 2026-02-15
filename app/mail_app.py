@@ -162,6 +162,24 @@ class MailApp:
         self.design_var = tk.StringVar(value=default_design)
         style.configure("Treeview", rowheight=28)
 
+        # Стили скроллбаров (тёмные для clam/dark)
+        style.configure(
+            "Dark.Vertical.TScrollbar",
+            background=colors["btn_bg"],
+            troughcolor=colors["panel_bg"],
+            bordercolor=colors["panel_bg"],
+            arrowcolor=colors["fg"],
+            lightcolor=colors["panel_bg"],
+            darkcolor=colors["panel_bg"],
+            gripcount=0,
+            borderwidth=0,
+            width=12,
+        )
+        style.map(
+            "Dark.Vertical.TScrollbar",
+            background=[("active", colors["btn_hover"]), ("pressed", colors["btn_hover"])],
+        )
+
         # --- Сплиттер ---
         self.paned = tk.PanedWindow(
             self.root_container, orient=tk.HORIZONTAL, sashwidth=2,
@@ -286,7 +304,10 @@ class MailApp:
         self.left_panel.grid_rowconfigure(row, weight=1)
         row += 1
 
-        self.acc_scrollbar = tk.Scrollbar(acc_frame, orient=tk.VERTICAL)
+        self.acc_scrollbar = ttk.Scrollbar(
+            acc_frame, orient=tk.VERTICAL,
+            style="Dark.Vertical.TScrollbar",
+        )
         self.acc_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.acc_listbox = tk.Listbox(
@@ -562,8 +583,9 @@ class MailApp:
         self.tree.column("date", width=80, anchor="center", minwidth=70)
         self.tree.column("msg_id", width=0, stretch=False)
 
-        self.tree_scrollbar = tk.Scrollbar(
-            self.tree_frame, orient=tk.VERTICAL, command=self.tree.yview
+        self.tree_scrollbar = ttk.Scrollbar(
+            self.tree_frame, orient=tk.VERTICAL, command=self.tree.yview,
+            style="Dark.Vertical.TScrollbar",
         )
         self.tree.configure(yscrollcommand=self.tree_scrollbar.set)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -595,13 +617,21 @@ class MailApp:
         self.msg_text_frame.pack(fill=tk.BOTH, expand=True, padx=self.PAD_X,
                                  pady=(4, self.PAD_X))
 
-        self.msg_scrollbar = tk.Scrollbar(self.msg_text_frame, orient=tk.VERTICAL)
+        self.msg_scrollbar = ttk.Scrollbar(
+            self.msg_text_frame, orient=tk.VERTICAL,
+            style="Dark.Vertical.TScrollbar",
+        )
         self.msg_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.msg_text = tk.Text(
             self.msg_text_frame, wrap=tk.WORD, height=10, font=FONT_BASE,
             relief=tk.FLAT, borderwidth=0,
             highlightthickness=1,
+            highlightbackground=colors["border"],
+            highlightcolor=colors["accent"],
+            bg=colors["text_bg"],
+            fg=colors["text_fg"],
+            insertbackground=colors["fg"],
             yscrollcommand=self.msg_scrollbar.set,
         )
         self.msg_text.pack(fill=tk.BOTH, expand=True)
@@ -1820,34 +1850,6 @@ class MailApp:
         )
         self.update_listbox_colors()
 
-        # Scrollbars
-        for scrollbar in [
-            getattr(self, "acc_scrollbar", None),
-            getattr(self, "tree_scrollbar", None),
-            getattr(self, "msg_scrollbar", None),
-        ]:
-            if not scrollbar:
-                continue
-            try:
-                scrollbar.config(
-                    bg=colors["btn_bg"],
-                    activebackground=colors["btn_hover"],
-                    troughcolor=colors["panel_bg"],
-                    relief=tk.FLAT,
-                    bd=0,
-                    width=12,
-                    highlightthickness=0,
-                )
-            except tk.TclError:
-                scrollbar.config(
-                    bg=colors["btn_bg"],
-                    activebackground=colors["btn_hover"],
-                    relief=tk.FLAT,
-                    bd=0,
-                    width=12,
-                    highlightthickness=0,
-                )
-
         # Right Panel
         self.right_panel.config(bg=colors["bg"])
         self.header_frame.config(bg=colors["header_bg"])
@@ -1933,15 +1935,24 @@ class MailApp:
             rowheight=28,
             borderwidth=0,
             relief="flat",
+            # Убираем белые рамки Treeview.field в clam-теме
+            bordercolor=colors["list_bg"],
+            lightcolor=colors["list_bg"],
+            darkcolor=colors["list_bg"],
         )
+        heading_border = colors["separator"] if theme_name == "dark" else ""
         style.configure(
             "Mail.Treeview.Heading",
             background=colors["header_bg"],
             foreground=colors["fg"],
             relief="flat",
             font=FONT_SMALL,
-            borderwidth=0,
+            borderwidth=1 if theme_name == "light" else 0,
             padding=(8, 4),
+            # Перекрашиваем все границы heading (clam рисует их белыми)
+            bordercolor=heading_border or colors["border"],
+            lightcolor=colors["header_bg"],
+            darkcolor=colors["header_bg"],
         )
         style.map(
             "Mail.Treeview.Heading",
@@ -1961,12 +1972,30 @@ class MailApp:
             ],
         )
 
-        # Убираем белые полосы вокруг Treeview (внутреннюю рамку/бордер)
+        # Убираем border из layout — оставляем только treearea (без рамки)
         style.layout("Mail.Treeview", [
-            ("Mail.Treeview.treearea", {"sticky": "nswe"})
+            ("Treeview.treearea", {"sticky": "nswe"})
         ])
 
         self.tree.configure(style="Mail.Treeview")
+
+        # Scrollbars (ttk — обновляем стиль ПОСЛЕ theme_use)
+        style.configure(
+            "Dark.Vertical.TScrollbar",
+            background=colors["btn_bg"],
+            troughcolor=colors["panel_bg"],
+            bordercolor=colors["panel_bg"],
+            arrowcolor=colors["fg"],
+            lightcolor=colors["panel_bg"],
+            darkcolor=colors["panel_bg"],
+            gripcount=0,
+            borderwidth=0,
+            width=12,
+        )
+        style.map(
+            "Dark.Vertical.TScrollbar",
+            background=[("active", colors["btn_hover"]), ("pressed", colors["btn_hover"])],
+        )
 
     def on_design_change(self, event=None):
         """Изменение дизайна (ttk theme)."""

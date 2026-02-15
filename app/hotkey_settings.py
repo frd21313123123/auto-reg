@@ -4,7 +4,7 @@ Settings window for hotkeys configuration.
 """
 
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
 import json
 import os
 import keyboard
@@ -14,6 +14,37 @@ from .config import BASE_DIR
 
 # Path for settings file
 SETTINGS_FILE = os.path.join(BASE_DIR, "hotkeys.json")
+
+# Маппинг кириллических клавиш → латинские (раскладка ЙЦУКЕН → QWERTY).
+# keyboard.read_hotkey() может вернуть кириллицу если активна русская раскладка,
+# но keyboard.add_hotkey() понимает только латинские имена клавиш.
+_CYRILLIC_TO_LATIN = {
+    "й": "q", "ц": "w", "у": "e", "к": "r", "е": "t", "н": "y",
+    "г": "u", "ш": "i", "щ": "o", "з": "p", "х": "[", "ъ": "]",
+    "ф": "a", "ы": "s", "в": "d", "а": "f", "п": "g", "р": "h",
+    "о": "j", "л": "k", "д": "l", "ж": ";", "э": "'",
+    "я": "z", "ч": "x", "с": "c", "м": "v", "и": "b", "т": "n",
+    "ь": "m", "б": ",", "ю": ".",
+}
+# + верхний регистр
+_CYRILLIC_TO_LATIN.update({k.upper(): v for k, v in _CYRILLIC_TO_LATIN.items()})
+
+
+def _normalize_hotkey(hotkey_str):
+    """Конвертирует кириллические символы клавиш в латинские эквиваленты.
+
+    Пример: 'ctrl+й' → 'ctrl+q', 'ctrl+shift+М' → 'ctrl+shift+v'
+    """
+    if not hotkey_str:
+        return hotkey_str
+    parts = hotkey_str.split("+")
+    normalized = []
+    for part in parts:
+        stripped = part.strip()
+        mapped = _CYRILLIC_TO_LATIN.get(stripped, stripped)
+        normalized.append(mapped)
+    return "+".join(normalized)
+
 
 # Default hotkeys
 DEFAULT_HOTKEYS = {
@@ -73,7 +104,7 @@ class HotkeySettings:
         self._hotkeys = self.load_hotkeys()
     
     def load_hotkeys(self):
-        """Load hotkeys from file."""
+        """Load hotkeys from file (нормализует кириллицу → латиницу)."""
         if os.path.exists(SETTINGS_FILE):
             try:
                 with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
@@ -81,17 +112,19 @@ class HotkeySettings:
                     # Merge with defaults to ensure all keys exist
                     result = DEFAULT_HOTKEYS.copy()
                     result.update(loaded)
-                    return result
+                    # Нормализуем кириллические клавиши в латинские
+                    return {k: _normalize_hotkey(v) for k, v in result.items()}
             except Exception:
                 pass
         return DEFAULT_HOTKEYS.copy()
     
     def save_hotkeys(self, hotkeys):
-        """Save hotkeys to file."""
-        self._hotkeys = hotkeys
+        """Save hotkeys to file (нормализует кириллицу → латиницу)."""
+        normalized = {k: _normalize_hotkey(v) for k, v in hotkeys.items()}
+        self._hotkeys = normalized
         try:
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                json.dump(hotkeys, f, indent=2)
+                json.dump(normalized, f, indent=2)
         except Exception as e:
             print(f"Error saving hotkeys: {e}")
     
@@ -107,15 +140,16 @@ class HotkeySettings:
         """Register all hotkeys."""
         if self._registered:
             self.unregister_all()
-        
+
         for key, hotkey in self._hotkeys.items():
             if hotkey and key in self._callbacks:
+                normalized = _normalize_hotkey(hotkey)
                 try:
                     # Don't use suppress=True as it blocks system hotkeys like Shift+Alt
-                    keyboard.add_hotkey(hotkey, self._callbacks[key], suppress=False)
+                    keyboard.add_hotkey(normalized, self._callbacks[key], suppress=False)
                 except Exception as e:
-                    print(f"Error registering hotkey {hotkey}: {e}")
-        
+                    print(f"Error registering hotkey {normalized}: {e}")
+
         self._registered = True
     
     def unregister_all(self):
@@ -167,7 +201,30 @@ def show_settings_window(parent, theme_name="light", on_save=None):
     container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
     
     canvas = tk.Canvas(container, bg=colors["bg"], highlightthickness=0)
-    scrollbar = tk.Scrollbar(container, orient="vertical", command=canvas.yview)
+
+    # Стиль скроллбара для текущей темы
+    style = ttk.Style()
+    style.configure(
+        "Settings.Vertical.TScrollbar",
+        background=colors.get("btn_bg", "#e0e0e0"),
+        troughcolor=colors.get("panel_bg", colors["bg"]),
+        bordercolor=colors.get("panel_bg", colors["bg"]),
+        arrowcolor=colors.get("fg", "#000000"),
+        lightcolor=colors.get("panel_bg", colors["bg"]),
+        darkcolor=colors.get("panel_bg", colors["bg"]),
+        gripcount=0,
+        borderwidth=0,
+        width=12,
+    )
+    style.map(
+        "Settings.Vertical.TScrollbar",
+        background=[("active", colors.get("btn_hover", "#d0d0d0"))],
+    )
+
+    scrollbar = ttk.Scrollbar(
+        container, orient="vertical", command=canvas.yview,
+        style="Settings.Vertical.TScrollbar",
+    )
     scrollable_frame = tk.Frame(canvas, bg=colors["bg"])
     
     scrollable_frame.bind(
@@ -208,6 +265,8 @@ def show_settings_window(parent, theme_name="light", on_save=None):
         try:
             hotkey = keyboard.read_hotkey(suppress=False)
             if hotkey:
+                # Нормализуем кириллицу → латиницу сразу при записи
+                hotkey = _normalize_hotkey(hotkey)
                 entry.delete(0, tk.END)
                 entry.insert(0, hotkey)
                 entry.config(fg=colors.get("entry_fg", "#000000"))
