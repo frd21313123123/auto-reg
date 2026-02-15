@@ -58,7 +58,7 @@ jobs:
 
       - name: Signing skipped notice (Python)
         if: ${{ !(secrets.WINDOWS_CERT_PFX_B64 != '' && secrets.WINDOWS_CERT_PASSWORD != '') }}
-        run: echo "Signing skipped: configure WINDOWS_CERT_PFX_B64 and WINDOWS_CERT_PASSWORD secrets."
+        run: 'echo "Signing skipped: configure WINDOWS_CERT_PFX_B64 and WINDOWS_CERT_PASSWORD secrets."'
 
       - name: Upload Auto-reg.exe
         uses: actions/upload-artifact@v4
@@ -105,7 +105,7 @@ jobs:
 
       - name: Signing skipped notice (C++)
         if: ${{ !(secrets.WINDOWS_CERT_PFX_B64 != '' && secrets.WINDOWS_CERT_PASSWORD != '') }}
-        run: echo "Signing skipped: configure WINDOWS_CERT_PFX_B64 and WINDOWS_CERT_PASSWORD secrets."
+        run: 'echo "Signing skipped: configure WINDOWS_CERT_PFX_B64 and WINDOWS_CERT_PASSWORD secrets."'
 
       - name: Upload auto_reg_cpp.exe
         uses: actions/upload-artifact@v4
