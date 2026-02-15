@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(cd:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "mcp__Windows-MCP__Shell"
     ]
   }
 }

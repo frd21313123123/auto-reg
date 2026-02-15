@@ -1004,6 +1004,9 @@ class MailApp:
         self.ban_check_threads = max(1, min(total, recommended_threads))
         self.ban_check_lock = threading.Lock()
 
+        # Сброс thread-local хранилища от предыдущего запуска
+        self._ban_thread_local = threading.local()
+
         self._ban_start_time = time.time()
         self._create_progress_window(total)
         threading.Thread(target=self.ban_check_thread, daemon=True).start()
@@ -1091,18 +1094,21 @@ class MailApp:
 
     def _update_progress(self, current, total, email, banned_count, checked_count):
         """Обновление прогресс бара."""
-        if hasattr(self, "progress_window") and self.progress_window.winfo_exists():
-            self.progress_bar["value"] = current
-            elapsed = time.time() - getattr(self, "_ban_start_time", time.time())
-            speed = checked_count / max(elapsed, 0.1)
-            remaining = (total - checked_count) / max(speed, 0.1)
-            self.progress_label.config(
-                text=f"{email[:30]}... ({current}/{total})"
-            )
-            self.progress_stats.config(
-                text=f"Забанено: {banned_count} | Проверено: {checked_count} | "
-                     f"{speed:.1f} акк/с | ~{remaining:.0f}с"
-            )
+        try:
+            if hasattr(self, "progress_window") and self.progress_window.winfo_exists():
+                self.progress_bar["value"] = current
+                elapsed = time.time() - getattr(self, "_ban_start_time", time.time())
+                speed = checked_count / max(elapsed, 0.1)
+                remaining = (total - checked_count) / max(speed, 0.1)
+                self.progress_label.config(
+                    text=f"{email[:30]}... ({current}/{total})"
+                )
+                self.progress_stats.config(
+                    text=f"Забанено: {banned_count} | Проверено: {checked_count} | "
+                         f"{speed:.1f} акк/с | ~{remaining:.0f}с"
+                )
+        except tk.TclError:
+            pass  # окно уже закрыто
 
     def _get_ban_thread_session(self):
         """HTTP сессия для текущего потока проверки (быстрая, минимальные retry)."""
@@ -1164,10 +1170,11 @@ class MailApp:
         """Поток проверки всех аккаунтов на бан с многопоточностью."""
         banned_count = 0
         invalid_pass_count = 0
+        error_count = 0
         checked_count = 0
         total = len(self.accounts_data)
         start_time = time.time()
-        last_ui_update = 0.0  # throttle UI updates
+        last_ui_update = [0.0]  # список для замыкания; пишется только из main loop
 
         def check_single_account(idx, account):
             email_addr = account.get("email", "")
@@ -1200,47 +1207,85 @@ class MailApp:
                     try:
                         idx, email_addr, result, reason, skipped = future.result()
 
-                        if skipped or not email_addr:
-                            checked_count += 1
-                            continue
-
                         with self.ban_check_lock:
+                            if skipped or not email_addr:
+                                checked_count += 1
+                                continue
+
                             if result == "banned":
                                 self.accounts_data[idx]["status"] = "banned"
                                 banned_count += 1
                             elif result == "invalid_password":
                                 self.accounts_data[idx]["status"] = "invalid_password"
                                 invalid_pass_count += 1
+                            elif result == "error":
+                                error_count += 1
 
                             checked_count += 1
 
+                            # Снимаем снимок счётчиков под локом
+                            _checked = checked_count
+                            _banned = banned_count
+                            _email = email_addr
+
                         # Обновляем UI не чаще чем раз в 150мс
                         now = time.monotonic()
-                        if now - last_ui_update > 0.15:
-                            last_ui_update = now
+                        if now - last_ui_update[0] > 0.15:
+                            last_ui_update[0] = now
                             self.root.after(
                                 0,
-                                lambda c=checked_count,
-                                e=email_addr,
-                                b=banned_count: self._update_progress(c, total, e, b, c),
+                                lambda c=_checked,
+                                e=_email,
+                                b=_banned: self._update_progress(c, total, e, b, c),
                             )
 
                     except Exception as e:
                         print(f"[BAN] Future error: {e}")
-                        checked_count += 1
+                        with self.ban_check_lock:
+                            checked_count += 1
         finally:
             self._close_ban_thread_sessions()
 
         elapsed_time = time.time() - start_time
         speed = total / max(elapsed_time, 0.1)
-        print(f"[BAN] Завершено за {elapsed_time:.1f}с ({speed:.1f} акк/с)")
+        print(f"[BAN] Завершено за {elapsed_time:.1f}с ({speed:.1f} акк/с), ошибок: {error_count}")
 
         self.root.after(
             0,
             lambda: self._on_ban_check_complete(
-                checked_count, banned_count, invalid_pass_count
+                checked_count, banned_count, invalid_pass_count, error_count
             ),
         )
+
+    @staticmethod
+    def _is_openai_ban_message(sender, subject):
+        """Проверяет, является ли письмо уведомлением о бане OpenAI."""
+        sender = sender.lower()
+        subject = subject.lower()
+        if "openai" not in sender:
+            return False
+        ban_keywords = [
+            "access deactivated",
+            "deactivated",
+            "account suspended",
+            "account disabled",
+            "account has been disabled",
+            "account has been deactivated",
+            "suspended",
+            "violation",
+        ]
+        return any(kw in subject for kw in ban_keywords)
+
+    @staticmethod
+    def _extract_sender_address(from_field):
+        """Извлечение email из поля From (поддерживает 'Name <email>' и dict)."""
+        if isinstance(from_field, dict):
+            return from_field.get("address", "")
+        # IMAP возвращает строку вида "OpenAI <noreply@tm.openai.com>"
+        s = str(from_field)
+        if "<" in s and ">" in s:
+            return s[s.index("<") + 1:s.index(">")]
+        return s
 
     def _check_account_for_ban_threadsafe(self, email_addr, password):
         """Потокобезопасная проверка одного аккаунта на бан OpenAI."""
@@ -1272,11 +1317,10 @@ class MailApp:
                 messages = res.json().get("hydra:member", [])
 
                 for msg in messages:
-                    sender = msg.get("from", {}).get("address", "").lower()
-                    subject = msg.get("subject", "").lower()
+                    sender = self._extract_sender_address(msg.get("from", {}))
+                    subject = msg.get("subject", "")
 
-                    if ("openai" in sender or "noreply@tm.openai.com" in sender) and \
-                       ("access deactivated" in subject or "deactivated" in subject):
+                    if self._is_openai_ban_message(sender, subject):
                         return ("banned", "access_deactivated")
 
                 return ("ok", "no_ban_found")
@@ -1286,26 +1330,35 @@ class MailApp:
 
         # IMAP проверка — короткий таймаут
         imap_client = None
+        any_host_reached = False
         try:
             for host in self._get_ban_imap_hosts(domain):
-                client = IMAPClient(host=host, timeout=5)
-                if client.login(email_addr, password):
-                    imap_client = client
-                    self._remember_ban_imap_host(domain, host)
-                    break
-                client.logout()
+                try:
+                    client = IMAPClient(host=host, timeout=5)
+                    if client.login(email_addr, password):
+                        imap_client = client
+                        self._remember_ban_imap_host(domain, host)
+                        break
+                    # Логин не прошёл, но сервер ответил — значит пароль неверный
+                    any_host_reached = True
+                    client.logout()
+                except (OSError, ConnectionError, TimeoutError):
+                    # Хост недоступен — пробуем следующий
+                    continue
+
             if not imap_client:
-                return ("invalid_password", "imap_login_failed")
+                if any_host_reached:
+                    return ("invalid_password", "imap_login_failed")
+                return ("error", "imap_connection_failed")
 
             # Проверяем только 15 последних — бан-письмо обычно среди свежих
             messages = imap_client.get_messages(limit=15)
 
             for msg in messages:
-                sender = msg.get("from", {}).get("address", "").lower()
-                subject = msg.get("subject", "").lower()
+                sender = self._extract_sender_address(msg.get("from", {}))
+                subject = msg.get("subject", "")
 
-                if "openai" in sender and \
-                   ("access deactivated" in subject or "deactivated" in subject):
+                if self._is_openai_ban_message(sender, subject):
                     return ("banned", "access_deactivated")
 
             return ("ok", "no_ban_found")
@@ -1316,7 +1369,7 @@ class MailApp:
             if imap_client:
                 imap_client.logout()
 
-    def _on_ban_check_complete(self, checked, banned, invalid_pass=0):
+    def _on_ban_check_complete(self, checked, banned, invalid_pass=0, errors=0):
         """Завершение проверки бана."""
         if hasattr(self, "progress_window") and self.progress_window.winfo_exists():
             self.progress_window.destroy()
@@ -1327,15 +1380,23 @@ class MailApp:
         self.update_listbox_colors()
         self.save_accounts_to_file()
 
-        msg = f"Проверка завершена!\n\nПроверено: {checked}\nЗабанено: {banned}\nНеверный пароль: {invalid_pass}"
+        msg = (
+            f"Проверка завершена!\n\n"
+            f"Проверено: {checked}\n"
+            f"Забанено: {banned}\n"
+            f"Неверный пароль: {invalid_pass}"
+        )
+        if errors > 0:
+            msg += f"\nОшибки (сеть/таймаут): {errors}"
         if banned > 0 or invalid_pass > 0:
             messagebox.showwarning("Результаты проверки", msg)
         else:
             messagebox.showinfo("Результаты проверки", msg)
 
-        self.update_status(
-            f"Проверка завершена. Забанено: {banned}, Неверный пароль: {invalid_pass}"
-        )
+        status_msg = f"Проверка завершена. Забанено: {banned}, Неверный пароль: {invalid_pass}"
+        if errors > 0:
+            status_msg += f", Ошибки: {errors}"
+        self.update_status(status_msg)
 
     # ================================================================
     #  EXCEL
@@ -1635,9 +1696,21 @@ class MailApp:
 
         # Theme toggle state
         if hasattr(self, "theme_toggle"):
-            self.theme_toggle.bg_on = colors["accent"]
-            self.theme_toggle.bg_off = colors["btn_bg"]
             self.theme_toggle.config(bg=colors["panel_bg"])
+            if theme_name == "dark":
+                self.theme_toggle.update_colors(
+                    bg_on=colors["accent"], bg_off=colors["btn_bg"],
+                    handle_color=colors["entry_fg"],
+                    handle_outline=colors["border"],
+                    shadow_color=colors["bg"],
+                )
+            else:
+                self.theme_toggle.update_colors(
+                    bg_on=colors["accent"], bg_off="#cbd5e0",
+                    handle_color="#ffffff",
+                    handle_outline="#e2e8f0",
+                    shadow_color="#d4d4d4",
+                )
             self.theme_toggle.set_state(theme_name == "dark")
 
         # Theme icon
@@ -1868,17 +1941,31 @@ class MailApp:
             relief="flat",
             font=FONT_SMALL,
             borderwidth=0,
+            padding=(8, 4),
         )
         style.map(
             "Mail.Treeview.Heading",
             background=[("active", colors["header_bg"]), ("pressed", colors["header_bg"])],
             foreground=[("active", colors["fg"]), ("pressed", colors["fg"])],
+            relief=[("active", "flat"), ("pressed", "flat")],
         )
         style.map(
             "Mail.Treeview",
-            background=[("selected", accent_bg)],
-            foreground=[("selected", accent_fg)],
+            background=[
+                ("selected", accent_bg),
+                ("!selected", colors["list_bg"]),
+            ],
+            foreground=[
+                ("selected", accent_fg),
+                ("!selected", colors["list_fg"]),
+            ],
         )
+
+        # Убираем белые полосы вокруг Treeview (внутреннюю рамку/бордер)
+        style.layout("Mail.Treeview", [
+            ("Mail.Treeview.treearea", {"sticky": "nswe"})
+        ])
+
         self.tree.configure(style="Mail.Treeview")
 
     def on_design_change(self, event=None):
@@ -1977,17 +2064,24 @@ class MailApp:
             if self.imap_client:
                 self.imap_client.logout()
 
-            self.imap_client = IMAPClient(host="imap.firstmail.ltd")
-            if self.imap_client.login(email_addr, password):
-                self.account_type = "imap"
-                success = True
-            else:
-                fallback_host = f"imap.{domain}"
-                print(f"Trying fallback IMAP: {fallback_host}")
-                self.imap_client = IMAPClient(host=fallback_host)
+            try:
+                self.imap_client = IMAPClient(host="imap.firstmail.ltd")
                 if self.imap_client.login(email_addr, password):
                     self.account_type = "imap"
                     success = True
+            except (OSError, ConnectionError, TimeoutError):
+                print("IMAP firstmail.ltd: connection failed")
+
+            if not success:
+                try:
+                    fallback_host = f"imap.{domain}"
+                    print(f"Trying fallback IMAP: {fallback_host}")
+                    self.imap_client = IMAPClient(host=fallback_host)
+                    if self.imap_client.login(email_addr, password):
+                        self.account_type = "imap"
+                        success = True
+                except (OSError, ConnectionError, TimeoutError):
+                    print(f"IMAP {domain}: connection failed")
 
         if success:
             self.last_message_ids = set()

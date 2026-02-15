@@ -129,7 +129,36 @@ class BanChecker:
         """Запоминает рабочий IMAP хост для домена."""
         with self._imap_host_lock:
             self._imap_host_cache[domain] = host
-    
+
+    @staticmethod
+    def _is_openai_ban_message(sender, subject):
+        """Проверяет, является ли письмо уведомлением о бане OpenAI."""
+        sender = sender.lower()
+        subject = subject.lower()
+        if "openai" not in sender:
+            return False
+        ban_keywords = [
+            "access deactivated",
+            "deactivated",
+            "account suspended",
+            "account disabled",
+            "account has been disabled",
+            "account has been deactivated",
+            "suspended",
+            "violation",
+        ]
+        return any(kw in subject for kw in ban_keywords)
+
+    @staticmethod
+    def _extract_sender_address(from_field):
+        """Извлечение email из поля From (поддерживает 'Name <email>' и dict)."""
+        if isinstance(from_field, dict):
+            return from_field.get("address", "")
+        s = str(from_field)
+        if "<" in s and ">" in s:
+            return s[s.index("<") + 1:s.index(">")]
+        return s
+
     def _make_request(self, session, method, url, **kwargs):
         """Выполнить HTTP запрос с обработкой ошибок"""
         try:
@@ -290,46 +319,48 @@ class BanChecker:
                     return ("error", "messages_failed")
                 
                 messages = res.json().get("hydra:member", [])
-                
+
                 for msg in messages:
-                    sender = msg.get("from", {}).get("address", "").lower()
-                    subject = msg.get("subject", "").lower()
-                    
-                    if "openai" in sender or "noreply@tm.openai.com" in sender:
-                        if "access deactivated" in subject or "deactivated" in subject:
-                            return ("banned", "access_deactivated")
-                    
-                    if "access deactivated" in subject and "openai" in sender:
+                    sender = self._extract_sender_address(msg.get("from", {}))
+                    subject = msg.get("subject", "")
+
+                    if self._is_openai_ban_message(sender, subject):
                         return ("banned", "access_deactivated")
-                
+
                 return ("ok", "no_ban_found")
             except Exception as e:
                 return ("error", str(e))
 
         # IMAP проверка
         imap_client = None
+        any_host_reached = False
         try:
             for host in self._imap_hosts_for_domain(domain):
-                client = IMAPClient(host=host, timeout=8)
-                if client.login(email_addr, password):
-                    imap_client = client
-                    self._remember_imap_host(domain, host)
-                    break
-                client.logout()
+                try:
+                    client = IMAPClient(host=host, timeout=8)
+                    if client.login(email_addr, password):
+                        imap_client = client
+                        self._remember_imap_host(domain, host)
+                        break
+                    any_host_reached = True
+                    client.logout()
+                except (OSError, ConnectionError, TimeoutError):
+                    continue
 
             if not imap_client:
-                return ("invalid_password", "imap_login_failed")
+                if any_host_reached:
+                    return ("invalid_password", "imap_login_failed")
+                return ("error", "imap_connection_failed")
 
             messages = imap_client.get_messages(limit=30)
-            
+
             for msg in messages:
-                sender = msg.get("from", {}).get("address", "").lower()
-                subject = msg.get("subject", "").lower()
-                
-                if "openai" in sender:
-                    if "access deactivated" in subject or "deactivated" in subject:
-                        return ("banned", "access_deactivated")
-            
+                sender = self._extract_sender_address(msg.get("from", {}))
+                subject = msg.get("subject", "")
+
+                if self._is_openai_ban_message(sender, subject):
+                    return ("banned", "access_deactivated")
+
             return ("ok", "no_ban_found")
         except Exception as e:
             return ("error", str(e))

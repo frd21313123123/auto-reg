@@ -56,7 +56,9 @@ class AnimatedToggle(tk.Canvas):
     """Анимированный переключатель (toggle switch) — modern pill-style."""
 
     def __init__(self, parent, on_toggle=None, width=48, height=26,
-                 bg_on="#4f6df5", bg_off="#cbd5e0"):
+                 bg_on="#4f6df5", bg_off="#cbd5e0",
+                 handle_color="#ffffff", handle_outline="#e2e8f0",
+                 shadow_color="#d4d4d4"):
         super().__init__(parent, width=width, height=height, bd=0,
                          highlightthickness=0, cursor="hand2")
         self.on_toggle = on_toggle
@@ -78,12 +80,30 @@ class AnimatedToggle(tk.Canvas):
         # Ручка с тенью (приближённый цвет вместо alpha)
         self.shadow = self.create_oval(self.p + 1, self.p + 1,
                                        self.p + self.d + 1, self.p + self.d + 1,
-                                       fill="#d4d4d4", outline="")
+                                       fill=shadow_color, outline="")
         self.handle = self.create_oval(self.p, self.p,
                                        self.p + self.d, self.p + self.d,
-                                       fill="white", outline="#e2e8f0")
+                                       fill=handle_color, outline=handle_outline)
 
         self.bind("<Button-1>", self.toggle)
+
+    def update_colors(self, bg_on=None, bg_off=None,
+                      handle_color=None, handle_outline=None, shadow_color=None):
+        """Обновить цвета переключателя (для смены темы)."""
+        if bg_on is not None:
+            self.bg_on = bg_on
+        if bg_off is not None:
+            self.bg_off = bg_off
+        bg_color = self.bg_on if self.is_on else self.bg_off
+        self.itemconfig(self.rect, fill=bg_color)
+        self.itemconfig(self.rect2, fill=bg_color)
+        self.itemconfig(self.rect3, fill=bg_color)
+        if handle_color is not None:
+            self.itemconfig(self.handle, fill=handle_color)
+        if handle_outline is not None:
+            self.itemconfig(self.handle, outline=handle_outline)
+        if shadow_color is not None:
+            self.itemconfig(self.shadow, fill=shadow_color)
 
     def toggle(self, event=None):
         self.is_on = not self.is_on

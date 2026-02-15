@@ -12,7 +12,8 @@ env/
 .env.*
 
 # Build artifacts
-
+build
+dist
 *.egg-info/
 *.spec
 .pyinstaller/

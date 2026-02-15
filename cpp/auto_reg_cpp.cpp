@@ -1195,17 +1195,26 @@ BanCheckResult checkAccountForBan(size_t idx, const Account& acc) {
         return out;
     }
 
+    // Ключевые слова бана — соответствует Python-реализации
+    static const std::vector<std::string> ban_keywords = {
+        "access deactivated", "deactivated", "account suspended",
+        "account disabled", "account has been disabled",
+        "account has been deactivated", "suspended", "violation",
+    };
+
     for (const auto& msg : *messages_opt) {
         std::string sender_lower = toLower(msg.sender);
         std::string subject_lower = toLower(msg.subject);
 
-        if ((sender_lower.find("openai") != std::string::npos ||
-             sender_lower.find("noreply@tm.openai.com") != std::string::npos) &&
-            (subject_lower.find("access deactivated") != std::string::npos ||
-             subject_lower.find("deactivated") != std::string::npos)) {
-            out.result = BanResult::banned;
-            out.reason = "access_deactivated";
-            return out;
+        if (sender_lower.find("openai") == std::string::npos)
+            continue;
+
+        for (const auto& kw : ban_keywords) {
+            if (subject_lower.find(kw) != std::string::npos) {
+                out.result = BanResult::banned;
+                out.reason = "access_deactivated";
+                return out;
+            }
         }
     }
 

@@ -17,11 +17,24 @@ class IMAPClient:
         self.mail = None
     
     def login(self, email_addr, password):
-        """Авторизация на IMAP сервере"""
+        """Авторизация на IMAP сервере.
+
+        Returns True при успешном логине, False при неверных учётных данных.
+        Raises OSError/ConnectionError/TimeoutError если сервер недоступен.
+        """
         try:
             self.mail = imaplib.IMAP4_SSL(self.host, timeout=self.timeout)
+        except (OSError, ConnectionError, TimeoutError):
+            # Сервер недоступен — пробрасываем наверх для различения от auth fail
+            raise
+        except Exception:
+            return False
+        try:
             self.mail.login(email_addr, password)
             return True
+        except imaplib.IMAP4.error:
+            # Неверные учётные данные
+            return False
         except Exception:
             return False
     
