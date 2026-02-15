@@ -17,9 +17,13 @@ dist
 *.egg-info/
 *.spec
 .pyinstaller/
+web/frontend/node_modules/
+web/frontend/dist/
+web/backend/*.db
 
 # Caches
 .pytest_cache/
+.claude
 .mypy_cache/
 .ruff_cache/
 
