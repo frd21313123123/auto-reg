@@ -1,7 +1,0 @@
-auto-reg C++ console client
-
-=== auto-reg C++ (mail.tm) ===
-1. Create account
-2. Login + read inbox
-3. Exit
-Select: 
