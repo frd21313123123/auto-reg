@@ -34,15 +34,12 @@ jobs:
         run: python build_exe.py
 
       - name: Sign Auto-reg.exe
+        if: ${{ secrets.WINDOWS_CERT_PFX_B64 != '' && secrets.WINDOWS_CERT_PASSWORD != '' }}
         shell: pwsh
         env:
           WINDOWS_CERT_PFX_B64: ${{ secrets.WINDOWS_CERT_PFX_B64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX_B64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)) {
-            throw "Release signing is enabled, but WINDOWS_CERT_PFX_B64 / WINDOWS_CERT_PASSWORD secrets are missing."
-          }
-
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } |
             Sort-Object FullName -Descending |
@@ -58,6 +55,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Signing dist/Auto-reg.exe failed with exit code $LASTEXITCODE"
           }
+
+      - name: Signing skipped notice (Python)
+        if: ${{ !(secrets.WINDOWS_CERT_PFX_B64 != '' && secrets.WINDOWS_CERT_PASSWORD != '') }}
+        run: echo "Signing skipped: configure WINDOWS_CERT_PFX_B64 and WINDOWS_CERT_PASSWORD secrets."
 
       - name: Upload Auto-reg.exe
         uses: actions/upload-artifact@v4
@@ -80,15 +81,12 @@ jobs:
         run: powershell -NoProfile -ExecutionPolicy Bypass -File .\build_cpp.ps1
 
       - name: Sign auto_reg_cpp.exe
+        if: ${{ secrets.WINDOWS_CERT_PFX_B64 != '' && secrets.WINDOWS_CERT_PASSWORD != '' }}
         shell: pwsh
         env:
           WINDOWS_CERT_PFX_B64: ${{ secrets.WINDOWS_CERT_PFX_B64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX_B64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)) {
-            throw "Release signing is enabled, but WINDOWS_CERT_PFX_B64 / WINDOWS_CERT_PASSWORD secrets are missing."
-          }
-
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } |
             Sort-Object FullName -Descending |
@@ -104,6 +102,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Signing build/auto_reg_cpp.exe failed with exit code $LASTEXITCODE"
           }
+
+      - name: Signing skipped notice (C++)
+        if: ${{ !(secrets.WINDOWS_CERT_PFX_B64 != '' && secrets.WINDOWS_CERT_PASSWORD != '') }}
+        run: echo "Signing skipped: configure WINDOWS_CERT_PFX_B64 and WINDOWS_CERT_PASSWORD secrets."
 
       - name: Upload auto_reg_cpp.exe
         uses: actions/upload-artifact@v4
@@ -136,8 +138,8 @@ jobs:
       - name: Rename release files
         shell: bash
         run: |
-          cp "release-assets/Auto-reg.exe" "release-assets/Auto-reg-python-signed.exe"
-          cp "release-assets/auto_reg_cpp.exe" "release-assets/Auto-reg-cpp-signed.exe"
+          cp "release-assets/Auto-reg.exe" "release-assets/Auto-reg-python.exe"
+          cp "release-assets/auto_reg_cpp.exe" "release-assets/Auto-reg-cpp.exe"
 
       - name: Upload binaries to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -151,9 +153,8 @@ jobs:
             Workflow run: `${{ github.run_id }}`.
           target_commitish: ${{ github.sha }}
           prerelease: true
-          make_latest: false
           fail_on_unmatched_files: true
           overwrite_files: true
           files: |
-            release-assets/Auto-reg-python-signed.exe
-            release-assets/Auto-reg-cpp-signed.exe
+            release-assets/Auto-reg-python.exe
+            release-assets/Auto-reg-cpp.exe

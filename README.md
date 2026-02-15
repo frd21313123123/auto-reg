@@ -1,6 +1,6 @@
 # auto-reg
 
-GUI tool for creating mail.tm accounts and reading inbox via API/IMAP.
+GUI tool for creating mail.tm accounts and reading inbox via API/IMAP..
 
 ## Requirements
 - Python 3.10+
