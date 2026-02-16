@@ -1168,14 +1168,8 @@ BanCheckResult checkAccountForBan(size_t idx, const Account& acc) {
         return out; // skip already marked
     }
 
-    if (!isMailTmAccount(acc.email)) {
-        out.result = BanResult::unsupported_domain;
-        out.reason = "imap_not_supported_in_cpp";
-        return out;
-    }
-
+    // Always try mail.tm API — domains may not end with "mail.tm"
     std::string error;
-    // Short timeout for ban check: 5s
     auto token_opt = getToken(acc.email, acc.password_mail, &error, 5000);
     if (!token_opt.has_value()) {
         if (error == "invalid_password") {
@@ -1503,13 +1497,7 @@ void handleInbox() {
     std::string email = promptLine("Email: ");
     std::string password = promptLine("Password: ");
 
-    if (!isMailTmAccount(email)) {
-        std::cout << "This domain is not from mail.tm.\n"
-                  << "C++ client currently supports inbox via mail.tm API only.\n"
-                  << "IMAP domains are not supported in standalone C++ mode yet.\n";
-        return;
-    }
-
+    // Always try mail.tm API — domains may not end with "mail.tm"
     std::string error;
     auto token_opt = getToken(email, password, &error);
     if (!token_opt.has_value()) {
@@ -2081,10 +2069,9 @@ void requestInboxForSelection(GuiState* state) {
         result->email = email;
         result->password = password;
 
-        if (!isMailTmAccount(email)) {
-            result->success = false;
-            result->error = "IMAP-домены пока не поддерживаются нативным C++ ядром.";
-        } else {
+        // Always try mail.tm API first — domains may not end with "mail.tm"
+        // (e.g. dollicons.com) and the cached domain list may fail to load.
+        {
             std::string error;
             auto token_opt = getToken(email, password, &error, 8000);
             if (!token_opt.has_value()) {
