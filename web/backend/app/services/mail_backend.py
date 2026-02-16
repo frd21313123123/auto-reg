@@ -508,6 +508,38 @@ class MailBackendService:
 
         return email_addr, password
 
+    def delete_mail_tm_account(self, email_addr: str, password: str) -> None:
+        if not self._is_mail_tm(email_addr):
+            raise RuntimeError("mailbox delete is supported only for mail.tm accounts")
+
+        payload = {"address": email_addr, "password": password}
+        auth_res = self._request("POST", f"{settings.mail_tm_api_url}/token", json=payload)
+        if auth_res.status_code == 401:
+            raise RuntimeError("wrong mailbox credentials")
+        if auth_res.status_code != 200:
+            raise RuntimeError(f"mail.tm auth failed: {auth_res.status_code}")
+
+        token = auth_res.json().get("token")
+        if not token:
+            raise RuntimeError("mail.tm token missing")
+
+        headers = {"Authorization": f"Bearer {token}"}
+        me_res = self._request("GET", f"{settings.mail_tm_api_url}/me", headers=headers)
+        if me_res.status_code != 200:
+            raise RuntimeError(f"mail.tm me failed: {me_res.status_code}")
+
+        account_id = me_res.json().get("id")
+        if not account_id:
+            raise RuntimeError("mail.tm account id missing")
+
+        delete_res = self._request(
+            "DELETE",
+            f"{settings.mail_tm_api_url}/accounts/{account_id}",
+            headers=headers,
+        )
+        if delete_res.status_code not in (200, 204):
+            raise RuntimeError(f"mail.tm delete failed: {delete_res.status_code}")
+
     def check_account_for_ban(self, email_addr: str, password: str) -> tuple[str, str]:
         domain = email_addr.split("@")[-1].lower()
         is_mail_tm = self._is_mail_tm(email_addr)

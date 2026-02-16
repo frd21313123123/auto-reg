@@ -158,6 +158,24 @@ def update_account_status(
     return account
 
 
+@router.delete("/{account_id}/mailbox", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account_mailbox(
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    account = _get_owned_account(db, current_user, account_id)
+    try:
+        mail_backend_service.delete_mail_tm_account(account.email, account.password_mail)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    mail_backend_service.clear_connection(current_user.id, account.id)
+    db.delete(account)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(
     account_id: int,
