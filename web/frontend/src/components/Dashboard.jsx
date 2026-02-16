@@ -6,7 +6,7 @@ const STATUS_OPTIONS = [
   "not_registered",
   "registered",
   "plus",
-  "busnis",
+  "business",
   "banned",
   "invalid_password"
 ];
@@ -15,7 +15,8 @@ const STATUS_LABELS = {
   not_registered: "Не зарегистрирован",
   registered: "Зарегистрирован",
   plus: "Plus",
-  busnis: "Busnis",
+  business: "Business",
+  busnis: "Business",
   banned: "Banned",
   invalid_password: "Неверный пароль"
 };
@@ -24,10 +25,15 @@ const STATUS_SHORT_LABELS = {
   not_registered: "Не рег",
   registered: "Рег",
   plus: "Plus",
-  busnis: "Busnis",
+  business: "Business",
+  busnis: "Business",
   banned: "Бан",
   invalid_password: "Пароль"
 };
+
+function normalizeAccountStatus(status) {
+  return status === "busnis" ? "business" : status;
+}
 
 const GENERATOR_HOTKEYS_STORAGE_KEY = "auto_reg_generator_hotkeys";
 const SIDEBAR_GENERATOR_VISIBILITY_KEY = "auto_reg_sidebar_generator_visible";
@@ -139,7 +145,7 @@ function hotkeyHintText(hotkeys) {
 }
 
 function statusClass(status) {
-  return `status-${status}`;
+  return `status-${normalizeAccountStatus(status)}`;
 }
 
 const ACCOUNTS_WINDOW_MIN_WIDTH = 620;
@@ -150,6 +156,8 @@ const GENERATOR_WINDOW_MIN_WIDTH = 520;
 const GENERATOR_WINDOW_MIN_HEIGHT = 360;
 const SETTINGS_WINDOW_MIN_WIDTH = 500;
 const SETTINGS_WINDOW_MIN_HEIGHT = 320;
+const IMPORT_WINDOW_MIN_WIDTH = 520;
+const IMPORT_WINDOW_MIN_HEIGHT = 300;
 const MAIL_INBOX_MIN_HEIGHT = 170;
 const MAIL_VIEWER_MIN_HEIGHT = 170;
 const MAIL_RESIZE_HANDLE_HEIGHT = 10;
@@ -357,6 +365,68 @@ function clampSettingsWindowRect(rect, isMobile) {
   };
 }
 
+function buildImportWindowDefaultRect() {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maxWidth = Math.max(360, viewportWidth - ACCOUNTS_WINDOW_MARGIN * 2);
+  const maxHeight = Math.max(240, viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - ACCOUNTS_WINDOW_MARGIN);
+  const width = Math.min(740, Math.max(560, Math.round(viewportWidth * 0.52), IMPORT_WINDOW_MIN_WIDTH, maxWidth));
+  const height = Math.min(520, Math.max(360, Math.round(viewportHeight * 0.56), IMPORT_WINDOW_MIN_HEIGHT, maxHeight));
+  return {
+    x: Math.max(ACCOUNTS_WINDOW_MARGIN, Math.round((viewportWidth - width) / 2)),
+    y: Math.max(ACCOUNTS_WINDOW_MARGIN, Math.round((viewportHeight - height) / 2)),
+    width: Math.min(width, maxWidth),
+    height: Math.min(height, maxHeight)
+  };
+}
+
+function buildImportWindowMaxRect(isMobile) {
+  if (isMobile) {
+    return {
+      x: 0,
+      y: 0,
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
+  }
+
+  const margin = 10;
+  return {
+    x: margin,
+    y: margin,
+    width: Math.max(360, window.innerWidth - margin * 2),
+    height: Math.max(260, window.innerHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - margin)
+  };
+}
+
+function clampImportWindowRect(rect, isMobile) {
+  if (isMobile) {
+    return buildImportWindowMaxRect(true);
+  }
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const availableWidth = Math.max(360, viewportWidth - ACCOUNTS_WINDOW_MARGIN * 2);
+  const availableHeight = Math.max(
+    260,
+    viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - ACCOUNTS_WINDOW_MARGIN
+  );
+  const width = clampValue(rect.width, IMPORT_WINDOW_MIN_WIDTH, availableWidth);
+  const height = clampValue(rect.height, IMPORT_WINDOW_MIN_HEIGHT, availableHeight);
+  const maxX = Math.max(ACCOUNTS_WINDOW_MARGIN, viewportWidth - width - ACCOUNTS_WINDOW_MARGIN);
+  const maxY = Math.max(
+    ACCOUNTS_WINDOW_MARGIN,
+    viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - height
+  );
+  return {
+    ...rect,
+    width,
+    height,
+    x: clampValue(rect.x, ACCOUNTS_WINDOW_MARGIN, maxX),
+    y: clampValue(rect.y, ACCOUNTS_WINDOW_MARGIN, maxY)
+  };
+}
+
 function toLocalDateTime(value) {
   if (!value) {
     return "";
@@ -378,11 +448,57 @@ function escapeCsvValue(value) {
   return text;
 }
 
+function validateImportAccountsText(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    return { ok: false, lineNumber: null, reason: "Добавьте минимум одну строку для импорта" };
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const lineNumber = index + 1;
+    const parts = line.split(" / ");
+
+    if (parts.length !== 3) {
+      return {
+        ok: false,
+        lineNumber,
+        reason: "используйте формат: email / pass;pass / status"
+      };
+    }
+
+    const [emailRaw, passwordsRaw, statusRaw] = parts.map((part) => part.trim());
+    if (!emailRaw || !emailRaw.includes("@")) {
+      return { ok: false, lineNumber, reason: "некорректный email" };
+    }
+
+    const passwordParts = passwordsRaw.split(";");
+    if (passwordParts.length !== 2 || !passwordParts[0].trim() || !passwordParts[1].trim()) {
+      return { ok: false, lineNumber, reason: "пароли должны быть в формате pass;pass" };
+    }
+
+    const normalizedStatus = normalizeAccountStatus(statusRaw.toLowerCase());
+    if (!STATUS_OPTIONS.includes(normalizedStatus)) {
+      return {
+        ok: false,
+        lineNumber,
+        reason: `неизвестный статус "${statusRaw}" (допустимо: ${STATUS_OPTIONS.join(", ")})`
+      };
+    }
+  }
+
+  return { ok: true, lineNumber: null, reason: "" };
+}
+
 function formatAccountCredentials(account) {
   if (!account) {
     return "";
   }
-  return `${account.email}:${account.password_openai}:${account.password_mail}`;
+  return `${account.email}:${account.password_openai};${account.password_mail}`;
 }
 
 async function copyText(value) {
@@ -805,16 +921,17 @@ export default function Dashboard({ token, user, onLogout }) {
   const [isDraggingSplitter, setIsDraggingSplitter] = useState(false);
 
   const [importText, setImportText] = useState("");
-  const [manualEmail, setManualEmail] = useState("");
-  const [manualPasswordOpenai, setManualPasswordOpenai] = useState("");
-  const [manualPasswordMail, setManualPasswordMail] = useState("");
+  const [showImportWindow, setShowImportWindow] = useState(false);
+  const [importWindowMinimized, setImportWindowMinimized] = useState(false);
+  const [importWindowMaximized, setImportWindowMaximized] = useState(false);
+  const [importWindowRect, setImportWindowRect] = useState(() => buildImportWindowDefaultRect());
+  const [isDraggingImportWindow, setIsDraggingImportWindow] = useState(false);
 
   const [randomPerson, setRandomPerson] = useState({ name: "", birthdate: "" });
   const [inData, setInData] = useState(null);
   const [skData, setSkData] = useState(null);
 
   const [busy, setBusy] = useState(false);
-  const [showImportPanel, setShowImportPanel] = useState(false);
   const [showInPanel, setShowInPanel] = useState(false);
   const [showSkPanel, setShowSkPanel] = useState(false);
   const [showSidebarGenerator, setShowSidebarGenerator] = useState(() => {
@@ -864,6 +981,8 @@ export default function Dashboard({ token, user, onLogout }) {
   const generatorWindowRestoreRef = useRef(null);
   const settingsWindowDragRef = useRef(null);
   const settingsWindowRestoreRef = useRef(null);
+  const importWindowDragRef = useRef(null);
+  const importWindowRestoreRef = useRef(null);
   const mailPanelsRef = useRef(null);
   const mailPanelsResizeRef = useRef(null);
 
@@ -963,6 +1082,65 @@ export default function Dashboard({ token, user, onLogout }) {
     accountsWindowDragRef.current = null;
     accountsWindowRestoreRef.current = null;
     accountsSelectionAnchorRef.current = null;
+  };
+
+  const openImportWindow = () => {
+    setShowImportWindow(true);
+    setImportWindowMinimized(false);
+    if (isMobile) {
+      setImportWindowMaximized(true);
+      setImportWindowRect(buildImportWindowMaxRect(true));
+      return;
+    }
+    setImportWindowRect((prev) => clampImportWindowRect(prev, false));
+  };
+
+  const closeImportWindow = () => {
+    setShowImportWindow(false);
+    setImportWindowMinimized(false);
+    setImportWindowMaximized(false);
+    setIsDraggingImportWindow(false);
+    importWindowDragRef.current = null;
+    importWindowRestoreRef.current = null;
+  };
+
+  const toggleImportWindowMinimize = () => {
+    setImportWindowMinimized((prev) => !prev);
+  };
+
+  const toggleImportWindowMaximize = () => {
+    if (isMobile || !showImportWindow) {
+      return;
+    }
+
+    if (importWindowMaximized) {
+      setImportWindowMaximized(false);
+      const restoreRect = importWindowRestoreRef.current || buildImportWindowDefaultRect();
+      setImportWindowRect(clampImportWindowRect(restoreRect, false));
+      importWindowRestoreRef.current = null;
+      return;
+    }
+
+    importWindowRestoreRef.current = importWindowRect;
+    setImportWindowMinimized(false);
+    setImportWindowMaximized(true);
+    setImportWindowRect(buildImportWindowMaxRect(false));
+  };
+
+  const startImportWindowDrag = (event) => {
+    if (isMobile || importWindowMaximized || importWindowMinimized || !showImportWindow) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    importWindowDragRef.current = {
+      offsetX: event.clientX - importWindowRect.x,
+      offsetY: event.clientY - importWindowRect.y
+    };
+    setIsDraggingImportWindow(true);
   };
 
   const toggleAccountsWindowMinimize = () => {
@@ -1132,8 +1310,8 @@ export default function Dashboard({ token, user, onLogout }) {
     const count = selectedAccountsInWindow.length;
     applyStatus(
       count > 1
-        ? `Скопировано ${count} строк: почта:пароль:2пароль`
-        : "Скопировано: почта:пароль:2пароль"
+        ? `Скопировано ${count} строк: почта:пароль;2пароль`
+        : "Скопировано: почта:пароль;2пароль"
     );
   };
 
@@ -1190,9 +1368,13 @@ export default function Dashboard({ token, user, onLogout }) {
 
   const loadAccounts = async (nextSelectedId = null) => {
     const response = await accountsApi.list(token);
-    setAccounts(response);
+    const normalizedResponse = response.map((item) => ({
+      ...item,
+      status: normalizeAccountStatus(item.status)
+    }));
+    setAccounts(normalizedResponse);
 
-    if (!response.length) {
+    if (!normalizedResponse.length) {
       setSelectedAccountId(null);
       setMessages([]);
       setMessageDetail(null);
@@ -1200,8 +1382,8 @@ export default function Dashboard({ token, user, onLogout }) {
     }
 
     const desiredId = nextSelectedId ?? selectedAccountId;
-    const hasDesired = response.some((item) => item.id === desiredId);
-    setSelectedAccountId(hasDesired ? desiredId : response[0].id);
+    const hasDesired = normalizedResponse.some((item) => item.id === desiredId);
+    setSelectedAccountId(hasDesired ? desiredId : normalizedResponse[0].id);
   };
 
   const loadRandomPerson = async () => {
@@ -1435,6 +1617,93 @@ export default function Dashboard({ token, user, onLogout }) {
     observer.observe(windowElement);
     return () => observer.disconnect();
   }, [showAccountsDataWindow, isMobile, accountsWindowMaximized, accountsWindowMinimized]);
+
+  useEffect(() => {
+    if (!isDraggingImportWindow) {
+      return;
+    }
+
+    const handleMouseMove = (event) => {
+      const drag = importWindowDragRef.current;
+      if (!drag) {
+        return;
+      }
+
+      setImportWindowRect((prev) =>
+        clampImportWindowRect(
+          {
+            ...prev,
+            x: event.clientX - drag.offsetX,
+            y: event.clientY - drag.offsetY
+          },
+          false
+        )
+      );
+    };
+
+    const stopDrag = () => {
+      setIsDraggingImportWindow(false);
+      importWindowDragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopDrag);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopDrag);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isDraggingImportWindow]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!showImportWindow) {
+        return;
+      }
+      if (isMobile) {
+        setImportWindowRect(buildImportWindowMaxRect(true));
+        return;
+      }
+      if (importWindowMaximized) {
+        setImportWindowRect(buildImportWindowMaxRect(false));
+        return;
+      }
+      setImportWindowRect((prev) => clampImportWindowRect(prev, false));
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [showImportWindow, importWindowMaximized, isMobile]);
+
+  useEffect(() => {
+    if (!showImportWindow) {
+      return;
+    }
+
+    if (isMobile) {
+      setImportWindowMaximized(true);
+      setImportWindowMinimized(false);
+      setImportWindowRect(buildImportWindowMaxRect(true));
+      return;
+    }
+
+    if (importWindowMaximized && !importWindowRestoreRef.current) {
+      setImportWindowMaximized(false);
+      setImportWindowRect(clampImportWindowRect(buildImportWindowDefaultRect(), false));
+      return;
+    }
+
+    if (!importWindowMaximized) {
+      setImportWindowRect((prev) => clampImportWindowRect(prev, false));
+    }
+  }, [isMobile, showImportWindow, importWindowMaximized]);
 
   useEffect(() => {
     setWindowSelectedAccountIds((prev) => {
@@ -1896,26 +2165,14 @@ export default function Dashboard({ token, user, onLogout }) {
       applyStatus(`Создан аккаунт ${created.email}`);
     }, "Создание аккаунта...");
 
-  const addManualAccount = (event) => {
-    event.preventDefault();
+  const importAccounts = () => {
+    const validation = validateImportAccountsText(importText);
+    if (!validation.ok) {
+      const lineText = validation.lineNumber == null ? "" : ` (строка ${validation.lineNumber})`;
+      applyStatus(`Ошибка формата${lineText}: ${validation.reason}`);
+      return;
+    }
 
-    withBusy(async () => {
-      const payload = {
-        email: manualEmail,
-        password_openai: manualPasswordOpenai,
-        password_mail: manualPasswordMail || manualPasswordOpenai,
-        status: "not_registered"
-      };
-      const created = await accountsApi.create(token, payload);
-      setManualEmail("");
-      setManualPasswordOpenai("");
-      setManualPasswordMail("");
-      await loadAccounts(created.id);
-      applyStatus(`Добавлен ${created.email}`);
-    }, "Добавление аккаунта...");
-  };
-
-  const importAccounts = () =>
     withBusy(async () => {
       const result = await accountsApi.importAccounts(token, importText);
       await loadAccounts();
@@ -1923,8 +2180,9 @@ export default function Dashboard({ token, user, onLogout }) {
         `Импорт: добавлено ${result.added}, дубли ${result.duplicates}, пропущено ${result.skipped}`
       );
       setImportText("");
-      setShowImportPanel(false);
+      closeImportWindow();
     }, "Импорт аккаунтов...");
+  };
 
   const refreshAccounts = () =>
     withBusy(async () => {
@@ -1978,16 +2236,13 @@ export default function Dashboard({ token, user, onLogout }) {
     withBusy(async () => {
       await accountsApi.updateStatus(token, selectedAccount.id, status);
       await loadAccounts(selectedAccount.id);
-      applyStatus(`Статус изменен: ${status}`);
+      const statusLabel = STATUS_LABELS[status] || status;
+      applyStatus(`Статус изменен: ${statusLabel}`);
     }, "Обновление статуса...");
   };
 
   const deleteSelectedAccount = () => {
     if (!selectedAccount) {
-      return;
-    }
-
-    if (!window.confirm(`Удалить ${selectedAccount.email}?`)) {
       return;
     }
 
@@ -1998,20 +2253,22 @@ export default function Dashboard({ token, user, onLogout }) {
     }, "Удаление аккаунта...");
   };
 
-  const deleteSelectedMailbox = () => {
-    if (!selectedAccount) {
-      return;
-    }
-
-    if (!window.confirm(`Удалить почту ${selectedAccount.email} в mail.tm и из списка?`)) {
+  const deleteMailboxByAccount = (account) => {
+    if (!account) {
       return;
     }
 
     withBusy(async () => {
-      await accountsApi.removeMailbox(token, selectedAccount.id);
+      // Remove account from the user's list for any mailbox domain.
+      await accountsApi.remove(token, account.id);
+      setWindowSelectedAccountIds((prev) => prev.filter((id) => id !== account.id));
       await loadAccounts();
-      applyStatus("Почта удалена");
+      applyStatus(`Почта убрана из списка: ${account.email}`);
     }, "Удаление почты...");
+  };
+
+  const deleteSelectedMailbox = () => {
+    deleteMailboxByAccount(selectedAccount);
   };
 
   const deleteAllAccounts = () => {
@@ -2021,9 +2278,6 @@ export default function Dashboard({ token, user, onLogout }) {
     }
 
     const total = accounts.length;
-    if (!window.confirm(`Удалить все записи (${total})?`)) {
-      return;
-    }
 
     withBusy(async () => {
       let deleted = 0;
@@ -2248,7 +2502,7 @@ export default function Dashboard({ token, user, onLogout }) {
 
     await copyText(value);
     applyStatus(
-      field === "full" ? "Скопировано: почта:пароль:2пароль" : `Скопировано: ${field}`
+      field === "full" ? "Скопировано: почта:пароль;2пароль" : `Скопировано: ${field}`
     );
   };
 
@@ -2295,8 +2549,14 @@ export default function Dashboard({ token, user, onLogout }) {
           </button>
           <button
             type="button"
-            className={showImportPanel ? "active" : ""}
-            onClick={() => setShowImportPanel((prev) => !prev)}
+            className={showImportWindow ? "active" : ""}
+            onClick={() => {
+              if (showImportWindow) {
+                closeImportWindow();
+              } else {
+                openImportWindow();
+              }
+            }}
             disabled={busy}
           >
             Файл
@@ -2311,49 +2571,6 @@ export default function Dashboard({ token, user, onLogout }) {
             Бан
           </button>
         </div>
-
-        {showImportPanel ? (
-          <div className="import-panel">
-            <form className="manual-form" onSubmit={addManualAccount}>
-              <input
-                placeholder="email"
-                value={manualEmail}
-                onChange={(event) => setManualEmail(event.target.value)}
-                required
-              />
-              <input
-                placeholder="пароль openai"
-                value={manualPasswordOpenai}
-                onChange={(event) => setManualPasswordOpenai(event.target.value)}
-                required
-              />
-              <input
-                placeholder="пароль почты (опц.)"
-                value={manualPasswordMail}
-                onChange={(event) => setManualPasswordMail(event.target.value)}
-              />
-              <button type="submit" disabled={busy}>
-                Добавить
-              </button>
-            </form>
-
-            <textarea
-              className="import-textarea"
-              placeholder="Вставьте аккаунты: email / pass;pass / status"
-              value={importText}
-              onChange={(event) => setImportText(event.target.value)}
-            />
-
-            <div className="import-actions">
-              <button type="button" onClick={importAccounts} disabled={busy || !importText.trim()}>
-                Импорт
-              </button>
-              <button type="button" onClick={() => setShowImportPanel(false)} disabled={busy}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         <div className="account-list">
           {accounts.map((account) => (
@@ -2370,8 +2587,25 @@ export default function Dashboard({ token, user, onLogout }) {
                 }
               }}
             >
-              <span className="account-email">{account.email}</span>
-              <small>{STATUS_LABELS[account.status] || account.status}</small>
+              <span className="account-item-main">
+                <span className="account-email">{account.email}</span>
+                <small>{STATUS_LABELS[account.status] || account.status}</small>
+              </span>
+              <span
+                className="account-mail-delete"
+                title={`Удалить почту ${account.email}`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  deleteMailboxByAccount(account);
+                }}
+              >
+                ×
+              </span>
             </button>
           ))}
 
@@ -2629,6 +2863,15 @@ export default function Dashboard({ token, user, onLogout }) {
       }
     : null;
 
+  const importWindowStyle = showImportWindow
+    ? {
+        left: `${importWindowRect.x}px`,
+        top: `${importWindowRect.y}px`,
+        width: `${importWindowRect.width}px`,
+        height: `${importWindowRect.height}px`
+      }
+    : null;
+
   const accountsDataWindow = showAccountsDataWindow ? (
     <div className="accounts-data-window-layer">
       <section
@@ -2693,7 +2936,7 @@ export default function Dashboard({ token, user, onLogout }) {
               <textarea
                 value={selectedAccountCredentials}
                 readOnly
-                placeholder="почта:пароль:2пароль"
+                placeholder="почта:пароль;2пароль"
                 onFocus={(event) => event.target.select()}
                 rows={Math.min(Math.max(selectedAccountsInWindow.length || 1, 1), 4)}
               />
@@ -2701,7 +2944,7 @@ export default function Dashboard({ token, user, onLogout }) {
                 type="button"
                 onClick={copySelectedAccountCredentials}
                 disabled={!selectedAccountsInWindow.length}
-                title="Скопировать выбранные строки: почта:пароль:2пароль"
+                title="Скопировать выбранные строки: почта:пароль;2пароль"
               >
                 Copy
               </button>
@@ -2749,6 +2992,86 @@ export default function Dashboard({ token, user, onLogout }) {
             </table>
           </div>
         ) : null}
+      </section>
+    </div>
+  ) : null;
+
+  const importAccountsWindow = showImportWindow ? (
+    <div className="accounts-data-window-layer">
+      <section
+        className={`accounts-data-window import-accounts-window ${importWindowMinimized ? "is-minimized" : ""} ${
+          importWindowMaximized ? "is-maximized" : ""
+        }`}
+        style={importWindowStyle}
+      >
+        <header
+          className={`accounts-data-window-header ${isDraggingImportWindow ? "dragging" : ""}`}
+          onMouseDown={startImportWindowDrag}
+        >
+          <div className="accounts-data-window-title">
+            <strong>Импорт аккаунтов</strong>
+            <span>Вставьте аккаунты: email / pass;pass / status</span>
+          </div>
+          <div className="accounts-data-window-actions" onMouseDown={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="accounts-window-action refresh"
+              onClick={importAccounts}
+              disabled={busy || !importText.trim()}
+              title="Импортировать"
+            >
+              ↥
+            </button>
+            <button
+              type="button"
+              className="accounts-window-action"
+              onClick={toggleImportWindowMinimize}
+              title={importWindowMinimized ? "Развернуть" : "Свернуть"}
+            >
+              {importWindowMinimized ? "▢" : "—"}
+            </button>
+            {!isMobile ? (
+              <button
+                type="button"
+                className="accounts-window-action"
+                onClick={toggleImportWindowMaximize}
+                title={importWindowMaximized ? "Восстановить" : "Развернуть"}
+              >
+                {importWindowMaximized ? "❐" : "□"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="accounts-window-action close"
+              onClick={closeImportWindow}
+              title="Закрыть"
+            >
+              ×
+            </button>
+          </div>
+        </header>
+
+        {!importWindowMinimized ? (
+          <div className="accounts-data-window-body import-accounts-window-body">
+            <textarea
+              className="import-textarea import-window-textarea"
+              placeholder="Вставьте аккаунты: email / pass;pass / status"
+              value={importText}
+              onChange={(event) => setImportText(event.target.value)}
+            />
+
+            <div className="import-actions import-window-actions">
+              <button type="button" className="primary-btn" onClick={importAccounts} disabled={busy || !importText.trim()}>
+                Импорт
+              </button>
+              <button type="button" onClick={closeImportWindow} disabled={busy}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="hotkeys-minimized-info">Окно свернуто</div>
+        )}
       </section>
     </div>
   ) : null;
@@ -2821,6 +3144,7 @@ export default function Dashboard({ token, user, onLogout }) {
         </nav>
 
         {accountsDataWindow}
+        {importAccountsWindow}
 
         {showSkPanel ? (
           <GeneratorPanel
@@ -3018,6 +3342,7 @@ export default function Dashboard({ token, user, onLogout }) {
       </div>
 
       {accountsDataWindow}
+      {importAccountsWindow}
 
       {showSkPanel ? (
         <GeneratorPanel
