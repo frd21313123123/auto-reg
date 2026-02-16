@@ -313,22 +313,22 @@ class MailBackendService:
         )
 
         domain = email_addr.split("@")[-1].lower()
-        is_mail_tm = self._is_mail_tm(email_addr)
 
-        if is_mail_tm:
-            try:
-                payload = {"address": email_addr, "password": password}
-                res = self._request("POST", f"{settings.mail_tm_api_url}/token", json=payload)
-                if res.status_code == 200:
-                    token = res.json().get("token")
-                    if token:
-                        state.account_type = "api"
-                        state.token = token
-                        with self._connections_lock:
-                            self._connections[key] = state
-                        return {"connected": True, "account_type": state.account_type}
-            except requests.RequestException:
-                pass
+        # Always try mail.tm API first — domains may not end with "mail.tm"
+        # (e.g. dollicons.com) and the domain list may not be loaded yet.
+        try:
+            payload = {"address": email_addr, "password": password}
+            res = self._request("POST", f"{settings.mail_tm_api_url}/token", json=payload)
+            if res.status_code == 200:
+                token = res.json().get("token")
+                if token:
+                    state.account_type = "api"
+                    state.token = token
+                    with self._connections_lock:
+                        self._connections[key] = state
+                    return {"connected": True, "account_type": state.account_type}
+        except requests.RequestException:
+            pass
 
         for host in self._get_imap_hosts(domain):
             client = IMAPSimpleClient(host=host, timeout=8)

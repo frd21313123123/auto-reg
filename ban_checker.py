@@ -280,8 +280,13 @@ class BanChecker:
         session = self._get_thread_session()
         
         domain = email_addr.split("@")[-1]
+
+        # Ensure domain list is loaded; mail.tm may use third-party domains
+        # (e.g. dollicons.com) that don't end with "mail.tm".
+        if not self.mail_tm_domains:
+            self._load_domains()
         is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
-        
+
         if is_mail_tm:
             try:
                 payload = {"address": email_addr, "password": password}

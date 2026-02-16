@@ -1321,6 +1321,11 @@ class MailApp:
         """Потокобезопасная проверка одного аккаунта на бан OpenAI."""
         session = self._get_ban_thread_session()
         domain = email_addr.split("@")[-1]
+
+        # Ensure domain list is loaded; mail.tm may use third-party domains
+        # (e.g. dollicons.com) that don't end with "mail.tm".
+        if not self.mail_tm_domains:
+            self.load_mail_tm_domains()
         is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
 
         if is_mail_tm:
@@ -2069,25 +2074,25 @@ class MailApp:
         self.current_password = password
         self._reset_http_session()
 
-        is_mail_tm = domain in self.mail_tm_domains or domain.endswith("mail.tm")
         success = False
 
-        if is_mail_tm:
-            try:
-                payload = {"address": email_addr, "password": password}
-                res = self._make_request(
-                    "post", f"{API_URL}/token", retry_auth=False, json=payload
-                )
-                if res and res.status_code == 200:
-                    self.current_token = res.json()["token"]
-                    self.account_type = "api"
-                    success = True
-                elif res:
-                    print(f"API Login failed: {res.status_code}")
-                else:
-                    print("API Login failed: network error")
-            except Exception as e:
-                print(f"API Error: {e}")
+        # Always try mail.tm API first — domains may not end with "mail.tm"
+        # (e.g. dollicons.com) and the async domain list may not be loaded yet.
+        try:
+            payload = {"address": email_addr, "password": password}
+            res = self._make_request(
+                "post", f"{API_URL}/token", retry_auth=False, json=payload
+            )
+            if res and res.status_code == 200:
+                self.current_token = res.json()["token"]
+                self.account_type = "api"
+                success = True
+            elif res:
+                print(f"API Login failed: {res.status_code}")
+            else:
+                print("API Login failed: network error")
+        except Exception as e:
+            print(f"API Error: {e}")
 
         if not success:
             if self.imap_client:
