@@ -90,6 +90,16 @@ class MailApp:
         self.stop_threads = False
         self.params = {"theme": "light"}
         self.is_pinned = False
+        self.accounts_window = None
+        self.accounts_window_tree = None
+        self.accounts_window_scrollbar = None
+        self.accounts_window_count_var = None
+        self.accounts_window_header = None
+        self.accounts_window_title = None
+        self.accounts_window_count = None
+        self.accounts_window_hint = None
+        self.accounts_window_body = None
+        self.btn_accounts_window_refresh = None
         self._ban_thread_local = threading.local()
         self._ban_thread_sessions = []
         self._ban_thread_sessions_lock = threading.Lock()
@@ -288,6 +298,14 @@ class MailApp:
             command=self.open_excel_file,
         )
         self.btn_open_excel.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+
+        self.btn_accounts_window = HoverButton(
+            self.file_btn_frame, text="Окно", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.open_accounts_window,
+        )
+        self.btn_accounts_window.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
 
         self.btn_check_ban = HoverButton(
             self.file_btn_frame, text="Бан", font=FONT_SMALL,
@@ -941,6 +959,245 @@ class MailApp:
         theme_name = self.params.get("theme", "light")
         show_minesweeper(self.root, theme_name)
 
+    def open_accounts_window(self):
+        """Открыть отдельное окно с данными аккаунтов."""
+        if self.accounts_window and self.accounts_window.winfo_exists():
+            self.accounts_window.deiconify()
+            self.accounts_window.lift()
+            self.accounts_window.focus_force()
+            self._refresh_accounts_window_data()
+            return
+
+        self.accounts_window = tk.Toplevel(self.root)
+        self.accounts_window.title("Аккаунты")
+        self.accounts_window.geometry("920x470")
+        self.accounts_window.minsize(700, 320)
+
+        try:
+            icon_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "assets", "icon.ico"
+            )
+            if os.path.exists(icon_path):
+                self.accounts_window.iconbitmap(icon_path)
+        except Exception:
+            pass
+
+        self.accounts_window.protocol("WM_DELETE_WINDOW", self._on_accounts_window_close)
+
+        self.accounts_window_header = tk.Frame(self.accounts_window)
+        self.accounts_window_header.pack(fill=tk.X, padx=self.PAD_X, pady=(self.PAD_X, 6))
+
+        self.accounts_window_title = tk.Label(
+            self.accounts_window_header,
+            text="Данные аккаунтов",
+            font=FONT_BOLD,
+            anchor="w",
+        )
+        self.accounts_window_title.pack(side=tk.LEFT)
+
+        self.accounts_window_count_var = tk.StringVar(value="Аккаунтов: 0")
+        self.accounts_window_count = tk.Label(
+            self.accounts_window_header,
+            textvariable=self.accounts_window_count_var,
+            font=FONT_SMALL,
+            anchor="w",
+        )
+        self.accounts_window_count.pack(side=tk.LEFT, padx=(10, 0))
+
+        self.btn_accounts_window_refresh = HoverButton(
+            self.accounts_window_header,
+            text="Обновить",
+            font=FONT_SMALL,
+            command=self._refresh_accounts_window_data,
+            padx=8,
+            pady=2,
+        )
+        self.btn_accounts_window_refresh.pack(side=tk.RIGHT)
+
+        self.accounts_window_hint = tk.Label(
+            self.accounts_window,
+            text="Двойной клик по строке выбирает аккаунт в основном окне",
+            font=FONT_SMALL,
+            anchor="w",
+        )
+        self.accounts_window_hint.pack(fill=tk.X, padx=self.PAD_X, pady=(0, 6))
+
+        self.accounts_window_body = tk.Frame(self.accounts_window)
+        self.accounts_window_body.pack(
+            fill=tk.BOTH, expand=True, padx=self.PAD_X, pady=(0, self.PAD_X)
+        )
+
+        columns = ("email", "password_openai", "password_mail", "status")
+        self.accounts_window_tree = ttk.Treeview(
+            self.accounts_window_body,
+            columns=columns,
+            displaycolumns=columns,
+            show="headings",
+            style="Mail.Treeview",
+        )
+        self.accounts_window_tree.heading("email", text="Email")
+        self.accounts_window_tree.heading("password_openai", text="Пароль OpenAI")
+        self.accounts_window_tree.heading("password_mail", text="Пароль почты")
+        self.accounts_window_tree.heading("status", text="Статус")
+
+        self.accounts_window_tree.column("email", width=300, minwidth=180)
+        self.accounts_window_tree.column("password_openai", width=210, minwidth=140)
+        self.accounts_window_tree.column("password_mail", width=210, minwidth=140)
+        self.accounts_window_tree.column("status", width=140, minwidth=100, anchor="center")
+
+        self.accounts_window_scrollbar = ttk.Scrollbar(
+            self.accounts_window_body,
+            orient=tk.VERTICAL,
+            command=self.accounts_window_tree.yview,
+            style="Dark.Vertical.TScrollbar",
+        )
+        self.accounts_window_tree.configure(
+            yscrollcommand=self.accounts_window_scrollbar.set
+        )
+        self.accounts_window_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.accounts_window_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.accounts_window_tree.bind("<Double-1>", self._activate_account_from_window)
+        self.accounts_window_tree.bind("<Return>", self._activate_account_from_window)
+
+        self._apply_accounts_window_theme()
+        self._refresh_accounts_window_data()
+
+    def _on_accounts_window_close(self):
+        """Закрыть окно аккаунтов и очистить ссылки на его виджеты."""
+        if self.accounts_window and self.accounts_window.winfo_exists():
+            self.accounts_window.destroy()
+        self.accounts_window = None
+        self.accounts_window_tree = None
+        self.accounts_window_scrollbar = None
+        self.accounts_window_count_var = None
+        self.accounts_window_header = None
+        self.accounts_window_title = None
+        self.accounts_window_count = None
+        self.accounts_window_hint = None
+        self.accounts_window_body = None
+        self.btn_accounts_window_refresh = None
+
+    def _activate_account_from_window(self, event=None):
+        """Выбрать аккаунт в основном окне по строке из отдельного окна."""
+        if not self.accounts_window_tree:
+            return
+
+        selection = self.accounts_window_tree.selection()
+        if not selection:
+            return
+
+        try:
+            idx = int(selection[0])
+        except (ValueError, TypeError):
+            return
+
+        if idx >= len(self.accounts_data):
+            return
+
+        self.acc_listbox.selection_clear(0, tk.END)
+        self.acc_listbox.selection_set(idx)
+        self.acc_listbox.activate(idx)
+        self.acc_listbox.see(idx)
+        self.on_account_select(None)
+
+    def _sync_accounts_window_selection_from_main(self):
+        """Синхронизировать выделение окна аккаунтов с главным списком."""
+        if not self.accounts_window_tree:
+            return
+
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            self.accounts_window_tree.selection_remove(self.accounts_window_tree.selection())
+            return
+
+        idx = selection[0]
+        row_id = str(idx)
+        if self.accounts_window_tree.exists(row_id):
+            self.accounts_window_tree.selection_set(row_id)
+            self.accounts_window_tree.focus(row_id)
+            self.accounts_window_tree.see(row_id)
+
+    def _refresh_accounts_window_data(self):
+        """Обновить таблицу в отдельном окне аккаунтов."""
+        if not self.accounts_window_tree:
+            return
+        if not self.accounts_window or not self.accounts_window.winfo_exists():
+            return
+
+        tree = self.accounts_window_tree
+        previous_selection = tree.selection()
+        y_pos = tree.yview()[0] if tree.get_children() else 0.0
+
+        tree.delete(*tree.get_children())
+
+        theme = self.params.get("theme", "light")
+        colors = THEMES[theme]
+        for status_name, palette in STATUS_COLORS.items():
+            tree.tag_configure(
+                status_name,
+                background=palette.get(theme, colors["list_bg"]),
+                foreground=colors["list_fg"],
+            )
+
+        for idx, account in enumerate(self.accounts_data):
+            email = account.get("email", "")
+            password_openai = account.get("password_openai", account.get("password", ""))
+            password_mail = account.get("password_mail", account.get("password", ""))
+            status = account.get("status", "not_registered")
+            tree.insert(
+                "",
+                tk.END,
+                iid=str(idx),
+                values=(email, password_openai, password_mail, status),
+                tags=(status,),
+            )
+
+        if self.accounts_window_count_var is not None:
+            self.accounts_window_count_var.set(f"Аккаунтов: {len(self.accounts_data)}")
+
+        restored = False
+        for item_id in previous_selection:
+            if tree.exists(item_id):
+                tree.selection_add(item_id)
+                restored = True
+
+        if not restored:
+            self._sync_accounts_window_selection_from_main()
+
+        if tree.get_children():
+            try:
+                tree.yview_moveto(y_pos)
+            except Exception:
+                pass
+
+    def _apply_accounts_window_theme(self):
+        """Применить тему к отдельному окну аккаунтов."""
+        if not self.accounts_window or not self.accounts_window.winfo_exists():
+            return
+
+        colors = THEMES[self.params.get("theme", "light")]
+        self.accounts_window.config(bg=colors["bg"])
+
+        if self.accounts_window_header:
+            self.accounts_window_header.config(bg=colors["panel_bg"])
+        if self.accounts_window_title:
+            self.accounts_window_title.config(bg=colors["panel_bg"], fg=colors["fg"])
+        if self.accounts_window_count:
+            self.accounts_window_count.config(bg=colors["panel_bg"], fg=colors["muted"])
+        if self.accounts_window_hint:
+            self.accounts_window_hint.config(bg=colors["bg"], fg=colors["muted"])
+        if self.accounts_window_body:
+            self.accounts_window_body.config(bg=colors["bg"])
+        if self.btn_accounts_window_refresh:
+            self.btn_accounts_window_refresh.update_colors(
+                bg=colors["btn_bg"],
+                fg=colors["btn_fg"],
+                hover_bg=colors["btn_hover"],
+            )
+
+        self._refresh_accounts_window_data()
+
     # ================================================================
     #  RANDOM DATA GENERATION
     # ================================================================
@@ -1583,8 +1840,10 @@ class MailApp:
 
             except Exception as e:
                 messagebox.showerror("Ошибка чтения файла", str(e))
+                self.update_listbox_colors()
         else:
             self.update_status("Файл accounts.txt не найден")
+            self.update_listbox_colors()
 
     def save_accounts_to_file(self):
         """Сохранение аккаунтов в файл."""
@@ -1803,6 +2062,7 @@ class MailApp:
         # Generic buttons (left panel)
         generic_btns = [
             self.btn_reload, self.btn_open_file, self.btn_open_excel,
+            self.btn_accounts_window,
             self.btn_copy_email, self.btn_copy_pass_openai, self.btn_copy_pass,
             self.btn_sk, self.btn_in, self.btn_minesweeper, self.btn_hotkey_settings,
             self.btn_copy_random_name, self.btn_copy_random_bdate,
@@ -2002,6 +2262,8 @@ class MailApp:
             background=[("active", colors["btn_hover"]), ("pressed", colors["btn_hover"])],
         )
 
+        self._apply_accounts_window_theme()
+
     def on_design_change(self, event=None):
         """Изменение дизайна (ttk theme)."""
         selected = self.design_var.get()
@@ -2024,12 +2286,16 @@ class MailApp:
                 fg_color = colors["list_fg"]
                 self.acc_listbox.itemconfig(i, {"bg": color, "fg": fg_color})
 
+        self._refresh_accounts_window_data()
+
     # ================================================================
     #  ACCOUNT SELECTION / EMAIL
     # ================================================================
 
     def on_account_select(self, event):
         """Выбор аккаунта."""
+        self._sync_accounts_window_selection_from_main()
+
         selection = self.acc_listbox.curselection()
         if not selection:
             return

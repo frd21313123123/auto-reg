@@ -142,6 +142,221 @@ function statusClass(status) {
   return `status-${status}`;
 }
 
+const ACCOUNTS_WINDOW_MIN_WIDTH = 620;
+const ACCOUNTS_WINDOW_MIN_HEIGHT = 320;
+const ACCOUNTS_WINDOW_MARGIN = 12;
+const ACCOUNTS_WINDOW_BOTTOM_GAP = 56;
+const GENERATOR_WINDOW_MIN_WIDTH = 520;
+const GENERATOR_WINDOW_MIN_HEIGHT = 360;
+const SETTINGS_WINDOW_MIN_WIDTH = 500;
+const SETTINGS_WINDOW_MIN_HEIGHT = 320;
+const MAIL_INBOX_MIN_HEIGHT = 170;
+const MAIL_VIEWER_MIN_HEIGHT = 170;
+const MAIL_RESIZE_HANDLE_HEIGHT = 10;
+const MAIL_RESIZE_HIT_ZONE = 16;
+const SIDEBAR_DRAG_MARGIN = 8;
+
+function clampValue(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function clampMailInboxHeight(value, containerHeight) {
+  const maxHeight = Math.max(
+    MAIL_INBOX_MIN_HEIGHT,
+    containerHeight - MAIL_RESIZE_HANDLE_HEIGHT - MAIL_VIEWER_MIN_HEIGHT
+  );
+  return clampValue(value, MAIL_INBOX_MIN_HEIGHT, maxHeight);
+}
+
+function buildAccountsWindowDefaultRect() {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maxWidth = Math.max(360, viewportWidth - ACCOUNTS_WINDOW_MARGIN * 2);
+  const maxHeight = Math.max(240, viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - ACCOUNTS_WINDOW_MARGIN);
+  const width = Math.min(920, Math.max(640, Math.round(viewportWidth * 0.72), ACCOUNTS_WINDOW_MIN_WIDTH, maxWidth));
+  const height = Math.min(520, Math.max(340, Math.round(viewportHeight * 0.62), ACCOUNTS_WINDOW_MIN_HEIGHT, maxHeight));
+  return {
+    x: Math.max(ACCOUNTS_WINDOW_MARGIN, Math.round((viewportWidth - width) / 2)),
+    y: Math.max(ACCOUNTS_WINDOW_MARGIN, Math.round((viewportHeight - height) / 2)),
+    width: Math.min(width, maxWidth),
+    height: Math.min(height, maxHeight)
+  };
+}
+
+function buildAccountsWindowMaxRect(isMobile) {
+  if (isMobile) {
+    return {
+      x: 0,
+      y: 0,
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
+  }
+
+  const margin = 10;
+  const width = Math.max(360, window.innerWidth - margin * 2);
+  const height = Math.max(260, window.innerHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - margin);
+  return {
+    x: margin,
+    y: margin,
+    width,
+    height
+  };
+}
+
+function clampAccountsWindowRect(rect, isMobile) {
+  if (isMobile) {
+    return buildAccountsWindowMaxRect(true);
+  }
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const availableWidth = Math.max(360, viewportWidth - ACCOUNTS_WINDOW_MARGIN * 2);
+  const availableHeight = Math.max(
+    260,
+    viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - ACCOUNTS_WINDOW_MARGIN
+  );
+  const width = clampValue(rect.width, ACCOUNTS_WINDOW_MIN_WIDTH, availableWidth);
+  const height = clampValue(rect.height, ACCOUNTS_WINDOW_MIN_HEIGHT, availableHeight);
+  const maxX = Math.max(ACCOUNTS_WINDOW_MARGIN, viewportWidth - width - ACCOUNTS_WINDOW_MARGIN);
+  const maxY = Math.max(
+    ACCOUNTS_WINDOW_MARGIN,
+    viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - height
+  );
+
+  return {
+    ...rect,
+    width,
+    height,
+    x: clampValue(rect.x, ACCOUNTS_WINDOW_MARGIN, maxX),
+    y: clampValue(rect.y, ACCOUNTS_WINDOW_MARGIN, maxY)
+  };
+}
+
+function buildGeneratorWindowDefaultRect() {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maxWidth = Math.max(360, viewportWidth - ACCOUNTS_WINDOW_MARGIN * 2);
+  const maxHeight = Math.max(260, viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - ACCOUNTS_WINDOW_MARGIN);
+  const width = Math.min(700, Math.max(560, Math.round(viewportWidth * 0.56), GENERATOR_WINDOW_MIN_WIDTH, maxWidth));
+  const height = Math.min(620, Math.max(420, Math.round(viewportHeight * 0.7), GENERATOR_WINDOW_MIN_HEIGHT, maxHeight));
+  return {
+    x: Math.max(ACCOUNTS_WINDOW_MARGIN, Math.round((viewportWidth - width) / 2)),
+    y: Math.max(ACCOUNTS_WINDOW_MARGIN, Math.round((viewportHeight - height) / 2)),
+    width: Math.min(width, maxWidth),
+    height: Math.min(height, maxHeight)
+  };
+}
+
+function buildGeneratorWindowMaxRect(isMobile) {
+  if (isMobile) {
+    return {
+      x: 0,
+      y: 0,
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
+  }
+
+  const margin = 10;
+  return {
+    x: margin,
+    y: margin,
+    width: Math.max(360, window.innerWidth - margin * 2),
+    height: Math.max(260, window.innerHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - margin)
+  };
+}
+
+function clampGeneratorWindowRect(rect, isMobile) {
+  if (isMobile) {
+    return buildGeneratorWindowMaxRect(true);
+  }
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const availableWidth = Math.max(360, viewportWidth - ACCOUNTS_WINDOW_MARGIN * 2);
+  const availableHeight = Math.max(
+    260,
+    viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - ACCOUNTS_WINDOW_MARGIN
+  );
+  const width = clampValue(rect.width, GENERATOR_WINDOW_MIN_WIDTH, availableWidth);
+  const height = clampValue(rect.height, GENERATOR_WINDOW_MIN_HEIGHT, availableHeight);
+  const maxX = Math.max(ACCOUNTS_WINDOW_MARGIN, viewportWidth - width - ACCOUNTS_WINDOW_MARGIN);
+  const maxY = Math.max(
+    ACCOUNTS_WINDOW_MARGIN,
+    viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - height
+  );
+  return {
+    ...rect,
+    width,
+    height,
+    x: clampValue(rect.x, ACCOUNTS_WINDOW_MARGIN, maxX),
+    y: clampValue(rect.y, ACCOUNTS_WINDOW_MARGIN, maxY)
+  };
+}
+
+function buildSettingsWindowDefaultRect() {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maxWidth = Math.max(360, viewportWidth - ACCOUNTS_WINDOW_MARGIN * 2);
+  const maxHeight = Math.max(240, viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - ACCOUNTS_WINDOW_MARGIN);
+  const width = Math.min(620, Math.max(520, Math.round(viewportWidth * 0.48), SETTINGS_WINDOW_MIN_WIDTH, maxWidth));
+  const height = Math.min(640, Math.max(430, Math.round(viewportHeight * 0.7), SETTINGS_WINDOW_MIN_HEIGHT, maxHeight));
+  return {
+    x: Math.max(ACCOUNTS_WINDOW_MARGIN, Math.round((viewportWidth - width) / 2)),
+    y: Math.max(ACCOUNTS_WINDOW_MARGIN, Math.round((viewportHeight - height) / 2)),
+    width: Math.min(width, maxWidth),
+    height: Math.min(height, maxHeight)
+  };
+}
+
+function buildSettingsWindowMaxRect(isMobile) {
+  if (isMobile) {
+    return {
+      x: 0,
+      y: 0,
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
+  }
+
+  const margin = 10;
+  return {
+    x: margin,
+    y: margin,
+    width: Math.max(360, window.innerWidth - margin * 2),
+    height: Math.max(260, window.innerHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - margin)
+  };
+}
+
+function clampSettingsWindowRect(rect, isMobile) {
+  if (isMobile) {
+    return buildSettingsWindowMaxRect(true);
+  }
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const availableWidth = Math.max(360, viewportWidth - ACCOUNTS_WINDOW_MARGIN * 2);
+  const availableHeight = Math.max(
+    260,
+    viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - ACCOUNTS_WINDOW_MARGIN
+  );
+  const width = clampValue(rect.width, SETTINGS_WINDOW_MIN_WIDTH, availableWidth);
+  const height = clampValue(rect.height, SETTINGS_WINDOW_MIN_HEIGHT, availableHeight);
+  const maxX = Math.max(ACCOUNTS_WINDOW_MARGIN, viewportWidth - width - ACCOUNTS_WINDOW_MARGIN);
+  const maxY = Math.max(
+    ACCOUNTS_WINDOW_MARGIN,
+    viewportHeight - ACCOUNTS_WINDOW_BOTTOM_GAP - height
+  );
+  return {
+    ...rect,
+    width,
+    height,
+    x: clampValue(rect.x, ACCOUNTS_WINDOW_MARGIN, maxX),
+    y: clampValue(rect.y, ACCOUNTS_WINDOW_MARGIN, maxY)
+  };
+}
+
 function toLocalDateTime(value) {
   if (!value) {
     return "";
@@ -161,6 +376,13 @@ function escapeCsvValue(value) {
     return `"${text.replace(/"/g, '""')}"`;
   }
   return text;
+}
+
+function formatAccountCredentials(account) {
+  if (!account) {
+    return "";
+  }
+  return `${account.email}:${account.password_openai}:${account.password_mail}`;
 }
 
 async function copyText(value) {
@@ -314,103 +536,238 @@ function GeneratorPanel({
   busy,
   activeAction,
   hotkeys,
+  windowStyle,
+  minimized,
+  maximized,
+  isMobile,
+  isDragging,
   onClose,
+  onHeaderMouseDown,
+  onToggleMinimize,
+  onToggleMaximize,
   onGenerate,
   onSettings,
   onCopy
 }) {
   return (
-    <div className="generator-overlay" onClick={onClose}>
-      <section className="generator-modal" onClick={(event) => event.stopPropagation()}>
-        <header className="generator-modal-header">
+    <div className="generator-overlay">
+      <section
+        className={`generator-modal ${minimized ? "is-minimized" : ""} ${maximized ? "is-maximized" : ""}`}
+        style={windowStyle}
+      >
+        <header
+          className={`generator-modal-header ${isDragging ? "dragging" : ""}`}
+          onMouseDown={onHeaderMouseDown}
+        >
           <h3>{title}</h3>
-          <button type="button" className="generator-close-btn" onClick={onClose} aria-label="Закрыть">
-            ×
-          </button>
+          <div className="generator-window-actions" onMouseDown={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="generator-window-action refresh"
+              onClick={onGenerate}
+              disabled={busy}
+              title="Сгенерировать"
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              className="generator-window-action"
+              onClick={onToggleMinimize}
+              title={minimized ? "Развернуть" : "Свернуть"}
+            >
+              {minimized ? "▢" : "—"}
+            </button>
+            {!isMobile ? (
+              <button
+                type="button"
+                className="generator-window-action"
+                onClick={onToggleMaximize}
+                title={maximized ? "Восстановить" : "Развернуть"}
+              >
+                {maximized ? "❐" : "□"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="generator-window-action close"
+              onClick={onClose}
+              aria-label="Закрыть"
+            >
+              ×
+            </button>
+          </div>
         </header>
 
-        <div className="generator-modal-body">
-          {GENERATOR_FIELDS.map((field) => (
-            <div className={`generator-field ${activeAction === field.action ? "active" : ""}`} key={field.action}>
-              <div className="generator-field-label">{field.label}</div>
-              <div className={`generator-field-input-row ${activeAction === field.action ? "highlight" : ""}`}>
-                <input value={data?.[field.dataKey] || ""} readOnly />
-                <button type="button" onClick={() => onCopy(field.action)}>
-                  Copy
-                </button>
-              </div>
+        {!minimized ? (
+          <>
+            <div className="generator-modal-body">
+              {GENERATOR_FIELDS.map((field) => (
+                <div className={`generator-field ${activeAction === field.action ? "active" : ""}`} key={field.action}>
+                  <div className="generator-field-label">{field.label}</div>
+                  <div className={`generator-field-input-row ${activeAction === field.action ? "highlight" : ""}`}>
+                    <input value={data?.[field.dataKey] || ""} readOnly />
+                    <button type="button" onClick={() => onCopy(field.action)}>
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        <div className="generator-modal-actions">
-          <button type="button" className="primary-btn" onClick={onGenerate} disabled={busy}>
-            Сгенерировать
-          </button>
-          <button type="button" onClick={onSettings}>
-            Настройки
-          </button>
-        </div>
+            <div className="generator-modal-actions">
+              <button type="button" className="primary-btn" onClick={onGenerate} disabled={busy}>
+                Сгенерировать
+              </button>
+              <button type="button" onClick={onSettings}>
+                Настройки
+              </button>
+            </div>
 
-        <div className="generator-hotkeys">
-          {hotkeyHintText(hotkeys)}
-        </div>
+            <div className="generator-hotkeys">
+              {hotkeyHintText(hotkeys)}
+            </div>
+          </>
+        ) : (
+          <div className="generator-minimized-info">Окно свернуто</div>
+        )}
       </section>
     </div>
   );
 }
-
 function HotkeySettingsModal({
+  windowStyle,
+  minimized,
+  maximized,
+  isMobile,
+  isDragging,
+  busy,
+  selectedAccount,
+  accountsCount,
   draftHotkeys,
   recordingHotkeyKey,
   onClose,
+  onHeaderMouseDown,
+  onToggleMinimize,
+  onToggleMaximize,
   onSave,
   onReset,
   onStartRecord,
-  onClearHotkey
+  onClearHotkey,
+  onDeleteAccount,
+  onDeleteMailbox,
+  onDeleteAllAccounts
 }) {
   return (
-    <div className="hotkeys-overlay" onClick={onClose}>
-      <section className="hotkeys-modal" onClick={(event) => event.stopPropagation()}>
-        <header className="hotkeys-header">
+    <div className="hotkeys-overlay">
+      <section
+        className={`hotkeys-modal ${minimized ? "is-minimized" : ""} ${maximized ? "is-maximized" : ""}`}
+        style={windowStyle}
+      >
+        <header
+          className={`hotkeys-header ${isDragging ? "dragging" : ""}`}
+          onMouseDown={onHeaderMouseDown}
+        >
           <h3>Настройки горячих клавиш</h3>
-          <button type="button" className="hotkeys-close-btn" onClick={onClose} aria-label="Закрыть">
-            ×
-          </button>
-        </header>
-
-        <form className="hotkeys-form" onSubmit={onSave}>
-          {HOTKEY_FIELDS.map((field) => (
-            <label className="hotkeys-row" key={field.key}>
-              <span>{field.label}</span>
-              <div className="hotkeys-input-row">
-                <input value={draftHotkeys[field.key]} readOnly placeholder={DEFAULT_GENERATOR_HOTKEYS[field.key]} />
-                <button
-                  type="button"
-                  className={`hotkeys-record-btn ${recordingHotkeyKey === field.key ? "active" : ""}`}
-                  onClick={() => onStartRecord(field.key)}
-                >
-                  {recordingHotkeyKey === field.key ? "Нажмите..." : "Записать"}
-                </button>
-                <button type="button" onClick={() => onClearHotkey(field.key)}>
-                  Очистить
-                </button>
-              </div>
-            </label>
-          ))}
-
-          <div className="hotkeys-actions">
-            <button type="submit" className="primary-btn">
-              Сохранить
+          <div className="hotkeys-window-actions" onMouseDown={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="hotkeys-window-action"
+              onClick={onToggleMinimize}
+              title={minimized ? "Развернуть" : "Свернуть"}
+            >
+              {minimized ? "▢" : "—"}
             </button>
-            <button type="button" onClick={onReset}>
-              Сбросить
-            </button>
-            <button type="button" onClick={onClose}>
-              Закрыть
+            {!isMobile ? (
+              <button
+                type="button"
+                className="hotkeys-window-action"
+                onClick={onToggleMaximize}
+                title={maximized ? "Восстановить" : "Развернуть"}
+              >
+                {maximized ? "❐" : "□"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="hotkeys-window-action close"
+              onClick={onClose}
+              aria-label="Закрыть"
+            >
+              ×
             </button>
           </div>
-        </form>
+        </header>
+
+        {!minimized ? (
+          <form className="hotkeys-form" onSubmit={onSave}>
+            {HOTKEY_FIELDS.map((field) => (
+              <label className="hotkeys-row" key={field.key}>
+                <span>{field.label}</span>
+                <div className="hotkeys-input-row">
+                  <input value={draftHotkeys[field.key]} readOnly placeholder={DEFAULT_GENERATOR_HOTKEYS[field.key]} />
+                  <button
+                    type="button"
+                    className={`hotkeys-record-btn ${recordingHotkeyKey === field.key ? "active" : ""}`}
+                    onClick={() => onStartRecord(field.key)}
+                  >
+                    {recordingHotkeyKey === field.key ? "Нажмите..." : "Записать"}
+                  </button>
+                  <button type="button" onClick={() => onClearHotkey(field.key)}>
+                    Очистить
+                  </button>
+                </div>
+              </label>
+            ))}
+
+            <div className="hotkeys-actions">
+              <button type="submit" className="primary-btn">
+                Сохранить
+              </button>
+              <button type="button" onClick={onReset}>
+                Сбросить
+              </button>
+              <button type="button" onClick={onClose}>
+                Закрыть
+              </button>
+            </div>
+
+            <section className="hotkeys-danger-zone">
+              <div className="hotkeys-danger-title">Управление записями</div>
+              <div className="hotkeys-danger-subtitle">
+                {selectedAccount
+                  ? `Выбран: ${selectedAccount.email}`
+                  : "Аккаунт не выбран"}
+              </div>
+              <div className="hotkeys-danger-actions">
+                <button
+                  type="button"
+                  onClick={onDeleteAccount}
+                  disabled={!selectedAccount || busy}
+                >
+                  Удалить запись
+                </button>
+                <button
+                  type="button"
+                  onClick={onDeleteMailbox}
+                  disabled={!selectedAccount || busy}
+                >
+                  Удалить почту
+                </button>
+                <button
+                  type="button"
+                  className="danger-btn"
+                  onClick={onDeleteAllAccounts}
+                  disabled={!accountsCount || busy}
+                >
+                  Удалить все записи ({accountsCount})
+                </button>
+              </div>
+            </section>
+          </form>
+        ) : (
+          <div className="hotkeys-minimized-info">Окно свернуто</div>
+        )}
       </section>
     </div>
   );
@@ -439,6 +796,13 @@ export default function Dashboard({ token, user, onLogout }) {
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageDetail, setMessageDetail] = useState(null);
+  const [mailInboxHeight, setMailInboxHeight] = useState(() =>
+    Math.max(240, Math.round(window.innerHeight * 0.35))
+  );
+  const [isInboxResizeReady, setIsInboxResizeReady] = useState(false);
+  const [sidebarOffset, setSidebarOffset] = useState({ x: 0, y: 0 });
+  const [sidebarWidth, setSidebarWidth] = useState(() => Math.round(window.innerWidth * 0.47));
+  const [isDraggingSplitter, setIsDraggingSplitter] = useState(false);
 
   const [importText, setImportText] = useState("");
   const [manualEmail, setManualEmail] = useState("");
@@ -473,11 +837,60 @@ export default function Dashboard({ token, user, onLogout }) {
   const [skCycleIndex, setSkCycleIndex] = useState(0);
   const [inCycleIndex, setInCycleIndex] = useState(0);
   const [pendingSkInitialCycle, setPendingSkInitialCycle] = useState(false);
+  const [showAccountsDataWindow, setShowAccountsDataWindow] = useState(false);
+  const [accountsWindowMinimized, setAccountsWindowMinimized] = useState(false);
+  const [accountsWindowMaximized, setAccountsWindowMaximized] = useState(false);
+  const [accountsWindowRect, setAccountsWindowRect] = useState(() => buildAccountsWindowDefaultRect());
+  const [isDraggingAccountsWindow, setIsDraggingAccountsWindow] = useState(false);
+  const [windowSelectedAccountIds, setWindowSelectedAccountIds] = useState([]);
+  const [generatorWindowMinimized, setGeneratorWindowMinimized] = useState(false);
+  const [generatorWindowMaximized, setGeneratorWindowMaximized] = useState(false);
+  const [generatorWindowRect, setGeneratorWindowRect] = useState(() => buildGeneratorWindowDefaultRect());
+  const [isDraggingGeneratorWindow, setIsDraggingGeneratorWindow] = useState(false);
+  const [settingsWindowMinimized, setSettingsWindowMinimized] = useState(false);
+  const [settingsWindowMaximized, setSettingsWindowMaximized] = useState(false);
+  const [settingsWindowRect, setSettingsWindowRect] = useState(() => buildSettingsWindowDefaultRect());
+  const [isDraggingSettingsWindow, setIsDraggingSettingsWindow] = useState(false);
+  const [isResizingMailPanels, setIsResizingMailPanels] = useState(false);
+  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
+  const accountsWindowDragRef = useRef(null);
+  const accountsWindowRestoreRef = useRef(null);
+  const accountsSelectionAnchorRef = useRef(null);
+  const accountsWindowElementRef = useRef(null);
+  const sidebarPanelRef = useRef(null);
+  const sidebarDragRef = useRef(null);
+  const splitterDragRef = useRef(null);
+  const generatorWindowDragRef = useRef(null);
+  const generatorWindowRestoreRef = useRef(null);
+  const settingsWindowDragRef = useRef(null);
+  const settingsWindowRestoreRef = useRef(null);
+  const mailPanelsRef = useRef(null);
+  const mailPanelsResizeRef = useRef(null);
 
   const selectedAccount = useMemo(
     () => accounts.find((item) => item.id === selectedAccountId) || null,
     [accounts, selectedAccountId]
   );
+  const effectiveWindowSelectedAccountIds = useMemo(() => {
+    if (windowSelectedAccountIds.length) {
+      return windowSelectedAccountIds;
+    }
+    return selectedAccountId ? [selectedAccountId] : [];
+  }, [windowSelectedAccountIds, selectedAccountId]);
+  const selectedAccountsInWindow = useMemo(() => {
+    const selectedSet = new Set(effectiveWindowSelectedAccountIds);
+    return accounts.filter((item) => selectedSet.has(item.id));
+  }, [accounts, effectiveWindowSelectedAccountIds]);
+  const selectedAccountCredentials = useMemo(
+    () => selectedAccountsInWindow.map((item) => formatAccountCredentials(item)).filter(Boolean).join("\n"),
+    [selectedAccountsInWindow]
+  );
+  const windowSelectedSet = useMemo(
+    () => new Set(effectiveWindowSelectedAccountIds),
+    [effectiveWindowSelectedAccountIds]
+  );
+  const activeGeneratorType = showSkPanel ? "sk" : showInPanel ? "in" : null;
+  const isGeneratorWindowVisible = Boolean(activeGeneratorType);
 
   const applyStatus = (message) => {
     setStatusMessage(message);
@@ -503,12 +916,264 @@ export default function Dashboard({ token, user, onLogout }) {
     setPendingSkInitialCycle(false);
     setSkCycleIndex(0);
     setSkActiveAction(null);
+    setGeneratorWindowMinimized(false);
+    setGeneratorWindowMaximized(false);
+    setIsDraggingGeneratorWindow(false);
+    generatorWindowDragRef.current = null;
+    generatorWindowRestoreRef.current = null;
   };
 
   const closeInGenerator = () => {
     setShowInPanel(false);
     setInCycleIndex(0);
     setInActiveAction(null);
+    setGeneratorWindowMinimized(false);
+    setGeneratorWindowMaximized(false);
+    setIsDraggingGeneratorWindow(false);
+    generatorWindowDragRef.current = null;
+    generatorWindowRestoreRef.current = null;
+  };
+
+  const openAccountsDataWindow = () => {
+    setShowAccountsDataWindow(true);
+    setAccountsWindowMinimized(false);
+    setWindowSelectedAccountIds((prev) => {
+      if (prev.length) {
+        return prev;
+      }
+      return selectedAccountId ? [selectedAccountId] : [];
+    });
+    if (selectedAccountId) {
+      const selectedIndex = accounts.findIndex((item) => item.id === selectedAccountId);
+      accountsSelectionAnchorRef.current = selectedIndex >= 0 ? selectedIndex : null;
+    }
+    if (isMobile) {
+      setAccountsWindowMaximized(true);
+      setAccountsWindowRect(buildAccountsWindowMaxRect(true));
+      return;
+    }
+    setAccountsWindowRect((prev) => clampAccountsWindowRect(prev, false));
+  };
+
+  const closeAccountsDataWindow = () => {
+    setShowAccountsDataWindow(false);
+    setAccountsWindowMinimized(false);
+    setAccountsWindowMaximized(false);
+    setIsDraggingAccountsWindow(false);
+    accountsWindowDragRef.current = null;
+    accountsWindowRestoreRef.current = null;
+    accountsSelectionAnchorRef.current = null;
+  };
+
+  const toggleAccountsWindowMinimize = () => {
+    setAccountsWindowMinimized((prev) => !prev);
+  };
+
+  const toggleAccountsWindowMaximize = () => {
+    if (isMobile) {
+      return;
+    }
+
+    if (accountsWindowMaximized) {
+      setAccountsWindowMaximized(false);
+      const restoreRect = accountsWindowRestoreRef.current || buildAccountsWindowDefaultRect();
+      setAccountsWindowRect(clampAccountsWindowRect(restoreRect, false));
+      accountsWindowRestoreRef.current = null;
+      return;
+    }
+
+    accountsWindowRestoreRef.current = accountsWindowRect;
+    setAccountsWindowMinimized(false);
+    setAccountsWindowMaximized(true);
+    setAccountsWindowRect(buildAccountsWindowMaxRect(false));
+  };
+
+  const startAccountsWindowDrag = (event) => {
+    if (isMobile || accountsWindowMaximized || accountsWindowMinimized) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    accountsWindowDragRef.current = {
+      offsetX: event.clientX - accountsWindowRect.x,
+      offsetY: event.clientY - accountsWindowRect.y
+    };
+    setIsDraggingAccountsWindow(true);
+  };
+
+  const startMailPanelsResize = (event) => {
+    if (isMobile) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+
+    const inboxCard = event.currentTarget;
+    const inboxRect = inboxCard.getBoundingClientRect();
+    const distanceFromBottom = inboxRect.bottom - event.clientY;
+    if (distanceFromBottom > MAIL_RESIZE_HIT_ZONE) {
+      return;
+    }
+
+    const container = mailPanelsRef.current;
+    if (!container) {
+      return;
+    }
+
+    event.preventDefault();
+    setIsInboxResizeReady(false);
+    mailPanelsResizeRef.current = {
+      startY: event.clientY,
+      startHeight: mailInboxHeight,
+      containerHeight: Math.round(container.getBoundingClientRect().height)
+    };
+    setIsResizingMailPanels(true);
+  };
+
+  const handleInboxResizeHover = (event) => {
+    if (isMobile || isResizingMailPanels) {
+      return;
+    }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const nearBottom = bounds.bottom - event.clientY <= MAIL_RESIZE_HIT_ZONE;
+    setIsInboxResizeReady((prev) => (prev === nearBottom ? prev : nearBottom));
+  };
+
+  const clearInboxResizeHover = () => {
+    setIsInboxResizeReady(false);
+  };
+
+  const startSidebarDrag = (event) => {
+    if (isMobile) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+    if (event.target instanceof Element && event.target.closest("button, input, textarea, select, a")) {
+      return;
+    }
+
+    const panel = sidebarPanelRef.current;
+    if (!panel) {
+      return;
+    }
+
+    event.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    sidebarDragRef.current = {
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startOffsetX: sidebarOffset.x,
+      startOffsetY: sidebarOffset.y,
+      baseLeft: rect.left - sidebarOffset.x,
+      baseTop: rect.top - sidebarOffset.y,
+      width: rect.width,
+      height: rect.height
+    };
+    setIsDraggingSidebar(true);
+  };
+
+  const startSplitterDrag = (event) => {
+    if (isMobile || event.button !== 0) return;
+    event.preventDefault();
+    splitterDragRef.current = { startX: event.clientX, startWidth: sidebarWidth };
+    setIsDraggingSplitter(true);
+  };
+
+  const selectAccountFromDataWindow = (event, accountId, rowIndex) => {
+    const withMeta = event.ctrlKey || event.metaKey;
+    const withShift = event.shiftKey;
+    let nextSelected = [accountId];
+
+    if (withShift && accounts.length) {
+      const anchorIndex =
+        accountsSelectionAnchorRef.current == null ? rowIndex : accountsSelectionAnchorRef.current;
+      const start = Math.min(anchorIndex, rowIndex);
+      const end = Math.max(anchorIndex, rowIndex);
+      const rangeIds = accounts.slice(start, end + 1).map((item) => item.id);
+      if (withMeta) {
+        const merged = new Set(windowSelectedAccountIds);
+        rangeIds.forEach((id) => merged.add(id));
+        nextSelected = Array.from(merged);
+      } else {
+        nextSelected = rangeIds;
+      }
+    } else if (withMeta) {
+      const toggled = new Set(windowSelectedAccountIds);
+      if (toggled.has(accountId)) {
+        toggled.delete(accountId);
+      } else {
+        toggled.add(accountId);
+      }
+      nextSelected = Array.from(toggled);
+      accountsSelectionAnchorRef.current = rowIndex;
+    } else {
+      nextSelected = [accountId];
+      accountsSelectionAnchorRef.current = rowIndex;
+    }
+
+    setWindowSelectedAccountIds(nextSelected);
+    setSelectedAccountId(accountId);
+    if (isMobile) {
+      setMobileTab("mail");
+    }
+  };
+
+  const copySelectedAccountCredentials = async () => {
+    if (!selectedAccountCredentials) {
+      return;
+    }
+    await copyText(selectedAccountCredentials);
+    const count = selectedAccountsInWindow.length;
+    applyStatus(
+      count > 1
+        ? `Скопировано ${count} строк: почта:пароль:2пароль`
+        : "Скопировано: почта:пароль:2пароль"
+    );
+  };
+
+  const toggleGeneratorWindowMinimize = () => {
+    setGeneratorWindowMinimized((prev) => !prev);
+  };
+
+  const toggleGeneratorWindowMaximize = () => {
+    if (isMobile || !isGeneratorWindowVisible) {
+      return;
+    }
+
+    if (generatorWindowMaximized) {
+      setGeneratorWindowMaximized(false);
+      const restoreRect = generatorWindowRestoreRef.current || buildGeneratorWindowDefaultRect();
+      setGeneratorWindowRect(clampGeneratorWindowRect(restoreRect, false));
+      generatorWindowRestoreRef.current = null;
+      return;
+    }
+
+    generatorWindowRestoreRef.current = generatorWindowRect;
+    setGeneratorWindowMinimized(false);
+    setGeneratorWindowMaximized(true);
+    setGeneratorWindowRect(buildGeneratorWindowMaxRect(false));
+  };
+
+  const startGeneratorWindowDrag = (event) => {
+    if (isMobile || generatorWindowMaximized || generatorWindowMinimized || !isGeneratorWindowVisible) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    generatorWindowDragRef.current = {
+      offsetX: event.clientX - generatorWindowRect.x,
+      offsetY: event.clientY - generatorWindowRect.y
+    };
+    setIsDraggingGeneratorWindow(true);
   };
 
   const withBusy = async (operation, loadingText = "Загрузка...") => {
@@ -643,6 +1308,503 @@ export default function Dashboard({ token, user, onLogout }) {
     window.addEventListener("keydown", handleHotkeyCapture, true);
     return () => window.removeEventListener("keydown", handleHotkeyCapture, true);
   }, [showGeneratorHotkeys, recordingHotkeyKey]);
+
+  useEffect(() => {
+    if (!isDraggingAccountsWindow) {
+      return;
+    }
+
+    const handleMouseMove = (event) => {
+      const drag = accountsWindowDragRef.current;
+      if (!drag) {
+        return;
+      }
+
+      setAccountsWindowRect((prev) =>
+        clampAccountsWindowRect(
+          {
+            ...prev,
+            x: event.clientX - drag.offsetX,
+            y: event.clientY - drag.offsetY
+          },
+          false
+        )
+      );
+    };
+
+    const stopDrag = () => {
+      setIsDraggingAccountsWindow(false);
+      accountsWindowDragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopDrag);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopDrag);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isDraggingAccountsWindow]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!showAccountsDataWindow) {
+        return;
+      }
+      if (isMobile) {
+        setAccountsWindowRect(buildAccountsWindowMaxRect(true));
+        return;
+      }
+      if (accountsWindowMaximized) {
+        setAccountsWindowRect(buildAccountsWindowMaxRect(false));
+        return;
+      }
+      setAccountsWindowRect((prev) => clampAccountsWindowRect(prev, false));
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [showAccountsDataWindow, accountsWindowMaximized, isMobile]);
+
+  useEffect(() => {
+    if (!showAccountsDataWindow) {
+      return;
+    }
+
+    if (isMobile) {
+      setAccountsWindowMaximized(true);
+      setAccountsWindowMinimized(false);
+      setAccountsWindowRect(buildAccountsWindowMaxRect(true));
+      return;
+    }
+
+    if (accountsWindowMaximized && !accountsWindowRestoreRef.current) {
+      setAccountsWindowMaximized(false);
+      setAccountsWindowRect(clampAccountsWindowRect(buildAccountsWindowDefaultRect(), false));
+      return;
+    }
+
+    if (!accountsWindowMaximized) {
+      setAccountsWindowRect((prev) => clampAccountsWindowRect(prev, false));
+    }
+  }, [isMobile, showAccountsDataWindow, accountsWindowMaximized]);
+
+  useEffect(() => {
+    if (!showAccountsDataWindow || isMobile || accountsWindowMaximized || accountsWindowMinimized) {
+      return;
+    }
+
+    const windowElement = accountsWindowElementRef.current;
+    if (!windowElement || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const syncWindowSize = () => {
+      const bounds = windowElement.getBoundingClientRect();
+      const nextWidth = Math.round(bounds.width);
+      const nextHeight = Math.round(bounds.height);
+      setAccountsWindowRect((prev) => {
+        const clamped = clampAccountsWindowRect(
+          {
+            ...prev,
+            width: nextWidth,
+            height: nextHeight
+          },
+          false
+        );
+        if (
+          clamped.width === prev.width &&
+          clamped.height === prev.height &&
+          clamped.x === prev.x &&
+          clamped.y === prev.y
+        ) {
+          return prev;
+        }
+        return clamped;
+      });
+    };
+
+    const observer = new ResizeObserver(syncWindowSize);
+    observer.observe(windowElement);
+    return () => observer.disconnect();
+  }, [showAccountsDataWindow, isMobile, accountsWindowMaximized, accountsWindowMinimized]);
+
+  useEffect(() => {
+    setWindowSelectedAccountIds((prev) => {
+      if (!prev.length) {
+        return prev;
+      }
+      const existingIds = new Set(accounts.map((item) => item.id));
+      const filtered = prev.filter((id) => existingIds.has(id));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+    if (accountsSelectionAnchorRef.current != null && accountsSelectionAnchorRef.current >= accounts.length) {
+      accountsSelectionAnchorRef.current = accounts.length ? accounts.length - 1 : null;
+    }
+  }, [accounts]);
+
+  useEffect(() => {
+    if (!isResizingMailPanels) {
+      return;
+    }
+
+    const handleMouseMove = (event) => {
+      const resize = mailPanelsResizeRef.current;
+      if (!resize) {
+        return;
+      }
+
+      const nextRawHeight = resize.startHeight + (event.clientY - resize.startY);
+      const nextHeight = clampMailInboxHeight(nextRawHeight, resize.containerHeight);
+      setMailInboxHeight((prev) => (Math.abs(prev - nextHeight) < 1 ? prev : nextHeight));
+    };
+
+    const stopResize = () => {
+      setIsResizingMailPanels(false);
+      setIsInboxResizeReady(false);
+      mailPanelsResizeRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "row-resize";
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopResize);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopResize);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isResizingMailPanels]);
+
+  useEffect(() => {
+    if (isMobile) {
+      return;
+    }
+
+    const container = mailPanelsRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncInboxHeight = () => {
+      const containerHeight = Math.round(container.getBoundingClientRect().height);
+      if (!containerHeight) {
+        return;
+      }
+      setMailInboxHeight((prev) => {
+        const clamped = clampMailInboxHeight(prev, containerHeight);
+        return Math.abs(clamped - prev) < 1 ? prev : clamped;
+      });
+    };
+
+    syncInboxHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(syncInboxHeight);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (!isDraggingSidebar) {
+      return;
+    }
+
+    const handleMouseMove = (event) => {
+      const drag = sidebarDragRef.current;
+      if (!drag) {
+        return;
+      }
+
+      const nextRawX = drag.startOffsetX + (event.clientX - drag.startClientX);
+      const nextRawY = drag.startOffsetY + (event.clientY - drag.startClientY);
+      const minX = SIDEBAR_DRAG_MARGIN - drag.baseLeft;
+      const maxX = window.innerWidth - drag.width - SIDEBAR_DRAG_MARGIN - drag.baseLeft;
+      const minY = SIDEBAR_DRAG_MARGIN - drag.baseTop;
+      const maxY = window.innerHeight - drag.height - SIDEBAR_DRAG_MARGIN - drag.baseTop;
+      const nextX = clampValue(nextRawX, minX, Math.max(minX, maxX));
+      const nextY = clampValue(nextRawY, minY, Math.max(minY, maxY));
+
+      setSidebarOffset((prev) => {
+        if (prev.x === nextX && prev.y === nextY) {
+          return prev;
+        }
+        return { x: nextX, y: nextY };
+      });
+    };
+
+    const stopDrag = () => {
+      setIsDraggingSidebar(false);
+      sidebarDragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopDrag);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopDrag);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isDraggingSidebar]);
+
+  useEffect(() => {
+    if (!isDraggingSplitter) return;
+    const handleMouseMove = (event) => {
+      const drag = splitterDragRef.current;
+      if (!drag) return;
+      const delta = event.clientX - drag.startX;
+      const min = 220;
+      const max = Math.round(window.innerWidth * 0.7);
+      setSidebarWidth(clampValue(drag.startWidth + delta, min, max));
+    };
+    const stopDrag = () => {
+      setIsDraggingSplitter(false);
+      splitterDragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopDrag);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopDrag);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isDraggingSplitter]);
+
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOffset({ x: 0, y: 0 });
+      setIsDraggingSidebar(false);
+      sidebarDragRef.current = null;
+      return;
+    }
+
+    const clampSidebarOffsetToViewport = () => {
+      const panel = sidebarPanelRef.current;
+      if (!panel) {
+        return;
+      }
+      setSidebarOffset((prev) => {
+        const rect = panel.getBoundingClientRect();
+        const baseLeft = rect.left - prev.x;
+        const baseTop = rect.top - prev.y;
+        const minX = SIDEBAR_DRAG_MARGIN - baseLeft;
+        const maxX = window.innerWidth - rect.width - SIDEBAR_DRAG_MARGIN - baseLeft;
+        const minY = SIDEBAR_DRAG_MARGIN - baseTop;
+        const maxY = window.innerHeight - rect.height - SIDEBAR_DRAG_MARGIN - baseTop;
+        const nextX = clampValue(prev.x, minX, Math.max(minX, maxX));
+        const nextY = clampValue(prev.y, minY, Math.max(minY, maxY));
+        if (nextX === prev.x && nextY === prev.y) {
+          return prev;
+        }
+        return { x: nextX, y: nextY };
+      });
+    };
+
+    clampSidebarOffsetToViewport();
+    window.addEventListener("resize", clampSidebarOffsetToViewport);
+    return () => window.removeEventListener("resize", clampSidebarOffsetToViewport);
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (!isDraggingGeneratorWindow) {
+      return;
+    }
+
+    const handleMouseMove = (event) => {
+      const drag = generatorWindowDragRef.current;
+      if (!drag) {
+        return;
+      }
+
+      setGeneratorWindowRect((prev) =>
+        clampGeneratorWindowRect(
+          {
+            ...prev,
+            x: event.clientX - drag.offsetX,
+            y: event.clientY - drag.offsetY
+          },
+          false
+        )
+      );
+    };
+
+    const stopDrag = () => {
+      setIsDraggingGeneratorWindow(false);
+      generatorWindowDragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopDrag);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopDrag);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isDraggingGeneratorWindow]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!isGeneratorWindowVisible) {
+        return;
+      }
+      if (isMobile) {
+        setGeneratorWindowRect(buildGeneratorWindowMaxRect(true));
+        return;
+      }
+      if (generatorWindowMaximized) {
+        setGeneratorWindowRect(buildGeneratorWindowMaxRect(false));
+        return;
+      }
+      setGeneratorWindowRect((prev) => clampGeneratorWindowRect(prev, false));
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isGeneratorWindowVisible, generatorWindowMaximized, isMobile]);
+
+  useEffect(() => {
+    if (!isGeneratorWindowVisible) {
+      return;
+    }
+
+    if (isMobile) {
+      setGeneratorWindowMaximized(true);
+      setGeneratorWindowMinimized(false);
+      setGeneratorWindowRect(buildGeneratorWindowMaxRect(true));
+      return;
+    }
+
+    if (generatorWindowMaximized && !generatorWindowRestoreRef.current) {
+      setGeneratorWindowMaximized(false);
+      setGeneratorWindowRect(clampGeneratorWindowRect(buildGeneratorWindowDefaultRect(), false));
+      return;
+    }
+
+    if (!generatorWindowMaximized) {
+      setGeneratorWindowRect((prev) => clampGeneratorWindowRect(prev, false));
+    }
+  }, [isMobile, isGeneratorWindowVisible, generatorWindowMaximized]);
+
+  useEffect(() => {
+    if (!isDraggingSettingsWindow) {
+      return;
+    }
+
+    const handleMouseMove = (event) => {
+      const drag = settingsWindowDragRef.current;
+      if (!drag) {
+        return;
+      }
+
+      setSettingsWindowRect((prev) =>
+        clampSettingsWindowRect(
+          {
+            ...prev,
+            x: event.clientX - drag.offsetX,
+            y: event.clientY - drag.offsetY
+          },
+          false
+        )
+      );
+    };
+
+    const stopDrag = () => {
+      setIsDraggingSettingsWindow(false);
+      settingsWindowDragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", stopDrag);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", stopDrag);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isDraggingSettingsWindow]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!showGeneratorHotkeys) {
+        return;
+      }
+      if (isMobile) {
+        setSettingsWindowRect(buildSettingsWindowMaxRect(true));
+        return;
+      }
+      if (settingsWindowMaximized) {
+        setSettingsWindowRect(buildSettingsWindowMaxRect(false));
+        return;
+      }
+      setSettingsWindowRect((prev) => clampSettingsWindowRect(prev, false));
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [showGeneratorHotkeys, settingsWindowMaximized, isMobile]);
+
+  useEffect(() => {
+    if (!showGeneratorHotkeys) {
+      return;
+    }
+
+    if (isMobile) {
+      setSettingsWindowMaximized(true);
+      setSettingsWindowMinimized(false);
+      setSettingsWindowRect(buildSettingsWindowMaxRect(true));
+      return;
+    }
+
+    if (settingsWindowMaximized && !settingsWindowRestoreRef.current) {
+      setSettingsWindowMaximized(false);
+      setSettingsWindowRect(clampSettingsWindowRect(buildSettingsWindowDefaultRect(), false));
+      return;
+    }
+
+    if (!settingsWindowMaximized) {
+      setSettingsWindowRect((prev) => clampSettingsWindowRect(prev, false));
+    }
+  }, [isMobile, showGeneratorHotkeys, settingsWindowMaximized]);
 
   const copyGeneratorAction = async (generatorType, action) => {
     const field = GENERATOR_FIELDS.find((item) => item.action === action);
@@ -852,6 +2014,43 @@ export default function Dashboard({ token, user, onLogout }) {
     }, "Удаление почты...");
   };
 
+  const deleteAllAccounts = () => {
+    if (!accounts.length) {
+      applyStatus("Нет записей для удаления");
+      return;
+    }
+
+    const total = accounts.length;
+    if (!window.confirm(`Удалить все записи (${total})?`)) {
+      return;
+    }
+
+    withBusy(async () => {
+      let deleted = 0;
+      let failed = 0;
+      const ids = accounts.map((item) => item.id);
+
+      for (const id of ids) {
+        try {
+          await accountsApi.remove(token, id);
+          deleted += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+
+      setWindowSelectedAccountIds([]);
+      accountsSelectionAnchorRef.current = null;
+      await loadAccounts();
+
+      if (failed > 0) {
+        applyStatus(`Удалено ${deleted} из ${total}. Ошибок: ${failed}`);
+      } else {
+        applyStatus(`Удалены все записи: ${deleted}`);
+      }
+    }, "Удаление всех записей...");
+  };
+
   const banCheckOne = () => {
     if (!selectedAccount) {
       return;
@@ -900,12 +2099,63 @@ export default function Dashboard({ token, user, onLogout }) {
   const openGeneratorHotkeys = () => {
     setDraftHotkeys(generatorHotkeys);
     setRecordingHotkeyKey(null);
+    setSettingsWindowMinimized(false);
+    if (isMobile) {
+      setSettingsWindowMaximized(true);
+      setSettingsWindowRect(buildSettingsWindowMaxRect(true));
+    } else {
+      setSettingsWindowRect((prev) => clampSettingsWindowRect(prev, false));
+    }
     setShowGeneratorHotkeys(true);
   };
 
   const closeGeneratorHotkeys = () => {
     setRecordingHotkeyKey(null);
     setShowGeneratorHotkeys(false);
+    setSettingsWindowMinimized(false);
+    setSettingsWindowMaximized(false);
+    setIsDraggingSettingsWindow(false);
+    settingsWindowDragRef.current = null;
+    settingsWindowRestoreRef.current = null;
+  };
+
+  const toggleSettingsWindowMinimize = () => {
+    setSettingsWindowMinimized((prev) => !prev);
+  };
+
+  const toggleSettingsWindowMaximize = () => {
+    if (isMobile || !showGeneratorHotkeys) {
+      return;
+    }
+
+    if (settingsWindowMaximized) {
+      setSettingsWindowMaximized(false);
+      const restoreRect = settingsWindowRestoreRef.current || buildSettingsWindowDefaultRect();
+      setSettingsWindowRect(clampSettingsWindowRect(restoreRect, false));
+      settingsWindowRestoreRef.current = null;
+      return;
+    }
+
+    settingsWindowRestoreRef.current = settingsWindowRect;
+    setSettingsWindowMinimized(false);
+    setSettingsWindowMaximized(true);
+    setSettingsWindowRect(buildSettingsWindowMaxRect(false));
+  };
+
+  const startSettingsWindowDrag = (event) => {
+    if (isMobile || settingsWindowMaximized || settingsWindowMinimized || !showGeneratorHotkeys) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    settingsWindowDragRef.current = {
+      offsetX: event.clientX - settingsWindowRect.x,
+      offsetY: event.clientY - settingsWindowRect.y
+    };
+    setIsDraggingSettingsWindow(true);
   };
 
   const toggleHotkeyRecord = (key) => {
@@ -926,6 +2176,11 @@ export default function Dashboard({ token, user, onLogout }) {
     setDraftHotkeys(normalized);
     setRecordingHotkeyKey(null);
     setShowGeneratorHotkeys(false);
+    setSettingsWindowMinimized(false);
+    setSettingsWindowMaximized(false);
+    setIsDraggingSettingsWindow(false);
+    settingsWindowDragRef.current = null;
+    settingsWindowRestoreRef.current = null;
     applyStatus("Настройки горячих клавиш сохранены");
   };
 
@@ -942,6 +2197,13 @@ export default function Dashboard({ token, user, onLogout }) {
     setShowInPanel(true);
     setInCycleIndex(0);
     setInActiveAction(null);
+    setGeneratorWindowMinimized(false);
+    if (isMobile) {
+      setGeneratorWindowMaximized(true);
+      setGeneratorWindowRect(buildGeneratorWindowMaxRect(true));
+    } else {
+      setGeneratorWindowRect((prev) => clampGeneratorWindowRect(prev, false));
+    }
     if (!inData) {
       void regenerateIn();
     }
@@ -953,6 +2215,13 @@ export default function Dashboard({ token, user, onLogout }) {
     setSkCycleIndex(0);
     setSkActiveAction(null);
     setPendingSkInitialCycle(true);
+    setGeneratorWindowMinimized(false);
+    if (isMobile) {
+      setGeneratorWindowMaximized(true);
+      setGeneratorWindowRect(buildGeneratorWindowMaxRect(true));
+    } else {
+      setGeneratorWindowRect((prev) => clampGeneratorWindowRect(prev, false));
+    }
     if (!skData) {
       void regenerateSk();
     }
@@ -974,15 +2243,13 @@ export default function Dashboard({ token, user, onLogout }) {
       value = selectedAccount.password_mail;
     }
     if (field === "full") {
-      if (selectedAccount.password_openai !== selectedAccount.password_mail) {
-        value = `${selectedAccount.email}:${selectedAccount.password_openai};${selectedAccount.password_mail}`;
-      } else {
-        value = `${selectedAccount.email}:${selectedAccount.password_openai}`;
-      }
+      value = formatAccountCredentials(selectedAccount);
     }
 
     await copyText(value);
-    applyStatus(`Скопировано: ${field}`);
+    applyStatus(
+      field === "full" ? "Скопировано: почта:пароль:2пароль" : `Скопировано: ${field}`
+    );
   };
 
   const copyGeneratorField = async (label, value) => {
@@ -1036,6 +2303,9 @@ export default function Dashboard({ token, user, onLogout }) {
           </button>
           <button type="button" onClick={exportAccountsForExcel} disabled={busy}>
             Excel
+          </button>
+          <button type="button" onClick={openAccountsDataWindow} disabled={busy}>
+            Окно
           </button>
           <button type="button" className="danger-btn" onClick={banCheckAll} disabled={busy}>
             Бан
@@ -1131,17 +2401,6 @@ export default function Dashboard({ token, user, onLogout }) {
           <button type="button" onClick={banCheckOne} disabled={!selectedAccount || busy}>
             Бан 1
           </button>
-          <button
-            type="button"
-            className="danger-btn"
-            onClick={deleteSelectedMailbox}
-            disabled={!selectedAccount || busy}
-          >
-            Удалить почту
-          </button>
-          <button type="button" onClick={deleteSelectedAccount} disabled={!selectedAccount || busy}>
-            Удалить запись
-          </button>
         </div>
       </section>
     </>
@@ -1195,82 +2454,92 @@ export default function Dashboard({ token, user, onLogout }) {
         </div>
       </header>
 
-      <section className="panel-card inbox-card">
-        {isMobile ? (
-          <div className="mobile-message-list">
-            {messages.map((message) => (
-              <button
-                key={message.id}
-                type="button"
-                className={`mobile-message-item ${messageDetail?.id === message.id ? "active" : ""}`}
-                onClick={() => openMessage(message)}
-              >
-                <div className="mobile-msg-sender">{message.sender}</div>
-                <div className="mobile-msg-subject">{message.subject}</div>
-                <div className="mobile-msg-time">{toLocalDateTime(message.created_at)}</div>
-              </button>
-            ))}
-            {!messages.length ? <div className="empty-list">Писем пока нет</div> : null}
-          </div>
-        ) : (
-          <>
-            <table className="message-table">
-              <thead>
-                <tr>
-                  <th>От кого</th>
-                  <th>Тема</th>
-                  <th>Время</th>
-                </tr>
-              </thead>
-              <tbody>
-                {messages.map((message) => (
-                  <tr
-                    key={message.id}
-                    className={messageDetail?.id === message.id ? "active" : ""}
-                    onClick={() => openMessage(message)}
-                  >
-                    <td>{message.sender}</td>
-                    <td>{message.subject}</td>
-                    <td>{toLocalDateTime(message.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!messages.length ? <div className="empty-list">Писем пока нет</div> : null}
-          </>
-        )}
-      </section>
-
-      <section className="panel-card viewer-card">
-        <div className="viewer-head">
-          <h3>Содержание письма</h3>
-          {messageDetail?.code ? (
-            <button type="button" onClick={copyCode}>
-              Копировать код {messageDetail.code}
-            </button>
-          ) : null}
-        </div>
-
-        <div className="viewer-content">
-          {messageDetail ? (
-            <>
-              <p>
-                <strong>От:</strong> {messageDetail.sender}
-              </p>
-              <p>
-                <strong>Тема:</strong> {messageDetail.subject}
-              </p>
-              {messageDetail.html ? (
-                <HtmlEmailViewer html={messageDetail.html} theme={theme} />
-              ) : (
-                <pre>{messageDetail.text}</pre>
-              )}
-            </>
+      <div className="mail-panels" ref={isMobile ? null : mailPanelsRef}>
+        <section
+          className={`panel-card inbox-card ${isInboxResizeReady ? "resize-ready" : ""} ${
+            isResizingMailPanels ? "is-resizing" : ""
+          }`}
+          style={!isMobile ? { height: `${Math.round(mailInboxHeight)}px` } : undefined}
+          onMouseDown={!isMobile ? startMailPanelsResize : undefined}
+          onMouseMove={!isMobile ? handleInboxResizeHover : undefined}
+          onMouseLeave={!isMobile ? clearInboxResizeHover : undefined}
+        >
+          {isMobile ? (
+            <div className="mobile-message-list">
+              {messages.map((message) => (
+                <button
+                  key={message.id}
+                  type="button"
+                  className={`mobile-message-item ${messageDetail?.id === message.id ? "active" : ""}`}
+                  onClick={() => openMessage(message)}
+                >
+                  <div className="mobile-msg-sender">{message.sender}</div>
+                  <div className="mobile-msg-subject">{message.subject}</div>
+                  <div className="mobile-msg-time">{toLocalDateTime(message.created_at)}</div>
+                </button>
+              ))}
+              {!messages.length ? <div className="empty-list">Писем пока нет</div> : null}
+            </div>
           ) : (
-            <p className="placeholder-text">Выберите письмо, чтобы увидеть содержимое.</p>
+            <>
+              <table className="message-table">
+                <thead>
+                  <tr>
+                    <th>От кого</th>
+                    <th>Тема</th>
+                    <th>Время</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {messages.map((message) => (
+                    <tr
+                      key={message.id}
+                      className={messageDetail?.id === message.id ? "active" : ""}
+                      onClick={() => openMessage(message)}
+                    >
+                      <td>{message.sender}</td>
+                      <td>{message.subject}</td>
+                      <td>{toLocalDateTime(message.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!messages.length ? <div className="empty-list">Писем пока нет</div> : null}
+            </>
           )}
-        </div>
-      </section>
+        </section>
+
+        <section className="panel-card viewer-card">
+          <div className="viewer-head">
+            <h3>Содержание письма</h3>
+            {messageDetail?.code ? (
+              <button type="button" onClick={copyCode}>
+                Копировать код {messageDetail.code}
+              </button>
+            ) : null}
+          </div>
+
+          <div className="viewer-content">
+            {messageDetail ? (
+              <>
+                <p>
+                  <strong>От:</strong> {messageDetail.sender}
+                </p>
+                <p>
+                  <strong>Тема:</strong> {messageDetail.subject}
+                </p>
+                {messageDetail.html ? (
+                  <HtmlEmailViewer html={messageDetail.html} theme={theme} />
+                ) : (
+                  <pre>{messageDetail.text}</pre>
+                )}
+              </>
+            ) : (
+              <p className="placeholder-text">Выберите письмо, чтобы увидеть содержимое.</p>
+            )}
+          </div>
+        </section>
+      </div>
     </>
   );
 
@@ -1332,6 +2601,157 @@ export default function Dashboard({ token, user, onLogout }) {
       </section>
     </>
   );
+
+  const accountsDataWindowStyle = showAccountsDataWindow
+    ? {
+        left: `${accountsWindowRect.x}px`,
+        top: `${accountsWindowRect.y}px`,
+        width: `${accountsWindowRect.width}px`,
+        height: `${accountsWindowRect.height}px`
+      }
+    : null;
+
+  const generatorWindowStyle = isGeneratorWindowVisible
+    ? {
+        left: `${generatorWindowRect.x}px`,
+        top: `${generatorWindowRect.y}px`,
+        width: `${generatorWindowRect.width}px`,
+        height: `${generatorWindowRect.height}px`
+      }
+    : null;
+
+  const hotkeysWindowStyle = showGeneratorHotkeys
+    ? {
+        left: `${settingsWindowRect.x}px`,
+        top: `${settingsWindowRect.y}px`,
+        width: `${settingsWindowRect.width}px`,
+        height: `${settingsWindowRect.height}px`
+      }
+    : null;
+
+  const accountsDataWindow = showAccountsDataWindow ? (
+    <div className="accounts-data-window-layer">
+      <section
+        ref={accountsWindowElementRef}
+        className={`accounts-data-window ${accountsWindowMinimized ? "is-minimized" : ""} ${
+          accountsWindowMaximized ? "is-maximized" : ""
+        }`}
+        style={accountsDataWindowStyle}
+      >
+        <header
+          className={`accounts-data-window-header ${isDraggingAccountsWindow ? "dragging" : ""}`}
+          onMouseDown={startAccountsWindowDrag}
+        >
+          <div className="accounts-data-window-title">
+            <strong>Данные аккаунтов</strong>
+            <span>
+              Всего: {accounts.length} • Выделено: {selectedAccountsInWindow.length}
+            </span>
+          </div>
+          <div className="accounts-data-window-actions" onMouseDown={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="accounts-window-action refresh"
+              onClick={refreshAccounts}
+              disabled={busy}
+              title="Обновить список"
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              className="accounts-window-action"
+              onClick={toggleAccountsWindowMinimize}
+              title={accountsWindowMinimized ? "Развернуть" : "Свернуть"}
+            >
+              {accountsWindowMinimized ? "▢" : "—"}
+            </button>
+            {!isMobile ? (
+              <button
+                type="button"
+                className="accounts-window-action"
+                onClick={toggleAccountsWindowMaximize}
+                title={accountsWindowMaximized ? "Восстановить" : "Развернуть"}
+              >
+                {accountsWindowMaximized ? "❐" : "□"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="accounts-window-action close"
+              onClick={closeAccountsDataWindow}
+              title="Закрыть"
+            >
+              ×
+            </button>
+          </div>
+        </header>
+
+        {!accountsWindowMinimized ? (
+          <div className="accounts-data-window-body">
+            <div className="accounts-data-copy-row">
+              <textarea
+                value={selectedAccountCredentials}
+                readOnly
+                placeholder="почта:пароль:2пароль"
+                onFocus={(event) => event.target.select()}
+                rows={Math.min(Math.max(selectedAccountsInWindow.length || 1, 1), 4)}
+              />
+              <button
+                type="button"
+                onClick={copySelectedAccountCredentials}
+                disabled={!selectedAccountsInWindow.length}
+                title="Скопировать выбранные строки: почта:пароль:2пароль"
+              >
+                Copy
+              </button>
+            </div>
+            <div className="accounts-data-select-hint">
+              Выделение: Shift — диапазон, Ctrl/Cmd — добавить или снять выбор
+            </div>
+            <table className="accounts-data-table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>OpenAI</th>
+                  <th>Почта</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accounts.map((account, index) => (
+                  <tr
+                    key={account.id}
+                    className={`${statusClass(account.status)} ${
+                      windowSelectedSet.has(account.id) ? "active" : ""
+                    }`}
+                    onClick={(event) => selectAccountFromDataWindow(event, account.id, index)}
+                    onMouseDown={(event) => {
+                      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                        event.preventDefault();
+                      }
+                    }}
+                  >
+                    <td title={account.email}>{account.email}</td>
+                    <td title={account.password_openai}>{account.password_openai}</td>
+                    <td title={account.password_mail}>{account.password_mail}</td>
+                    <td>{STATUS_LABELS[account.status] || account.status}</td>
+                  </tr>
+                ))}
+                {!accounts.length ? (
+                  <tr>
+                    <td colSpan={4} className="accounts-data-empty">
+                      Аккаунтов пока нет
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  ) : null;
 
   if (isMobile) {
     return (
@@ -1400,6 +2820,8 @@ export default function Dashboard({ token, user, onLogout }) {
           </button>
         </nav>
 
+        {accountsDataWindow}
+
         {showSkPanel ? (
           <GeneratorPanel
             title="South Korea Data Generator"
@@ -1407,7 +2829,15 @@ export default function Dashboard({ token, user, onLogout }) {
             busy={busy}
             activeAction={skActiveAction}
             hotkeys={generatorHotkeys}
+            windowStyle={generatorWindowStyle}
+            minimized={generatorWindowMinimized}
+            maximized={generatorWindowMaximized}
+            isMobile={isMobile}
+            isDragging={isDraggingGeneratorWindow}
             onClose={closeSkGenerator}
+            onHeaderMouseDown={startGeneratorWindowDrag}
+            onToggleMinimize={toggleGeneratorWindowMinimize}
+            onToggleMaximize={toggleGeneratorWindowMaximize}
             onGenerate={regenerateSk}
             onSettings={openGeneratorHotkeys}
             onCopy={(action) => copyGeneratorAction("sk", action)}
@@ -1421,7 +2851,15 @@ export default function Dashboard({ token, user, onLogout }) {
             busy={busy}
             activeAction={inActiveAction}
             hotkeys={generatorHotkeys}
+            windowStyle={generatorWindowStyle}
+            minimized={generatorWindowMinimized}
+            maximized={generatorWindowMaximized}
+            isMobile={isMobile}
+            isDragging={isDraggingGeneratorWindow}
             onClose={closeInGenerator}
+            onHeaderMouseDown={startGeneratorWindowDrag}
+            onToggleMinimize={toggleGeneratorWindowMinimize}
+            onToggleMaximize={toggleGeneratorWindowMaximize}
             onGenerate={regenerateIn}
             onSettings={openGeneratorHotkeys}
             onCopy={(action) => copyGeneratorAction("in", action)}
@@ -1430,13 +2868,27 @@ export default function Dashboard({ token, user, onLogout }) {
 
         {showGeneratorHotkeys ? (
           <HotkeySettingsModal
+            windowStyle={hotkeysWindowStyle}
+            minimized={settingsWindowMinimized}
+            maximized={settingsWindowMaximized}
+            isMobile={isMobile}
+            isDragging={isDraggingSettingsWindow}
+            busy={busy}
+            selectedAccount={selectedAccount}
+            accountsCount={accounts.length}
             draftHotkeys={draftHotkeys}
             recordingHotkeyKey={recordingHotkeyKey}
             onClose={closeGeneratorHotkeys}
+            onHeaderMouseDown={startSettingsWindowDrag}
+            onToggleMinimize={toggleSettingsWindowMinimize}
+            onToggleMaximize={toggleSettingsWindowMaximize}
             onSave={saveGeneratorHotkeys}
             onReset={resetGeneratorHotkeys}
             onStartRecord={toggleHotkeyRecord}
             onClearHotkey={clearDraftHotkey}
+            onDeleteAccount={deleteSelectedAccount}
+            onDeleteMailbox={deleteSelectedMailbox}
+            onDeleteAllAccounts={deleteAllAccounts}
           />
         ) : null}
       </div>
@@ -1446,9 +2898,25 @@ export default function Dashboard({ token, user, onLogout }) {
   return (
     <div className={`dashboard-shell theme-${theme}`}>
       {theme === "dark" ? <DarkParallaxDotsBackground /> : null}
-      <div className="dashboard-window">
-        <aside className="left-panel">
-          <div className="brand-strip">
+      <div
+        className="dashboard-window"
+        style={!isMobile ? { gridTemplateColumns: `${sidebarWidth}px auto 1fr` } : undefined}
+      >
+        <aside
+          ref={sidebarPanelRef}
+          className={`left-panel ${!isMobile ? "movable" : ""} ${isDraggingSidebar ? "is-dragging" : ""} ${
+            sidebarOffset.x || sidebarOffset.y ? "is-floating" : ""
+          }`}
+          style={
+            !isMobile
+              ? { transform: `translate(${Math.round(sidebarOffset.x)}px, ${Math.round(sidebarOffset.y)}px)` }
+              : undefined
+          }
+        >
+          <div
+            className={`brand-strip ${!isMobile ? "drag-handle" : ""} ${isDraggingSidebar ? "dragging" : ""}`}
+            onMouseDown={!isMobile ? startSidebarDrag : undefined}
+          >
             <h1 className="brand-title">
               <span>Mail.</span>tm
             </h1>
@@ -1537,10 +3005,19 @@ export default function Dashboard({ token, user, onLogout }) {
           ) : null}
         </aside>
 
+        {!isMobile ? (
+          <div
+            className={`panel-splitter ${isDraggingSplitter ? "is-dragging" : ""}`}
+            onMouseDown={startSplitterDrag}
+          />
+        ) : null}
+
         <main className="right-panel">
           {mailPanel}
         </main>
       </div>
+
+      {accountsDataWindow}
 
       {showSkPanel ? (
         <GeneratorPanel
@@ -1549,7 +3026,15 @@ export default function Dashboard({ token, user, onLogout }) {
           busy={busy}
           activeAction={skActiveAction}
           hotkeys={generatorHotkeys}
+          windowStyle={generatorWindowStyle}
+          minimized={generatorWindowMinimized}
+          maximized={generatorWindowMaximized}
+          isMobile={isMobile}
+          isDragging={isDraggingGeneratorWindow}
           onClose={closeSkGenerator}
+          onHeaderMouseDown={startGeneratorWindowDrag}
+          onToggleMinimize={toggleGeneratorWindowMinimize}
+          onToggleMaximize={toggleGeneratorWindowMaximize}
           onGenerate={regenerateSk}
           onSettings={openGeneratorHotkeys}
           onCopy={(action) => copyGeneratorAction("sk", action)}
@@ -1563,7 +3048,15 @@ export default function Dashboard({ token, user, onLogout }) {
           busy={busy}
           activeAction={inActiveAction}
           hotkeys={generatorHotkeys}
+          windowStyle={generatorWindowStyle}
+          minimized={generatorWindowMinimized}
+          maximized={generatorWindowMaximized}
+          isMobile={isMobile}
+          isDragging={isDraggingGeneratorWindow}
           onClose={closeInGenerator}
+          onHeaderMouseDown={startGeneratorWindowDrag}
+          onToggleMinimize={toggleGeneratorWindowMinimize}
+          onToggleMaximize={toggleGeneratorWindowMaximize}
           onGenerate={regenerateIn}
           onSettings={openGeneratorHotkeys}
           onCopy={(action) => copyGeneratorAction("in", action)}
@@ -1572,13 +3065,27 @@ export default function Dashboard({ token, user, onLogout }) {
 
       {showGeneratorHotkeys ? (
         <HotkeySettingsModal
+          windowStyle={hotkeysWindowStyle}
+          minimized={settingsWindowMinimized}
+          maximized={settingsWindowMaximized}
+          isMobile={isMobile}
+          isDragging={isDraggingSettingsWindow}
+          busy={busy}
+          selectedAccount={selectedAccount}
+          accountsCount={accounts.length}
           draftHotkeys={draftHotkeys}
           recordingHotkeyKey={recordingHotkeyKey}
           onClose={closeGeneratorHotkeys}
+          onHeaderMouseDown={startSettingsWindowDrag}
+          onToggleMinimize={toggleSettingsWindowMinimize}
+          onToggleMaximize={toggleSettingsWindowMaximize}
           onSave={saveGeneratorHotkeys}
           onReset={resetGeneratorHotkeys}
           onStartRecord={toggleHotkeyRecord}
           onClearHotkey={clearDraftHotkey}
+          onDeleteAccount={deleteSelectedAccount}
+          onDeleteMailbox={deleteSelectedMailbox}
+          onDeleteAllAccounts={deleteAllAccounts}
         />
       ) : null}
 
