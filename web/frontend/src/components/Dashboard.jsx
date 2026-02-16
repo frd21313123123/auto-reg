@@ -170,6 +170,51 @@ async function copyText(value) {
   await navigator.clipboard.writeText(value);
 }
 
+function HtmlEmailViewer({ html, theme }) {
+  const iframeRef = useRef(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || !html) {
+      return;
+    }
+
+    const isDark = theme === "dark";
+    const styleOverride = `<style>
+      body { margin: 0; padding: 10px; font-family: "Segoe UI", Tahoma, sans-serif; font-size: 14px; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere; ${isDark ? "color: #e6efff; background: transparent;" : "color: #1f2937; background: transparent;"} }
+      a { color: ${isDark ? "#6fa0ff" : "#4f66da"}; }
+      img { max-width: 100%; height: auto; }
+      table { max-width: 100% !important; }
+    </style>`;
+    const doc = iframe.contentDocument;
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">${styleOverride}</head><body>${html}</body></html>`);
+    doc.close();
+
+    const resize = () => {
+      try {
+        const height = doc.documentElement.scrollHeight || doc.body.scrollHeight;
+        iframe.style.height = `${Math.max(height + 16, 80)}px`;
+      } catch {
+        /* cross-origin guard */
+      }
+    };
+
+    resize();
+    const timer = setTimeout(resize, 300);
+    return () => clearTimeout(timer);
+  }, [html, theme]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      className="html-email-iframe"
+      sandbox="allow-same-origin"
+      title="Email content"
+    />
+  );
+}
+
 function DarkParallaxDotsBackground() {
   const canvasRef = useRef(null);
 
@@ -371,9 +416,24 @@ function HotkeySettingsModal({
   );
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= breakpoint);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 export default function Dashboard({ token, user, onLogout }) {
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState("dark");
   const [statusMessage, setStatusMessage] = useState("Готово");
+  const isMobile = useIsMobile();
+  const [mobileTab, setMobileTab] = useState("accounts");
 
   const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
@@ -506,25 +566,27 @@ export default function Dashboard({ token, user, onLogout }) {
     applyStatus(`Писем: ${inbox.length}`);
   };
 
-  const openMessage = async (message) => {
-    if (!selectedAccount) {
-      return;
-    }
+  const openMessage = (message) =>
+    withBusy(async () => {
+      if (!selectedAccount) {
+        return;
+      }
 
-    const detail = await mailApi.messageDetail(
-      token,
-      selectedAccount.id,
-      message.id,
-      message.sender,
-      message.subject
-    );
-    setMessageDetail({
-      ...detail,
-      id: message.id,
-      sender: detail.sender || message.sender,
-      subject: detail.subject || message.subject
-    });
-  };
+      const detail = await mailApi.messageDetail(
+        token,
+        selectedAccount.id,
+        message.id,
+        message.sender,
+        message.subject
+      );
+      setMessageDetail({
+        ...detail,
+        id: message.id,
+        sender: detail.sender || message.sender,
+        subject: detail.subject || message.subject
+      });
+      applyStatus(`Письмо открыто: ${detail.subject || message.subject}`);
+    }, "Загрузка письма...");
 
   useEffect(() => {
     withBusy(async () => {
@@ -951,6 +1013,436 @@ export default function Dashboard({ token, user, onLogout }) {
     });
   };
 
+  const accountsPanel = (
+    <>
+      <button type="button" className="primary-btn create-btn" onClick={createMailTm} disabled={busy}>
+        + Создать аккаунт
+      </button>
+
+      <section className="side-section accounts-section">
+        <div className="section-caption">АККАУНТЫ</div>
+
+        <div className="mini-controls">
+          <button type="button" onClick={refreshAccounts} disabled={busy}>
+            Обновить
+          </button>
+          <button
+            type="button"
+            className={showImportPanel ? "active" : ""}
+            onClick={() => setShowImportPanel((prev) => !prev)}
+            disabled={busy}
+          >
+            Файл
+          </button>
+          <button type="button" onClick={exportAccountsForExcel} disabled={busy}>
+            Excel
+          </button>
+          <button type="button" className="danger-btn" onClick={banCheckAll} disabled={busy}>
+            Бан
+          </button>
+        </div>
+
+        {showImportPanel ? (
+          <div className="import-panel">
+            <form className="manual-form" onSubmit={addManualAccount}>
+              <input
+                placeholder="email"
+                value={manualEmail}
+                onChange={(event) => setManualEmail(event.target.value)}
+                required
+              />
+              <input
+                placeholder="пароль openai"
+                value={manualPasswordOpenai}
+                onChange={(event) => setManualPasswordOpenai(event.target.value)}
+                required
+              />
+              <input
+                placeholder="пароль почты (опц.)"
+                value={manualPasswordMail}
+                onChange={(event) => setManualPasswordMail(event.target.value)}
+              />
+              <button type="submit" disabled={busy}>
+                Добавить
+              </button>
+            </form>
+
+            <textarea
+              className="import-textarea"
+              placeholder="Вставьте аккаунты: email / pass;pass / status"
+              value={importText}
+              onChange={(event) => setImportText(event.target.value)}
+            />
+
+            <div className="import-actions">
+              <button type="button" onClick={importAccounts} disabled={busy || !importText.trim()}>
+                Импорт
+              </button>
+              <button type="button" onClick={() => setShowImportPanel(false)} disabled={busy}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="account-list">
+          {accounts.map((account) => (
+            <button
+              key={account.id}
+              type="button"
+              className={`account-item ${statusClass(account.status)} ${
+                account.id === selectedAccountId ? "active" : ""
+              }`}
+              onClick={() => {
+                setSelectedAccountId(account.id);
+                if (isMobile) {
+                  setMobileTab("mail");
+                }
+              }}
+            >
+              <span className="account-email">{account.email}</span>
+              <small>{STATUS_LABELS[account.status] || account.status}</small>
+            </button>
+          ))}
+
+          {!accounts.length ? <div className="empty-list">Аккаунтов пока нет</div> : null}
+        </div>
+      </section>
+
+      <section className="side-section">
+        <div className="section-caption">ДЕЙСТВИЯ</div>
+
+        <div className="actions-grid">
+          <button type="button" onClick={() => copyAccountField("email")} disabled={!selectedAccount}>
+            Email
+          </button>
+          <button type="button" onClick={() => copyAccountField("openai")} disabled={!selectedAccount}>
+            OpenAI
+          </button>
+          <button type="button" onClick={() => copyAccountField("mail")} disabled={!selectedAccount}>
+            Почта
+          </button>
+          <button type="button" onClick={() => copyAccountField("full")} disabled={!selectedAccount}>
+            Full
+          </button>
+        </div>
+
+        <div className="utility-row">
+          <button type="button" onClick={banCheckOne} disabled={!selectedAccount || busy}>
+            Бан 1
+          </button>
+          <button
+            type="button"
+            className="danger-btn"
+            onClick={deleteSelectedMailbox}
+            disabled={!selectedAccount || busy}
+          >
+            Удалить почту
+          </button>
+          <button type="button" onClick={deleteSelectedAccount} disabled={!selectedAccount || busy}>
+            Удалить запись
+          </button>
+        </div>
+      </section>
+    </>
+  );
+
+  const mailPanel = (
+    <>
+      <header className="top-toolbar">
+        <div className="top-toolbar-title-row">
+          {isMobile ? (
+            <button
+              type="button"
+              className="mobile-back-btn"
+              onClick={() => setMobileTab("accounts")}
+              aria-label="Назад к аккаунтам"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+          ) : null}
+          <h2>{selectedAccount ? selectedAccount.email : "Выберите аккаунт"}</h2>
+        </div>
+
+        <div className="toolbar-controls">
+          <button
+            type="button"
+            className="primary-btn"
+            onClick={manualRefresh}
+            disabled={!selectedAccount || busy}
+          >
+            Обновить
+          </button>
+
+          <div className="status-switch">
+            {STATUS_OPTIONS.map((status) => (
+              <button
+                type="button"
+                key={status}
+                className={`status-chip ${statusClass(status)} ${
+                  selectedAccount?.status === status ? "active" : ""
+                }`}
+                onClick={() => setSelectedStatus(status)}
+                disabled={!selectedAccount || busy}
+                title={STATUS_LABELS[status]}
+              >
+                {STATUS_SHORT_LABELS[status]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <section className="panel-card inbox-card">
+        {isMobile ? (
+          <div className="mobile-message-list">
+            {messages.map((message) => (
+              <button
+                key={message.id}
+                type="button"
+                className={`mobile-message-item ${messageDetail?.id === message.id ? "active" : ""}`}
+                onClick={() => openMessage(message)}
+              >
+                <div className="mobile-msg-sender">{message.sender}</div>
+                <div className="mobile-msg-subject">{message.subject}</div>
+                <div className="mobile-msg-time">{toLocalDateTime(message.created_at)}</div>
+              </button>
+            ))}
+            {!messages.length ? <div className="empty-list">Писем пока нет</div> : null}
+          </div>
+        ) : (
+          <>
+            <table className="message-table">
+              <thead>
+                <tr>
+                  <th>От кого</th>
+                  <th>Тема</th>
+                  <th>Время</th>
+                </tr>
+              </thead>
+              <tbody>
+                {messages.map((message) => (
+                  <tr
+                    key={message.id}
+                    className={messageDetail?.id === message.id ? "active" : ""}
+                    onClick={() => openMessage(message)}
+                  >
+                    <td>{message.sender}</td>
+                    <td>{message.subject}</td>
+                    <td>{toLocalDateTime(message.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!messages.length ? <div className="empty-list">Писем пока нет</div> : null}
+          </>
+        )}
+      </section>
+
+      <section className="panel-card viewer-card">
+        <div className="viewer-head">
+          <h3>Содержание письма</h3>
+          {messageDetail?.code ? (
+            <button type="button" onClick={copyCode}>
+              Копировать код {messageDetail.code}
+            </button>
+          ) : null}
+        </div>
+
+        <div className="viewer-content">
+          {messageDetail ? (
+            <>
+              <p>
+                <strong>От:</strong> {messageDetail.sender}
+              </p>
+              <p>
+                <strong>Тема:</strong> {messageDetail.subject}
+              </p>
+              {messageDetail.html ? (
+                <HtmlEmailViewer html={messageDetail.html} theme={theme} />
+              ) : (
+                <pre>{messageDetail.text}</pre>
+              )}
+            </>
+          ) : (
+            <p className="placeholder-text">Выберите письмо, чтобы увидеть содержимое.</p>
+          )}
+        </div>
+      </section>
+    </>
+  );
+
+  const toolsPanel = (
+    <>
+      <section className="mobile-tools-section">
+        <div className="section-caption">ГЕНЕРАТОРЫ</div>
+
+        <div className="mobile-tools-grid">
+          <button
+            type="button"
+            className={`mobile-tool-card ${showSkPanel ? "active" : ""}`}
+            onClick={openSkGenerator}
+          >
+            <span className="mobile-tool-icon">SK</span>
+            <span className="mobile-tool-label">South Korea</span>
+          </button>
+          <button
+            type="button"
+            className={`mobile-tool-card ${showInPanel ? "active" : ""}`}
+            onClick={openInGenerator}
+          >
+            <span className="mobile-tool-icon">IN</span>
+            <span className="mobile-tool-label">India</span>
+          </button>
+          <button type="button" className="mobile-tool-card" onClick={openGeneratorHotkeys}>
+            <span className="mobile-tool-icon">HK</span>
+            <span className="mobile-tool-label">Настройки</span>
+          </button>
+          <button type="button" className="mobile-tool-card" onClick={handleMinesweeper}>
+            <span className="mobile-tool-icon">MS</span>
+            <span className="mobile-tool-label">Сапёр</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="mobile-tools-section">
+        <div className="section-caption">СЛУЧАЙНЫЕ ДАННЫЕ</div>
+
+        <div className="mobile-person-card">
+          <div className="mobile-person-row">
+            <span className="mobile-person-label">Имя</span>
+            <code className="mobile-person-value">{randomPerson.name || "-"}</code>
+            <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)}>
+              Copy
+            </button>
+          </div>
+          <div className="mobile-person-row">
+            <span className="mobile-person-label">Дата</span>
+            <code className="mobile-person-value">{randomPerson.birthdate || "-"}</code>
+            <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)}>
+              Copy
+            </button>
+          </div>
+          <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy}>
+            Новые данные
+          </button>
+        </div>
+      </section>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div className={`dashboard-shell theme-${theme} mobile-shell`}>
+        {theme === "dark" ? <DarkParallaxDotsBackground /> : null}
+
+        <header className="mobile-header">
+          <h1 className="brand-title">
+            <span>Mail.</span>tm
+          </h1>
+          <div className="mobile-header-actions">
+            <span className="mobile-user-badge">{user.username}</span>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            >
+              {theme === "light" ? "D" : "L"}
+            </button>
+            <button type="button" className="icon-btn" onClick={onLogout}>
+              X
+            </button>
+          </div>
+        </header>
+
+        <div className="mobile-content">
+          {mobileTab === "accounts" ? accountsPanel : null}
+          {mobileTab === "mail" ? mailPanel : null}
+          {mobileTab === "tools" ? toolsPanel : null}
+        </div>
+
+        <footer className="mobile-status-bar">{statusMessage}</footer>
+
+        <nav className="mobile-bottom-nav">
+          <button
+            type="button"
+            className={mobileTab === "accounts" ? "active" : ""}
+            onClick={() => setMobileTab("accounts")}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span>Аккаунты</span>
+          </button>
+          <button
+            type="button"
+            className={mobileTab === "mail" ? "active" : ""}
+            onClick={() => setMobileTab("mail")}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+            </svg>
+            <span>Почта</span>
+          </button>
+          <button
+            type="button"
+            className={mobileTab === "tools" ? "active" : ""}
+            onClick={() => setMobileTab("tools")}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+            <span>Инструм.</span>
+          </button>
+        </nav>
+
+        {showSkPanel ? (
+          <GeneratorPanel
+            title="South Korea Data Generator"
+            data={skData}
+            busy={busy}
+            activeAction={skActiveAction}
+            hotkeys={generatorHotkeys}
+            onClose={closeSkGenerator}
+            onGenerate={regenerateSk}
+            onSettings={openGeneratorHotkeys}
+            onCopy={(action) => copyGeneratorAction("sk", action)}
+          />
+        ) : null}
+
+        {showInPanel ? (
+          <GeneratorPanel
+            title="India Data Generator"
+            data={inData}
+            busy={busy}
+            activeAction={inActiveAction}
+            hotkeys={generatorHotkeys}
+            onClose={closeInGenerator}
+            onGenerate={regenerateIn}
+            onSettings={openGeneratorHotkeys}
+            onCopy={(action) => copyGeneratorAction("in", action)}
+          />
+        ) : null}
+
+        {showGeneratorHotkeys ? (
+          <HotkeySettingsModal
+            draftHotkeys={draftHotkeys}
+            recordingHotkeyKey={recordingHotkeyKey}
+            onClose={closeGeneratorHotkeys}
+            onSave={saveGeneratorHotkeys}
+            onReset={resetGeneratorHotkeys}
+            onStartRecord={toggleHotkeyRecord}
+            onClearHotkey={clearDraftHotkey}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className={`dashboard-shell theme-${theme}`}>
       {theme === "dark" ? <DarkParallaxDotsBackground /> : null}
@@ -976,108 +1468,12 @@ export default function Dashboard({ token, user, onLogout }) {
           </div>
           <div className="user-caption">{user.username}</div>
 
-          <button type="button" className="primary-btn create-btn" onClick={createMailTm} disabled={busy}>
-            + Создать аккаунт
-          </button>
-
-          <section className="side-section accounts-section">
-            <div className="section-caption">АККАУНТЫ</div>
-
-            <div className="mini-controls">
-              <button type="button" onClick={refreshAccounts} disabled={busy}>
-                Обновить
-              </button>
-              <button
-                type="button"
-                className={showImportPanel ? "active" : ""}
-                onClick={() => setShowImportPanel((prev) => !prev)}
-                disabled={busy}
-              >
-                Файл
-              </button>
-              <button type="button" onClick={exportAccountsForExcel} disabled={busy}>
-                Excel
-              </button>
-              <button type="button" className="danger-btn" onClick={banCheckAll} disabled={busy}>
-                Бан
-              </button>
-            </div>
-
-            {showImportPanel ? (
-              <div className="import-panel">
-                <form className="manual-form" onSubmit={addManualAccount}>
-                  <input
-                    placeholder="email"
-                    value={manualEmail}
-                    onChange={(event) => setManualEmail(event.target.value)}
-                    required
-                  />
-                  <input
-                    placeholder="пароль openai"
-                    value={manualPasswordOpenai}
-                    onChange={(event) => setManualPasswordOpenai(event.target.value)}
-                    required
-                  />
-                  <input
-                    placeholder="пароль почты (опц.)"
-                    value={manualPasswordMail}
-                    onChange={(event) => setManualPasswordMail(event.target.value)}
-                  />
-                  <button type="submit" disabled={busy}>
-                    Добавить
-                  </button>
-                </form>
-
-                <textarea
-                  className="import-textarea"
-                  placeholder="Вставьте аккаунты: email / pass;pass / status"
-                  value={importText}
-                  onChange={(event) => setImportText(event.target.value)}
-                />
-
-                <div className="import-actions">
-                  <button type="button" onClick={importAccounts} disabled={busy || !importText.trim()}>
-                    Импорт
-                  </button>
-                  <button type="button" onClick={() => setShowImportPanel(false)} disabled={busy}>
-                    Закрыть
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="account-list">
-              {accounts.map((account) => (
-                <button
-                  key={account.id}
-                  type="button"
-                  className={`account-item ${statusClass(account.status)} ${
-                    account.id === selectedAccountId ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedAccountId(account.id)}
-                >
-                  <span className="account-email">{account.email}</span>
-                  <small>{STATUS_LABELS[account.status] || account.status}</small>
-                </button>
-              ))}
-
-              {!accounts.length ? <div className="empty-list">Аккаунтов пока нет</div> : null}
-            </div>
-          </section>
+          {accountsPanel}
 
           <section className="side-section">
             <div className="section-caption">ДЕЙСТВИЯ</div>
 
             <div className="actions-grid">
-              <button type="button" onClick={() => copyAccountField("email")} disabled={!selectedAccount}>
-                Email
-              </button>
-              <button type="button" onClick={() => copyAccountField("openai")} disabled={!selectedAccount}>
-                OpenAI
-              </button>
-              <button type="button" onClick={() => copyAccountField("mail")} disabled={!selectedAccount}>
-                Почта
-              </button>
               <button
                 type="button"
                 className={showSkPanel ? "active" : ""}
@@ -1097,26 +1493,6 @@ export default function Dashboard({ token, user, onLogout }) {
               </button>
               <button type="button" onClick={openGeneratorHotkeys}>
                 Настройки
-              </button>
-            </div>
-
-            <div className="utility-row">
-              <button type="button" onClick={banCheckOne} disabled={!selectedAccount || busy}>
-                Бан 1
-              </button>
-              <button
-                type="button"
-                className="danger-btn"
-                onClick={deleteSelectedMailbox}
-                disabled={!selectedAccount || busy}
-              >
-                Удалить почту
-              </button>
-              <button type="button" onClick={deleteSelectedAccount} disabled={!selectedAccount || busy}>
-                Удалить запись
-              </button>
-              <button type="button" onClick={() => copyAccountField("full")} disabled={!selectedAccount}>
-                Full
               </button>
             </div>
           </section>
@@ -1162,91 +1538,7 @@ export default function Dashboard({ token, user, onLogout }) {
         </aside>
 
         <main className="right-panel">
-          <header className="top-toolbar">
-            <h2>{selectedAccount ? selectedAccount.email : "Выберите аккаунт слева"}</h2>
-
-            <div className="toolbar-controls">
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={manualRefresh}
-                disabled={!selectedAccount || busy}
-              >
-                Обновить
-              </button>
-
-              <div className="status-switch">
-                {STATUS_OPTIONS.map((status) => (
-                  <button
-                    type="button"
-                    key={status}
-                    className={`status-chip ${statusClass(status)} ${
-                      selectedAccount?.status === status ? "active" : ""
-                    }`}
-                    onClick={() => setSelectedStatus(status)}
-                    disabled={!selectedAccount || busy}
-                    title={STATUS_LABELS[status]}
-                  >
-                    {STATUS_SHORT_LABELS[status]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </header>
-
-          <section className="panel-card inbox-card">
-            <table className="message-table">
-              <thead>
-                <tr>
-                  <th>От кого</th>
-                  <th>Тема</th>
-                  <th>Время</th>
-                </tr>
-              </thead>
-              <tbody>
-                {messages.map((message) => (
-                  <tr
-                    key={message.id}
-                    className={messageDetail?.id === message.id ? "active" : ""}
-                    onClick={() => openMessage(message)}
-                  >
-                    <td>{message.sender}</td>
-                    <td>{message.subject}</td>
-                    <td>{toLocalDateTime(message.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {!messages.length ? <div className="empty-list">Писем пока нет</div> : null}
-          </section>
-
-          <section className="panel-card viewer-card">
-            <div className="viewer-head">
-              <h3>Содержание письма</h3>
-              {messageDetail?.code ? (
-                <button type="button" onClick={copyCode}>
-                  Копировать код {messageDetail.code}
-                </button>
-              ) : null}
-            </div>
-
-            <div className="viewer-content">
-              {messageDetail ? (
-                <>
-                  <p>
-                    <strong>От:</strong> {messageDetail.sender}
-                  </p>
-                  <p>
-                    <strong>Тема:</strong> {messageDetail.subject}
-                  </p>
-                  <pre>{messageDetail.text}</pre>
-                </>
-              ) : (
-                <p className="placeholder-text">Выберите письмо, чтобы увидеть содержимое.</p>
-              )}
-            </div>
-          </section>
+          {mailPanel}
         </main>
       </div>
 

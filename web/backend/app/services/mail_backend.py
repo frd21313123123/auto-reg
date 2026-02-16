@@ -464,12 +464,15 @@ class MailBackendService:
             data = res.json()
             sender = self.extract_sender_address(data.get("from", {}))
             subject = data.get("subject") or "(без темы)"
-            text = data.get("text") or data.get("html") or "Нет текстового содержимого"
+            raw_text = data.get("text") or ""
+            raw_html = data.get("html") or ""
+            text = raw_text or raw_html or "Нет текстового содержимого"
             return {
                 "id": str(message_id),
                 "sender": sender,
                 "subject": subject,
                 "text": text,
+                "html": raw_html or None,
                 "code": self._extract_code(text),
             }
 
@@ -479,11 +482,13 @@ class MailBackendService:
         text = state.imap_client.get_message_content(message_id)
         sender = sender_hint or "IMAP Sender"
         subject = subject_hint or "IMAP Message"
+        has_html = bool(text and "<html" in text.lower()[:200])
         return {
             "id": str(message_id),
             "sender": sender,
             "subject": subject,
             "text": text,
+            "html": text if has_html else None,
             "code": self._extract_code(text),
         }
 

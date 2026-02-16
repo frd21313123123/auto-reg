@@ -3,7 +3,18 @@
     "allow": [
       "Bash(cd:*)",
       "Bash(python -c:*)",
-      "mcp__Windows-MCP__Shell"
+      "mcp__Windows-MCP__Shell",
+      "Bash(npx vite build)",
+      "Bash(pushd:*)",
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_fill_form",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_resize"
     ]
   }
 }
