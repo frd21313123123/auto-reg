@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { accountsApi, mailApi, toolsApi } from "../api";
 
@@ -30,6 +30,7 @@ const STATUS_SHORT_LABELS = {
 };
 
 const GENERATOR_HOTKEYS_STORAGE_KEY = "auto_reg_generator_hotkeys";
+const SIDEBAR_GENERATOR_VISIBILITY_KEY = "auto_reg_sidebar_generator_visible";
 
 const GENERATOR_CYCLE_ORDER = ["card", "exp_date", "cvv", "name", "city", "street", "postcode"];
 
@@ -169,6 +170,99 @@ async function copyText(value) {
   await navigator.clipboard.writeText(value);
 }
 
+function DarkParallaxDotsBackground() {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return undefined;
+    }
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return undefined;
+    }
+
+    const spacing = 22;
+    const radius = 1;
+    const color = "rgba(255,255,255,0.08)";
+    const parallaxStrength = 25;
+    const smoothness = 0.08;
+
+    let mouseX = 0;
+    let mouseY = 0;
+    let offsetX = 0;
+    let offsetY = 0;
+    let targetOffsetX = 0;
+    let targetOffsetY = 0;
+    let cols = 0;
+    let rows = 0;
+    let frameId = 0;
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      cols = Math.ceil(canvas.width / spacing) + 2;
+      rows = Math.ceil(canvas.height / spacing) + 2;
+    };
+
+    const updateParallax = () => {
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+
+      targetOffsetX = ((mouseX - centerX) / centerX) * parallaxStrength;
+      targetOffsetY = ((mouseY - centerY) / centerY) * parallaxStrength;
+
+      offsetX += (targetOffsetX - offsetX) * smoothness;
+      offsetY += (targetOffsetY - offsetY) * smoothness;
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = color;
+
+      const startX = -spacing + offsetX;
+      const startY = -spacing + offsetY;
+
+      for (let i = 0; i < cols; i += 1) {
+        for (let j = 0; j < rows; j += 1) {
+          const x = startX + i * spacing;
+          const y = startY + j * spacing;
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    };
+
+    const animate = () => {
+      updateParallax();
+      draw();
+      frameId = window.requestAnimationFrame(animate);
+    };
+
+    const handleMouseMove = (event) => {
+      mouseX = event.clientX;
+      mouseY = event.clientY;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    window.addEventListener("resize", resizeCanvas);
+
+    resizeCanvas();
+    animate();
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("resize", resizeCanvas);
+    };
+  }, []);
+
+  return <canvas className="parallax-dots-bg" ref={canvasRef} aria-hidden="true" />;
+}
+
 function GeneratorPanel({
   title,
   data,
@@ -299,6 +393,17 @@ export default function Dashboard({ token, user, onLogout }) {
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [showInPanel, setShowInPanel] = useState(false);
   const [showSkPanel, setShowSkPanel] = useState(false);
+  const [showSidebarGenerator, setShowSidebarGenerator] = useState(() => {
+    try {
+      const raw = localStorage.getItem(SIDEBAR_GENERATOR_VISIBILITY_KEY);
+      if (raw === null) {
+        return true;
+      }
+      return raw === "1";
+    } catch {
+      return true;
+    }
+  });
   const [showGeneratorHotkeys, setShowGeneratorHotkeys] = useState(false);
   const [generatorHotkeys, setGeneratorHotkeys] = useState(() => loadGeneratorHotkeys());
   const [draftHotkeys, setDraftHotkeys] = useState(() => loadGeneratorHotkeys());
@@ -448,6 +553,13 @@ export default function Dashboard({ token, user, onLogout }) {
       JSON.stringify(normalizeHotkeyMap(generatorHotkeys))
     );
   }, [generatorHotkeys]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      SIDEBAR_GENERATOR_VISIBILITY_KEY,
+      showSidebarGenerator ? "1" : "0"
+    );
+  }, [showSidebarGenerator]);
 
   useEffect(() => {
     if (!showGeneratorHotkeys || !recordingHotkeyKey) {
@@ -662,6 +774,22 @@ export default function Dashboard({ token, user, onLogout }) {
     }, "Удаление аккаунта...");
   };
 
+  const deleteSelectedMailbox = () => {
+    if (!selectedAccount) {
+      return;
+    }
+
+    if (!window.confirm(`Удалить почту ${selectedAccount.email} в mail.tm и из списка?`)) {
+      return;
+    }
+
+    withBusy(async () => {
+      await accountsApi.removeMailbox(token, selectedAccount.id);
+      await loadAccounts();
+      applyStatus("Почта удалена");
+    }, "Удаление почты...");
+  };
+
   const banCheckOne = () => {
     if (!selectedAccount) {
       return;
@@ -815,8 +943,17 @@ export default function Dashboard({ token, user, onLogout }) {
     applyStatus("Сапер пока доступен только в desktop-версии");
   };
 
+  const toggleSidebarGenerator = () => {
+    setShowSidebarGenerator((prev) => {
+      const next = !prev;
+      applyStatus(next ? "Генератор показан" : "Генератор скрыт");
+      return next;
+    });
+  };
+
   return (
     <div className={`dashboard-shell theme-${theme}`}>
+      {theme === "dark" ? <DarkParallaxDotsBackground /> : null}
       <div className="dashboard-window">
         <aside className="left-panel">
           <div className="brand-strip">
@@ -967,8 +1104,16 @@ export default function Dashboard({ token, user, onLogout }) {
               <button type="button" onClick={banCheckOne} disabled={!selectedAccount || busy}>
                 Бан 1
               </button>
+              <button
+                type="button"
+                className="danger-btn"
+                onClick={deleteSelectedMailbox}
+                disabled={!selectedAccount || busy}
+              >
+                Удалить почту
+              </button>
               <button type="button" onClick={deleteSelectedAccount} disabled={!selectedAccount || busy}>
-                Удалить
+                Удалить запись
               </button>
               <button type="button" onClick={() => copyAccountField("full")} disabled={!selectedAccount}>
                 Full
@@ -976,31 +1121,44 @@ export default function Dashboard({ token, user, onLogout }) {
             </div>
           </section>
 
-          <section className="side-section generator-section">
-            <div className="section-caption">ГЕНЕРАТОР</div>
-
-            <div className="generator-row">
-              <span>Name</span>
-              <code>{randomPerson.name || "-"}</code>
-              <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)}>
-                Копировать
+          <section className={`side-section generator-section ${showSidebarGenerator ? "" : "collapsed"}`}>
+            <div className="section-header">
+              <div className="section-caption">ГЕНЕРАТОР</div>
+              <button type="button" className="section-toggle-btn" onClick={toggleSidebarGenerator}>
+                {showSidebarGenerator ? "Скрыть" : "Показать"}
               </button>
             </div>
 
-            <div className="generator-row">
-              <span>Дата</span>
-              <code>{randomPerson.birthdate || "-"}</code>
-              <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)}>
-                Копировать
-              </button>
-            </div>
+            {showSidebarGenerator ? (
+              <>
+                <div className="generator-row">
+                  <span>Name</span>
+                  <code>{randomPerson.name || "-"}</code>
+                  <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)}>
+                    Копировать
+                  </button>
+                </div>
 
-            <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy}>
-              Новые данные
-            </button>
+                <div className="generator-row">
+                  <span>Дата</span>
+                  <code>{randomPerson.birthdate || "-"}</code>
+                  <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)}>
+                    Копировать
+                  </button>
+                </div>
+
+                <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy}>
+                  Новые данные
+                </button>
+              </>
+            ) : (
+              <div className="generator-collapsed-note">Блок генератора скрыт</div>
+            )}
           </section>
 
-          <div className="side-footer">Сгенерировано: {randomPerson.name || "-"}</div>
+          {showSidebarGenerator ? (
+            <div className="side-footer">Сгенерировано: {randomPerson.name || "-"}</div>
+          ) : null}
         </aside>
 
         <main className="right-panel">

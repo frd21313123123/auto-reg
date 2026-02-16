@@ -112,6 +112,11 @@ export const accountsApi = {
       token,
       body: { status }
     }),
+  removeMailbox: (token, accountId) =>
+    request(`/accounts/${accountId}/mailbox`, {
+      method: "DELETE",
+      token
+    }),
   remove: (token, accountId) =>
     request(`/accounts/${accountId}`, {
       method: "DELETE",
