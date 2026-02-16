@@ -6,20 +6,160 @@ const STATUS_OPTIONS = [
   "not_registered",
   "registered",
   "plus",
+  "busnis",
   "banned",
   "invalid_password"
 ];
 
 const STATUS_LABELS = {
   not_registered: "Не зарегистрирован",
-  registered: "Registered",
+  registered: "Зарегистрирован",
   plus: "Plus",
+  busnis: "Busnis",
   banned: "Banned",
   invalid_password: "Неверный пароль"
 };
 
+const STATUS_SHORT_LABELS = {
+  not_registered: "Не рег",
+  registered: "Рег",
+  plus: "Plus",
+  busnis: "Busnis",
+  banned: "Бан",
+  invalid_password: "Пароль"
+};
+
+const GENERATOR_HOTKEYS_STORAGE_KEY = "auto_reg_generator_hotkeys";
+
+const GENERATOR_CYCLE_ORDER = ["card", "exp_date", "cvv", "name", "city", "street", "postcode"];
+
+const GENERATOR_FIELDS = [
+  { action: "card", dataKey: "card", label: "Номер карты:" },
+  { action: "exp_date", dataKey: "exp", label: "Expiration Date:" },
+  { action: "cvv", dataKey: "cvv", label: "CVV:" },
+  { action: "name", dataKey: "name", label: "Имя (Name):" },
+  { action: "city", dataKey: "city", label: "Город (City):" },
+  { action: "street", dataKey: "street", label: "Улица (Street):" },
+  { action: "postcode", dataKey: "postcode", label: "Индекс (Postcode):" },
+  { action: "address_en", dataKey: "address_en", label: "Address (English):" }
+];
+
+const HOTKEY_FIELDS = [
+  { key: "sk_cycle", label: "Следующее поле" },
+  { key: "sk_close", label: "Закрыть окно" },
+  { key: "card", label: "Копировать карту" },
+  { key: "exp_date", label: "Копировать Exp" },
+  { key: "cvv", label: "Копировать CVV" },
+  { key: "name", label: "Копировать имя" },
+  { key: "city", label: "Копировать город" },
+  { key: "street", label: "Копировать улицу" },
+  { key: "postcode", label: "Копировать индекс" }
+];
+
+const DEFAULT_GENERATOR_HOTKEYS = {
+  sk_cycle: "6",
+  sk_close: "esc",
+  card: "ctrl+1",
+  exp_date: "ctrl+4",
+  cvv: "ctrl+5",
+  name: "ctrl+2",
+  city: "ctrl+3",
+  street: "ctrl+6",
+  postcode: "ctrl+7"
+};
+
+function normalizeHotkeyValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/control/g, "ctrl")
+    .replace(/escape/g, "esc");
+}
+
+function normalizeHotkeyMap(value) {
+  const merged = { ...DEFAULT_GENERATOR_HOTKEYS };
+  if (!value || typeof value !== "object") {
+    return merged;
+  }
+
+  for (const field of HOTKEY_FIELDS) {
+    if (typeof value[field.key] === "string") {
+      const normalized = normalizeHotkeyValue(value[field.key]);
+      merged[field.key] = normalized;
+    }
+  }
+
+  return merged;
+}
+
+function loadGeneratorHotkeys() {
+  try {
+    const raw = localStorage.getItem(GENERATOR_HOTKEYS_STORAGE_KEY);
+    if (!raw) {
+      return { ...DEFAULT_GENERATOR_HOTKEYS };
+    }
+    return normalizeHotkeyMap(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_GENERATOR_HOTKEYS };
+  }
+}
+
+function eventToHotkey(event) {
+  const key = String(event.key || "").toLowerCase();
+  if (!key || key === "control" || key === "shift" || key === "alt" || key === "meta") {
+    return "";
+  }
+
+  const normalizedKey = key === "escape" ? "esc" : key === " " ? "space" : key;
+  const parts = [];
+  if (event.ctrlKey) {
+    parts.push("ctrl");
+  }
+  if (event.altKey) {
+    parts.push("alt");
+  }
+  if (event.shiftKey) {
+    parts.push("shift");
+  }
+  parts.push(normalizedKey);
+  return parts.join("+");
+}
+
+function hotkeyHintText(hotkeys) {
+  const value = (key) => hotkeys[key] || "-";
+  return (
+    `Горячие клавиши: Следующее=${value("sk_cycle")}, ` +
+    `Закрыть=${value("sk_close")}, ` +
+    `Карта=${value("card")}, ` +
+    `Имя=${value("name")}, ` +
+    `Город=${value("city")}`
+  );
+}
+
 function statusClass(status) {
   return `status-${status}`;
+}
+
+function toLocalDateTime(value) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return String(value);
+  }
+
+  return parsed.toLocaleString();
+}
+
+function escapeCsvValue(value) {
+  const text = String(value ?? "");
+  if (text.includes('"') || text.includes(";") || text.includes("\n")) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
 }
 
 async function copyText(value) {
@@ -27,6 +167,114 @@ async function copyText(value) {
     return;
   }
   await navigator.clipboard.writeText(value);
+}
+
+function GeneratorPanel({
+  title,
+  data,
+  busy,
+  activeAction,
+  hotkeys,
+  onClose,
+  onGenerate,
+  onSettings,
+  onCopy
+}) {
+  return (
+    <div className="generator-overlay" onClick={onClose}>
+      <section className="generator-modal" onClick={(event) => event.stopPropagation()}>
+        <header className="generator-modal-header">
+          <h3>{title}</h3>
+          <button type="button" className="generator-close-btn" onClick={onClose} aria-label="Закрыть">
+            ×
+          </button>
+        </header>
+
+        <div className="generator-modal-body">
+          {GENERATOR_FIELDS.map((field) => (
+            <div className={`generator-field ${activeAction === field.action ? "active" : ""}`} key={field.action}>
+              <div className="generator-field-label">{field.label}</div>
+              <div className={`generator-field-input-row ${activeAction === field.action ? "highlight" : ""}`}>
+                <input value={data?.[field.dataKey] || ""} readOnly />
+                <button type="button" onClick={() => onCopy(field.action)}>
+                  Copy
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="generator-modal-actions">
+          <button type="button" className="primary-btn" onClick={onGenerate} disabled={busy}>
+            Сгенерировать
+          </button>
+          <button type="button" onClick={onSettings}>
+            Настройки
+          </button>
+        </div>
+
+        <div className="generator-hotkeys">
+          {hotkeyHintText(hotkeys)}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function HotkeySettingsModal({
+  draftHotkeys,
+  recordingHotkeyKey,
+  onClose,
+  onSave,
+  onReset,
+  onStartRecord,
+  onClearHotkey
+}) {
+  return (
+    <div className="hotkeys-overlay" onClick={onClose}>
+      <section className="hotkeys-modal" onClick={(event) => event.stopPropagation()}>
+        <header className="hotkeys-header">
+          <h3>Настройки горячих клавиш</h3>
+          <button type="button" className="hotkeys-close-btn" onClick={onClose} aria-label="Закрыть">
+            ×
+          </button>
+        </header>
+
+        <form className="hotkeys-form" onSubmit={onSave}>
+          {HOTKEY_FIELDS.map((field) => (
+            <label className="hotkeys-row" key={field.key}>
+              <span>{field.label}</span>
+              <div className="hotkeys-input-row">
+                <input value={draftHotkeys[field.key]} readOnly placeholder={DEFAULT_GENERATOR_HOTKEYS[field.key]} />
+                <button
+                  type="button"
+                  className={`hotkeys-record-btn ${recordingHotkeyKey === field.key ? "active" : ""}`}
+                  onClick={() => onStartRecord(field.key)}
+                >
+                  {recordingHotkeyKey === field.key ? "Нажмите..." : "Записать"}
+                </button>
+                <button type="button" onClick={() => onClearHotkey(field.key)}>
+                  Очистить
+                </button>
+              </div>
+            </label>
+          ))}
+
+          <div className="hotkeys-actions">
+            <button type="submit" className="primary-btn">
+              Сохранить
+            </button>
+            <button type="button" onClick={onReset}>
+              Сбросить
+            </button>
+            <button type="button" onClick={onClose}>
+              Закрыть
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
 }
 
 export default function Dashboard({ token, user, onLogout }) {
@@ -48,6 +296,18 @@ export default function Dashboard({ token, user, onLogout }) {
   const [skData, setSkData] = useState(null);
 
   const [busy, setBusy] = useState(false);
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [showInPanel, setShowInPanel] = useState(false);
+  const [showSkPanel, setShowSkPanel] = useState(false);
+  const [showGeneratorHotkeys, setShowGeneratorHotkeys] = useState(false);
+  const [generatorHotkeys, setGeneratorHotkeys] = useState(() => loadGeneratorHotkeys());
+  const [draftHotkeys, setDraftHotkeys] = useState(() => loadGeneratorHotkeys());
+  const [recordingHotkeyKey, setRecordingHotkeyKey] = useState(null);
+  const [skActiveAction, setSkActiveAction] = useState(null);
+  const [inActiveAction, setInActiveAction] = useState(null);
+  const [skCycleIndex, setSkCycleIndex] = useState(0);
+  const [inCycleIndex, setInCycleIndex] = useState(0);
+  const [pendingSkInitialCycle, setPendingSkInitialCycle] = useState(false);
 
   const selectedAccount = useMemo(
     () => accounts.find((item) => item.id === selectedAccountId) || null,
@@ -56,6 +316,34 @@ export default function Dashboard({ token, user, onLogout }) {
 
   const applyStatus = (message) => {
     setStatusMessage(message);
+  };
+
+  const getGeneratorData = (generatorType) => {
+    if (generatorType === "sk") {
+      return skData;
+    }
+    return inData;
+  };
+
+  const setGeneratorActiveAction = (generatorType, action) => {
+    if (generatorType === "sk") {
+      setSkActiveAction(action);
+      return;
+    }
+    setInActiveAction(action);
+  };
+
+  const closeSkGenerator = () => {
+    setShowSkPanel(false);
+    setPendingSkInitialCycle(false);
+    setSkCycleIndex(0);
+    setSkActiveAction(null);
+  };
+
+  const closeInGenerator = () => {
+    setShowInPanel(false);
+    setInCycleIndex(0);
+    setInActiveAction(null);
   };
 
   const withBusy = async (operation, loadingText = "Загрузка...") => {
@@ -102,6 +390,7 @@ export default function Dashboard({ token, user, onLogout }) {
     if (!selectedAccount) {
       return;
     }
+
     const inbox = await mailApi.messages(token, selectedAccount.id);
     setMessages(inbox);
 
@@ -124,7 +413,12 @@ export default function Dashboard({ token, user, onLogout }) {
       message.sender,
       message.subject
     );
-    setMessageDetail(detail);
+    setMessageDetail({
+      ...detail,
+      id: message.id,
+      sender: detail.sender || message.sender,
+      subject: detail.subject || message.subject
+    });
   };
 
   useEffect(() => {
@@ -141,11 +435,123 @@ export default function Dashboard({ token, user, onLogout }) {
     if (!selectedAccountId) {
       return;
     }
+
     withBusy(async () => {
       await connectSelected();
       await refreshMessages();
     }, "Подключение к почте...");
   }, [selectedAccountId]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      GENERATOR_HOTKEYS_STORAGE_KEY,
+      JSON.stringify(normalizeHotkeyMap(generatorHotkeys))
+    );
+  }, [generatorHotkeys]);
+
+  useEffect(() => {
+    if (!showGeneratorHotkeys || !recordingHotkeyKey) {
+      return;
+    }
+
+    const handleHotkeyCapture = (event) => {
+      const next = eventToHotkey(event);
+      if (!next) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setDraftHotkeys((prev) => ({ ...prev, [recordingHotkeyKey]: next }));
+      setRecordingHotkeyKey(null);
+      applyStatus(`Горячая клавиша назначена: ${recordingHotkeyKey} = ${next}`);
+    };
+
+    window.addEventListener("keydown", handleHotkeyCapture, true);
+    return () => window.removeEventListener("keydown", handleHotkeyCapture, true);
+  }, [showGeneratorHotkeys, recordingHotkeyKey]);
+
+  const copyGeneratorAction = async (generatorType, action) => {
+    const field = GENERATOR_FIELDS.find((item) => item.action === action);
+    if (!field) {
+      return;
+    }
+
+    const data = getGeneratorData(generatorType);
+    const value = data?.[field.dataKey] || "";
+    if (!value) {
+      return;
+    }
+    await copyText(value);
+    setGeneratorActiveAction(generatorType, action);
+    applyStatus(`Скопировано: ${generatorType} ${action}`);
+  };
+
+  const cycleGeneratorAction = (generatorType) => {
+    if (generatorType === "sk") {
+      const action = GENERATOR_CYCLE_ORDER[skCycleIndex % GENERATOR_CYCLE_ORDER.length];
+      void copyGeneratorAction("sk", action);
+      setSkCycleIndex((prev) => (prev + 1) % GENERATOR_CYCLE_ORDER.length);
+      return;
+    }
+
+    const action = GENERATOR_CYCLE_ORDER[inCycleIndex % GENERATOR_CYCLE_ORDER.length];
+    void copyGeneratorAction("in", action);
+    setInCycleIndex((prev) => (prev + 1) % GENERATOR_CYCLE_ORDER.length);
+  };
+
+  useEffect(() => {
+    if ((!showSkPanel && !showInPanel) || showGeneratorHotkeys) {
+      return;
+    }
+
+    const handleKeydown = (event) => {
+      const pressed = eventToHotkey(event);
+      if (!pressed) {
+        return;
+      }
+
+      const activeGenerator = showSkPanel ? "sk" : "in";
+      let handled = false;
+
+      if (pressed === generatorHotkeys.sk_close) {
+        if (activeGenerator === "sk") {
+          closeSkGenerator();
+        } else {
+          closeInGenerator();
+        }
+        handled = true;
+      } else if (pressed === generatorHotkeys.sk_cycle) {
+        cycleGeneratorAction(activeGenerator);
+        handled = true;
+      } else {
+        for (const action of GENERATOR_CYCLE_ORDER) {
+          if (pressed === generatorHotkeys[action]) {
+            void copyGeneratorAction(activeGenerator, action);
+            handled = true;
+            break;
+          }
+        }
+      }
+
+      if (handled) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  }, [showSkPanel, showInPanel, showGeneratorHotkeys, generatorHotkeys, skCycleIndex, inCycleIndex, skData, inData]);
+
+  useEffect(() => {
+    if (!showSkPanel || !pendingSkInitialCycle || !skData) {
+      return;
+    }
+
+    void copyGeneratorAction("sk", "card");
+    setSkCycleIndex(1 % GENERATOR_CYCLE_ORDER.length);
+    setPendingSkInitialCycle(false);
+  }, [showSkPanel, pendingSkInitialCycle, skData]);
 
   const createMailTm = () =>
     withBusy(async () => {
@@ -181,7 +587,52 @@ export default function Dashboard({ token, user, onLogout }) {
         `Импорт: добавлено ${result.added}, дубли ${result.duplicates}, пропущено ${result.skipped}`
       );
       setImportText("");
+      setShowImportPanel(false);
     }, "Импорт аккаунтов...");
+
+  const refreshAccounts = () =>
+    withBusy(async () => {
+      await loadAccounts(selectedAccountId);
+      applyStatus("Список аккаунтов обновлен");
+    }, "Обновление списка аккаунтов...");
+
+  const exportAccountsForExcel = () => {
+    if (!accounts.length) {
+      applyStatus("Нет аккаунтов для экспорта");
+      return;
+    }
+
+    const lines = ["email;password_openai;password_mail;status"];
+    for (const account of accounts) {
+      lines.push(
+        [
+          escapeCsvValue(account.email),
+          escapeCsvValue(account.password_openai),
+          escapeCsvValue(account.password_mail),
+          escapeCsvValue(account.status)
+        ].join(";")
+      );
+    }
+
+    const csvText = lines.join("\n");
+    const blob = new Blob([`\uFEFF${csvText}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
+      now.getDate()
+    ).padStart(2, "0")}`;
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `accounts_${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    applyStatus("Экспорт в CSV для Excel завершен");
+  };
 
   const setSelectedStatus = (status) => {
     if (!selectedAccount) {
@@ -219,7 +670,7 @@ export default function Dashboard({ token, user, onLogout }) {
     withBusy(async () => {
       const result = await mailApi.banCheckOne(token, selectedAccount.id);
       await loadAccounts(selectedAccount.id);
-      applyStatus(`Ban check: ${result.result}`);
+      applyStatus(`Проверка: ${result.result}`);
     }, "Проверка аккаунта...");
   };
 
@@ -256,6 +707,67 @@ export default function Dashboard({ token, user, onLogout }) {
       applyStatus("SK-генератор обновлен");
     }, "Генерация SK данных...");
 
+  const openGeneratorHotkeys = () => {
+    setDraftHotkeys(generatorHotkeys);
+    setRecordingHotkeyKey(null);
+    setShowGeneratorHotkeys(true);
+  };
+
+  const closeGeneratorHotkeys = () => {
+    setRecordingHotkeyKey(null);
+    setShowGeneratorHotkeys(false);
+  };
+
+  const toggleHotkeyRecord = (key) => {
+    setRecordingHotkeyKey((prev) => (prev === key ? null : key));
+  };
+
+  const clearDraftHotkey = (key) => {
+    setDraftHotkeys((prev) => ({ ...prev, [key]: "" }));
+    if (recordingHotkeyKey === key) {
+      setRecordingHotkeyKey(null);
+    }
+  };
+
+  const saveGeneratorHotkeys = (event) => {
+    event.preventDefault();
+    const normalized = normalizeHotkeyMap(draftHotkeys);
+    setGeneratorHotkeys(normalized);
+    setDraftHotkeys(normalized);
+    setRecordingHotkeyKey(null);
+    setShowGeneratorHotkeys(false);
+    applyStatus("Настройки горячих клавиш сохранены");
+  };
+
+  const resetGeneratorHotkeys = () => {
+    const defaults = { ...DEFAULT_GENERATOR_HOTKEYS };
+    setDraftHotkeys(defaults);
+    setGeneratorHotkeys(defaults);
+    setRecordingHotkeyKey(null);
+    applyStatus("Горячие клавиши сброшены к значениям по умолчанию");
+  };
+
+  const openInGenerator = () => {
+    setShowSkPanel(false);
+    setShowInPanel(true);
+    setInCycleIndex(0);
+    setInActiveAction(null);
+    if (!inData) {
+      void regenerateIn();
+    }
+  };
+
+  const openSkGenerator = () => {
+    setShowInPanel(false);
+    setShowSkPanel(true);
+    setSkCycleIndex(0);
+    setSkActiveAction(null);
+    setPendingSkInitialCycle(true);
+    if (!skData) {
+      void regenerateSk();
+    }
+  };
+
   const copyAccountField = async (field) => {
     if (!selectedAccount) {
       return;
@@ -283,6 +795,14 @@ export default function Dashboard({ token, user, onLogout }) {
     applyStatus(`Скопировано: ${field}`);
   };
 
+  const copyGeneratorField = async (label, value) => {
+    if (!value) {
+      return;
+    }
+    await copyText(value);
+    applyStatus(`Скопировано: ${label}`);
+  };
+
   const copyCode = async () => {
     if (!messageDetail?.code) {
       return;
@@ -291,206 +811,326 @@ export default function Dashboard({ token, user, onLogout }) {
     applyStatus(`Код ${messageDetail.code} скопирован`);
   };
 
+  const handleMinesweeper = () => {
+    applyStatus("Сапер пока доступен только в desktop-версии");
+  };
+
   return (
-    <div className={`dashboard theme-${theme}`}>
-      <aside className="left-panel">
-        <div className="panel-header">
-          <div>
-            <h2>Mail.tm</h2>
-            <p>{user.username}</p>
+    <div className={`dashboard-shell theme-${theme}`}>
+      <div className="dashboard-window">
+        <aside className="left-panel">
+          <div className="brand-strip">
+            <h1 className="brand-title">
+              <span>Mail.</span>tm
+            </h1>
+            <div className="brand-actions">
+              <button
+                type="button"
+                className="icon-btn"
+                title="Переключить тему"
+                onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+              >
+                Т
+              </button>
+              <button type="button" className="icon-btn" title="Выйти" onClick={onLogout}>
+                В
+              </button>
+            </div>
           </div>
-          <div className="header-actions">
-            <button type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>Тема</button>
-            <button type="button" onClick={onLogout}>Выход</button>
-          </div>
-        </div>
+          <div className="user-caption">{user.username}</div>
 
-        <div className="button-row">
-          <button type="button" onClick={createMailTm} disabled={busy}>+ Создать mail.tm</button>
-          <button type="button" onClick={banCheckAll} disabled={busy}>Ban чек всех</button>
-        </div>
-
-        <h3 className="section-title">Почты</h3>
-
-        <div className="account-list">
-          {accounts.map((account) => (
-            <button
-              key={account.id}
-              type="button"
-              className={`account-item ${statusClass(account.status)} ${
-                account.id === selectedAccountId ? "active" : ""
-              }`}
-              onClick={() => setSelectedAccountId(account.id)}
-            >
-              <span>{account.email}</span>
-              <small>{STATUS_LABELS[account.status] || account.status}</small>
-            </button>
-          ))}
-        </div>
-
-        <details className="tools-panel" open>
-          <summary>Управление аккаунтами</summary>
-          <form className="manual-form" onSubmit={addManualAccount}>
-            <input
-              placeholder="email"
-              value={manualEmail}
-              onChange={(event) => setManualEmail(event.target.value)}
-              required
-            />
-            <input
-              placeholder="пароль openai"
-              value={manualPasswordOpenai}
-              onChange={(event) => setManualPasswordOpenai(event.target.value)}
-              required
-            />
-            <input
-              placeholder="пароль почты (опц.)"
-              value={manualPasswordMail}
-              onChange={(event) => setManualPasswordMail(event.target.value)}
-            />
-            <button type="submit" disabled={busy}>Добавить вручную</button>
-          </form>
-
-          <textarea
-            className="import-textarea"
-            placeholder="Вставьте аккаунты: email / pass;pass / status"
-            value={importText}
-            onChange={(event) => setImportText(event.target.value)}
-          />
-          <button type="button" onClick={importAccounts} disabled={busy || !importText.trim()}>
-            Импорт из текста
+          <button type="button" className="primary-btn create-btn" onClick={createMailTm} disabled={busy}>
+            + Создать аккаунт
           </button>
-        </details>
 
-        <div className="button-grid">
-          <button type="button" onClick={() => copyAccountField("email")} disabled={!selectedAccount}>Copy email</button>
-          <button type="button" onClick={() => copyAccountField("openai")} disabled={!selectedAccount}>Copy openai</button>
-          <button type="button" onClick={() => copyAccountField("mail")} disabled={!selectedAccount}>Copy mail</button>
-          <button type="button" onClick={() => copyAccountField("full")} disabled={!selectedAccount}>Copy full</button>
-        </div>
+          <section className="side-section accounts-section">
+            <div className="section-caption">АККАУНТЫ</div>
 
-        <div className="button-grid status-grid">
-          {STATUS_OPTIONS.map((status) => (
-            <button
-              type="button"
-              key={status}
-              onClick={() => setSelectedStatus(status)}
-              disabled={!selectedAccount || busy}
-            >
-              {STATUS_LABELS[status]}
+            <div className="mini-controls">
+              <button type="button" onClick={refreshAccounts} disabled={busy}>
+                Обновить
+              </button>
+              <button
+                type="button"
+                className={showImportPanel ? "active" : ""}
+                onClick={() => setShowImportPanel((prev) => !prev)}
+                disabled={busy}
+              >
+                Файл
+              </button>
+              <button type="button" onClick={exportAccountsForExcel} disabled={busy}>
+                Excel
+              </button>
+              <button type="button" className="danger-btn" onClick={banCheckAll} disabled={busy}>
+                Бан
+              </button>
+            </div>
+
+            {showImportPanel ? (
+              <div className="import-panel">
+                <form className="manual-form" onSubmit={addManualAccount}>
+                  <input
+                    placeholder="email"
+                    value={manualEmail}
+                    onChange={(event) => setManualEmail(event.target.value)}
+                    required
+                  />
+                  <input
+                    placeholder="пароль openai"
+                    value={manualPasswordOpenai}
+                    onChange={(event) => setManualPasswordOpenai(event.target.value)}
+                    required
+                  />
+                  <input
+                    placeholder="пароль почты (опц.)"
+                    value={manualPasswordMail}
+                    onChange={(event) => setManualPasswordMail(event.target.value)}
+                  />
+                  <button type="submit" disabled={busy}>
+                    Добавить
+                  </button>
+                </form>
+
+                <textarea
+                  className="import-textarea"
+                  placeholder="Вставьте аккаунты: email / pass;pass / status"
+                  value={importText}
+                  onChange={(event) => setImportText(event.target.value)}
+                />
+
+                <div className="import-actions">
+                  <button type="button" onClick={importAccounts} disabled={busy || !importText.trim()}>
+                    Импорт
+                  </button>
+                  <button type="button" onClick={() => setShowImportPanel(false)} disabled={busy}>
+                    Закрыть
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="account-list">
+              {accounts.map((account) => (
+                <button
+                  key={account.id}
+                  type="button"
+                  className={`account-item ${statusClass(account.status)} ${
+                    account.id === selectedAccountId ? "active" : ""
+                  }`}
+                  onClick={() => setSelectedAccountId(account.id)}
+                >
+                  <span className="account-email">{account.email}</span>
+                  <small>{STATUS_LABELS[account.status] || account.status}</small>
+                </button>
+              ))}
+
+              {!accounts.length ? <div className="empty-list">Аккаунтов пока нет</div> : null}
+            </div>
+          </section>
+
+          <section className="side-section">
+            <div className="section-caption">ДЕЙСТВИЯ</div>
+
+            <div className="actions-grid">
+              <button type="button" onClick={() => copyAccountField("email")} disabled={!selectedAccount}>
+                Email
+              </button>
+              <button type="button" onClick={() => copyAccountField("openai")} disabled={!selectedAccount}>
+                OpenAI
+              </button>
+              <button type="button" onClick={() => copyAccountField("mail")} disabled={!selectedAccount}>
+                Почта
+              </button>
+              <button
+                type="button"
+                className={showSkPanel ? "active" : ""}
+                onClick={openSkGenerator}
+              >
+                SK
+              </button>
+              <button
+                type="button"
+                className={showInPanel ? "active" : ""}
+                onClick={openInGenerator}
+              >
+                IN
+              </button>
+              <button type="button" onClick={handleMinesweeper}>
+                Сапёр
+              </button>
+              <button type="button" onClick={openGeneratorHotkeys}>
+                Настройки
+              </button>
+            </div>
+
+            <div className="utility-row">
+              <button type="button" onClick={banCheckOne} disabled={!selectedAccount || busy}>
+                Бан 1
+              </button>
+              <button type="button" onClick={deleteSelectedAccount} disabled={!selectedAccount || busy}>
+                Удалить
+              </button>
+              <button type="button" onClick={() => copyAccountField("full")} disabled={!selectedAccount}>
+                Full
+              </button>
+            </div>
+          </section>
+
+          <section className="side-section generator-section">
+            <div className="section-caption">ГЕНЕРАТОР</div>
+
+            <div className="generator-row">
+              <span>Name</span>
+              <code>{randomPerson.name || "-"}</code>
+              <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)}>
+                Копировать
+              </button>
+            </div>
+
+            <div className="generator-row">
+              <span>Дата</span>
+              <code>{randomPerson.birthdate || "-"}</code>
+              <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)}>
+                Копировать
+              </button>
+            </div>
+
+            <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy}>
+              Новые данные
             </button>
-          ))}
-        </div>
+          </section>
 
-        <div className="button-row">
-          <button type="button" onClick={banCheckOne} disabled={!selectedAccount || busy}>Ban чек</button>
-          <button type="button" onClick={deleteSelectedAccount} disabled={!selectedAccount || busy}>Удалить</button>
-        </div>
+          <div className="side-footer">Сгенерировано: {randomPerson.name || "-"}</div>
+        </aside>
 
-        <section className="generator-block">
-          <h3>Random person</h3>
-          <div className="kv-row">
-            <span>Name</span>
-            <code>{randomPerson.name}</code>
-            <button type="button" onClick={() => copyText(randomPerson.name)}>Copy</button>
-          </div>
-          <div className="kv-row">
-            <span>Birthdate</span>
-            <code>{randomPerson.birthdate}</code>
-            <button type="button" onClick={() => copyText(randomPerson.birthdate)}>Copy</button>
-          </div>
-          <button type="button" onClick={regenerateRandomPerson}>Обновить</button>
-        </section>
+        <main className="right-panel">
+          <header className="top-toolbar">
+            <h2>{selectedAccount ? selectedAccount.email : "Выберите аккаунт слева"}</h2>
 
-        <section className="generator-block compact">
-          <h3>IN Generator</h3>
-          {inData ? (
-            <>
-              <div className="mini-grid">
-                <button type="button" onClick={() => copyText(inData.card)}>Card</button>
-                <button type="button" onClick={() => copyText(inData.exp)}>Exp</button>
-                <button type="button" onClick={() => copyText(inData.cvv)}>CVV</button>
-                <button type="button" onClick={() => copyText(inData.name)}>Name</button>
-                <button type="button" onClick={() => copyText(inData.city)}>City</button>
-                <button type="button" onClick={() => copyText(inData.postcode)}>Postcode</button>
+            <div className="toolbar-controls">
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={manualRefresh}
+                disabled={!selectedAccount || busy}
+              >
+                Обновить
+              </button>
+
+              <div className="status-switch">
+                {STATUS_OPTIONS.map((status) => (
+                  <button
+                    type="button"
+                    key={status}
+                    className={`status-chip ${statusClass(status)} ${
+                      selectedAccount?.status === status ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedStatus(status)}
+                    disabled={!selectedAccount || busy}
+                    title={STATUS_LABELS[status]}
+                  >
+                    {STATUS_SHORT_LABELS[status]}
+                  </button>
+                ))}
               </div>
-              <button type="button" onClick={regenerateIn}>Новые IN данные</button>
-            </>
-          ) : null}
-        </section>
+            </div>
+          </header>
 
-        <section className="generator-block compact">
-          <h3>SK Generator</h3>
-          {skData ? (
-            <>
-              <div className="mini-grid">
-                <button type="button" onClick={() => copyText(skData.card)}>Card</button>
-                <button type="button" onClick={() => copyText(skData.exp)}>Exp</button>
-                <button type="button" onClick={() => copyText(skData.cvv)}>CVV</button>
-                <button type="button" onClick={() => copyText(skData.name)}>Name</button>
-                <button type="button" onClick={() => copyText(skData.city)}>City</button>
-                <button type="button" onClick={() => copyText(skData.postcode)}>Postcode</button>
-              </div>
-              <button type="button" onClick={regenerateSk}>Новые SK данные</button>
-            </>
-          ) : null}
-        </section>
-      </aside>
-
-      <main className="right-panel">
-        <header className="mail-header">
-          <div>
-            <h2>{selectedAccount ? selectedAccount.email : "Выберите аккаунт"}</h2>
-            <p>{selectedAccount ? `Статус: ${STATUS_LABELS[selectedAccount.status]}` : ""}</p>
-          </div>
-          <button type="button" onClick={manualRefresh} disabled={!selectedAccount || busy}>Обновить inbox</button>
-        </header>
-
-        <h3 className="section-title right">Письма с почты</h3>
-
-        <div className="mail-grid">
-          <section className="message-list">
-            <table>
+          <section className="panel-card inbox-card">
+            <table className="message-table">
               <thead>
                 <tr>
-                  <th>От</th>
+                  <th>От кого</th>
                   <th>Тема</th>
                   <th>Время</th>
                 </tr>
               </thead>
               <tbody>
                 {messages.map((message) => (
-                  <tr key={message.id} onClick={() => openMessage(message)}>
+                  <tr
+                    key={message.id}
+                    className={messageDetail?.id === message.id ? "active" : ""}
+                    onClick={() => openMessage(message)}
+                  >
                     <td>{message.sender}</td>
                     <td>{message.subject}</td>
-                    <td>{message.created_at}</td>
+                    <td>{toLocalDateTime(message.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {!messages.length ? <div className="empty-state">Писем пока нет</div> : null}
+
+            {!messages.length ? <div className="empty-list">Писем пока нет</div> : null}
           </section>
 
-          <section className="message-viewer">
-            {messageDetail ? (
-              <>
-                <div className="message-meta">
-                  <p><strong>От:</strong> {messageDetail.sender}</p>
-                  <p><strong>Тема:</strong> {messageDetail.subject}</p>
-                  {messageDetail.code ? (
-                    <button type="button" onClick={copyCode}>
-                      Скопировать код {messageDetail.code}
-                    </button>
-                  ) : null}
-                </div>
-                <pre>{messageDetail.text}</pre>
-              </>
-            ) : (
-              <div className="empty-state">Выберите письмо для просмотра</div>
-            )}
+          <section className="panel-card viewer-card">
+            <div className="viewer-head">
+              <h3>Содержание письма</h3>
+              {messageDetail?.code ? (
+                <button type="button" onClick={copyCode}>
+                  Копировать код {messageDetail.code}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="viewer-content">
+              {messageDetail ? (
+                <>
+                  <p>
+                    <strong>От:</strong> {messageDetail.sender}
+                  </p>
+                  <p>
+                    <strong>Тема:</strong> {messageDetail.subject}
+                  </p>
+                  <pre>{messageDetail.text}</pre>
+                </>
+              ) : (
+                <p className="placeholder-text">Выберите письмо, чтобы увидеть содержимое.</p>
+              )}
+            </div>
           </section>
-        </div>
-      </main>
+        </main>
+      </div>
+
+      {showSkPanel ? (
+        <GeneratorPanel
+          title="South Korea Data Generator"
+          data={skData}
+          busy={busy}
+          activeAction={skActiveAction}
+          hotkeys={generatorHotkeys}
+          onClose={closeSkGenerator}
+          onGenerate={regenerateSk}
+          onSettings={openGeneratorHotkeys}
+          onCopy={(action) => copyGeneratorAction("sk", action)}
+        />
+      ) : null}
+
+      {showInPanel ? (
+        <GeneratorPanel
+          title="India Data Generator"
+          data={inData}
+          busy={busy}
+          activeAction={inActiveAction}
+          hotkeys={generatorHotkeys}
+          onClose={closeInGenerator}
+          onGenerate={regenerateIn}
+          onSettings={openGeneratorHotkeys}
+          onCopy={(action) => copyGeneratorAction("in", action)}
+        />
+      ) : null}
+
+      {showGeneratorHotkeys ? (
+        <HotkeySettingsModal
+          draftHotkeys={draftHotkeys}
+          recordingHotkeyKey={recordingHotkeyKey}
+          onClose={closeGeneratorHotkeys}
+          onSave={saveGeneratorHotkeys}
+          onReset={resetGeneratorHotkeys}
+          onStartRecord={toggleHotkeyRecord}
+          onClearHotkey={clearDraftHotkey}
+        />
+      ) : null}
 
       <footer className="status-bar">{statusMessage}</footer>
     </div>

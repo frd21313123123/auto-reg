@@ -6,6 +6,7 @@ VALID_ACCOUNT_STATUSES = {
     "not_registered",
     "registered",
     "plus",
+    "busnis",
     "banned",
     "invalid_password",
 }
