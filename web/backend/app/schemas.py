@@ -2,14 +2,28 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-VALID_ACCOUNT_STATUSES = {
+CANONICAL_ACCOUNT_STATUSES = {
     "not_registered",
     "registered",
     "plus",
-    "busnis",
+    "business",
     "banned",
     "invalid_password",
 }
+
+ACCOUNT_STATUS_ALIASES = {
+    "busnis": "business",
+}
+
+VALID_ACCOUNT_STATUSES = CANONICAL_ACCOUNT_STATUSES | set(ACCOUNT_STATUS_ALIASES.keys())
+
+
+def normalize_account_status(value: str) -> str:
+    status = value.strip().lower()
+    status = ACCOUNT_STATUS_ALIASES.get(status, status)
+    if status not in CANONICAL_ACCOUNT_STATUSES:
+        raise ValueError("invalid status")
+    return status
 
 
 class UserCreate(BaseModel):
@@ -52,10 +66,7 @@ class AccountCreate(BaseModel):
     @field_validator("status")
     @classmethod
     def _validate_status(cls, value: str) -> str:
-        status = value.strip()
-        if status not in VALID_ACCOUNT_STATUSES:
-            raise ValueError("invalid status")
-        return status
+        return normalize_account_status(value)
 
 
 class AccountUpdateStatus(BaseModel):
@@ -64,10 +75,7 @@ class AccountUpdateStatus(BaseModel):
     @field_validator("status")
     @classmethod
     def _validate_status(cls, value: str) -> str:
-        status = value.strip()
-        if status not in VALID_ACCOUNT_STATUSES:
-            raise ValueError("invalid status")
-        return status
+        return normalize_account_status(value)
 
 
 class AccountOut(BaseModel):

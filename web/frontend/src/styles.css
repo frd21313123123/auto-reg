@@ -336,19 +336,6 @@ textarea {
   font-size: 13px;
 }
 
-.import-panel {
-  display: grid;
-  gap: 8px;
-  border: 1px solid var(--border);
-  background: #edf2fa;
-  padding: 8px;
-}
-
-.manual-form {
-  display: grid;
-  gap: 6px;
-}
-
 .import-textarea {
   min-height: 74px;
 }
@@ -374,16 +361,49 @@ textarea {
 }
 
 .account-item {
+  position: relative;
   text-align: left;
   display: grid;
   gap: 2px;
+  min-height: 54px;
+  padding: 9px 42px 9px 10px;
+  border-radius: 8px;
   border: 1px solid transparent;
   background: var(--surface-soft);
+  overflow: hidden;
+  transition:
+    transform 0.16s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.account-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+  transition: opacity 0.22s ease;
+}
+
+.account-item:hover {
+  transform: translateY(-1px);
+}
+
+.account-item:hover::before {
+  opacity: 1;
 }
 
 .account-item.active {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.account-item-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
 .account-email {
@@ -396,6 +416,71 @@ textarea {
 .account-item small {
   font-size: 11px;
   color: #556171;
+}
+
+.account-mail-delete {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  font-size: 18px;
+  font-weight: 700;
+  color: #8f3f52;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(202, 70, 98, 0.3);
+  box-shadow: 0 2px 6px rgba(133, 40, 64, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  transform: translateY(-50%) scale(0.76) rotate(-90deg);
+  transform-origin: center;
+  transition:
+    opacity 0.2s ease,
+    transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1.15),
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.22s ease;
+}
+
+.account-item:hover .account-mail-delete,
+.account-item:focus-visible .account-mail-delete,
+.account-item.active .account-mail-delete {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1) rotate(0deg);
+}
+
+.account-mail-delete:hover {
+  color: #ffffff;
+  background: #e14a6e;
+  border-color: #e14a6e;
+  box-shadow:
+    0 0 0 4px rgba(225, 74, 110, 0.16),
+    0 6px 14px rgba(168, 30, 62, 0.32);
+  animation: mailboxDeletePulse 0.68s ease-out;
+}
+
+.account-mail-delete:active {
+  transform: translateY(-50%) scale(0.88) rotate(0deg);
+}
+
+@keyframes mailboxDeletePulse {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(225, 74, 110, 0.34),
+      0 6px 14px rgba(168, 30, 62, 0.32);
+  }
+  100% {
+    box-shadow:
+      0 0 0 10px rgba(225, 74, 110, 0),
+      0 6px 14px rgba(168, 30, 62, 0.3);
+  }
 }
 
 .empty-list {
@@ -899,6 +984,33 @@ textarea {
   background: rgba(255, 255, 255, 0.14);
 }
 
+.import-accounts-window {
+  min-width: 420px;
+  min-height: 240px;
+  resize: none;
+}
+
+.import-accounts-window-body {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 10px;
+  padding: 10px;
+  overflow: auto;
+}
+
+.import-window-textarea {
+  width: 100%;
+  min-height: 180px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  resize: none;
+}
+
+.import-window-actions {
+  gap: 8px;
+}
+
 .accounts-data-copy-row {
   position: sticky;
   top: 0;
@@ -1196,6 +1308,7 @@ textarea {
   background: #cdeecf;
 }
 
+.status-business,
 .status-busnis {
   background: #cfe4ff;
 }
@@ -1371,6 +1484,7 @@ textarea {
   background: rgba(80, 200, 160, 0.1);
 }
 
+.theme-dark .status-business,
 .theme-dark .status-busnis {
   background: rgba(80, 150, 255, 0.12);
 }
@@ -1635,7 +1749,8 @@ textarea {
 }
 
 .mobile-shell .account-item {
-  padding: 10px 12px;
+  min-height: 58px;
+  padding: 10px 46px 10px 12px;
   border-radius: 8px;
 }
 
@@ -1645,6 +1760,20 @@ textarea {
 
 .mobile-shell .account-item small {
   font-size: 12px;
+}
+
+.mobile-shell .account-item:hover {
+  transform: none;
+}
+
+.mobile-shell .account-mail-delete {
+  opacity: 1;
+  pointer-events: auto;
+  width: 28px;
+  height: 28px;
+  right: 10px;
+  font-size: 19px;
+  transform: translateY(-50%) scale(1) rotate(0deg);
 }
 
 .mobile-shell .create-btn {
@@ -1680,22 +1809,6 @@ textarea {
 .mobile-shell .utility-row button {
   padding: 10px 4px;
   font-size: 12px;
-  border-radius: 8px;
-}
-
-.mobile-shell .import-panel {
-  border-radius: 10px;
-}
-
-.mobile-shell .import-panel input,
-.mobile-shell .import-panel textarea {
-  font-size: 15px;
-  padding: 10px 12px;
-  border-radius: 8px;
-}
-
-.mobile-shell .import-panel button {
-  padding: 10px 8px;
   border-radius: 8px;
 }
 
@@ -2032,6 +2145,17 @@ textarea {
   resize: none;
 }
 
+.mobile-shell .import-accounts-window-body {
+  grid-template-rows: 1fr auto;
+  padding: 12px;
+}
+
+.mobile-shell .import-window-textarea {
+  min-height: 220px;
+  font-size: 14px;
+  padding: 10px 12px;
+}
+
 .mobile-shell .accounts-data-window-header {
   cursor: default;
 }
@@ -2283,7 +2407,6 @@ textarea {
   background: transparent;
 }
 
-.theme-dark .import-panel,
 .theme-dark .quick-data-box {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: transparent;
@@ -2307,6 +2430,21 @@ textarea {
   box-shadow:
     inset 0 0 0 1px rgba(125, 172, 255, 0.5),
     0 4px 12px rgba(18, 36, 66, 0.3);
+}
+
+.theme-dark .account-mail-delete {
+  color: #f2a4b8;
+  background: rgba(38, 26, 36, 0.72);
+  border-color: rgba(237, 114, 150, 0.38);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.theme-dark .account-mail-delete:hover {
+  background: #de4a70;
+  border-color: #f07196;
+  box-shadow:
+    0 0 0 4px rgba(222, 74, 112, 0.2),
+    0 8px 16px rgba(123, 24, 53, 0.35);
 }
 
 .theme-dark button {
@@ -2510,4 +2648,263 @@ textarea {
 
 .theme-dark .left-panel.is-dragging {
   box-shadow: 0 24px 42px rgba(1, 8, 18, 0.62);
+}
+
+/* =============================================
+   APPLE LIQUID GLASS (PDF parity)
+   ============================================= */
+
+:root {
+  color-scheme: light dark;
+  --glass-radius: 18px;
+  --glass-blur: 16px;
+  --glass-saturate: 160%;
+  --glass-brightness: 115%;
+  --glass-bg: rgb(255 255 255 / 0.14);
+  --glass-border-color: rgb(255 255 255 / 0.28);
+  --glass-shadow: 0 10px 35px rgb(0 0 0 / 0.14);
+  --glass-scrim: rgb(0 0 0 / 0.1);
+  --glass-highlight-top: rgb(255 255 255 / 0.25);
+  --glass-highlight-side: rgb(255 255 255 / 0.14);
+}
+
+.theme-dark {
+  --glass-bg: rgb(12 22 38 / 0.46);
+  --glass-border-color: rgb(154 182 224 / 0.24);
+  --glass-shadow: 0 14px 40px rgb(0 0 0 / 0.44);
+  --glass-scrim: rgb(0 0 0 / 0.2);
+  --glass-highlight-top: rgb(255 255 255 / 0.12);
+  --glass-highlight-side: rgb(255 255 255 / 0.08);
+}
+
+.auth-card,
+.left-panel,
+.top-toolbar,
+.panel-card,
+.generator-modal,
+.hotkeys-modal,
+.accounts-data-window,
+.mobile-header,
+.mobile-status-bar,
+.mobile-bottom-nav,
+.mobile-tool-card,
+.mobile-person-card {
+  position: relative;
+  isolation: isolate;
+  border-color: var(--glass-border-color);
+  background: var(--glass-bg);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight-top),
+    var(--glass-shadow);
+}
+
+.auth-card,
+.left-panel,
+.top-toolbar,
+.generator-modal,
+.hotkeys-modal,
+.accounts-data-window,
+.mobile-header,
+.mobile-status-bar,
+.mobile-bottom-nav,
+.mobile-tool-card,
+.mobile-person-card {
+  overflow: hidden;
+}
+
+.auth-card::before,
+.left-panel::before,
+.top-toolbar::before,
+.panel-card::before,
+.generator-modal::before,
+.hotkeys-modal::before,
+.accounts-data-window::before,
+.mobile-header::before,
+.mobile-status-bar::before,
+.mobile-bottom-nav::before,
+.mobile-tool-card::before,
+.mobile-person-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(0 0 0 / 0.08)),
+    radial-gradient(120% 80% at 10% 0%, var(--glass-highlight-top), transparent 60%),
+    radial-gradient(120% 80% at 90% 0%, var(--glass-highlight-side), transparent 55%),
+    linear-gradient(0deg, var(--glass-scrim), transparent 55%);
+}
+
+.auth-card > *,
+.left-panel > *,
+.top-toolbar > *,
+.panel-card > *,
+.generator-modal > *,
+.hotkeys-modal > *,
+.accounts-data-window > *,
+.mobile-header > *,
+.mobile-status-bar > *,
+.mobile-bottom-nav > *,
+.mobile-tool-card > *,
+.mobile-person-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-card,
+.top-toolbar,
+.panel-card,
+.generator-modal,
+.hotkeys-modal,
+.accounts-data-window,
+.mobile-tool-card,
+.mobile-person-card {
+  border-radius: var(--glass-radius);
+}
+
+.mobile-header,
+.mobile-status-bar,
+.mobile-bottom-nav {
+  border-radius: 0;
+}
+
+.generator-overlay,
+.hotkeys-overlay,
+.accounts-data-window-layer {
+  background: rgb(0 0 0 / 0.18);
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .has-backdrop .auth-card,
+  .has-backdrop .left-panel,
+  .has-backdrop .top-toolbar,
+  .has-backdrop .panel-card,
+  .has-backdrop .generator-modal,
+  .has-backdrop .hotkeys-modal,
+  .has-backdrop .accounts-data-window,
+  .has-backdrop .mobile-header,
+  .has-backdrop .mobile-status-bar,
+  .has-backdrop .mobile-bottom-nav,
+  .has-backdrop .mobile-tool-card,
+  .has-backdrop .mobile-person-card {
+    -webkit-backdrop-filter:
+      blur(var(--glass-blur))
+      saturate(var(--glass-saturate))
+      brightness(var(--glass-brightness));
+    backdrop-filter:
+      blur(var(--glass-blur))
+      saturate(var(--glass-saturate))
+      brightness(var(--glass-brightness));
+  }
+
+  .has-backdrop .generator-overlay,
+  .has-backdrop .hotkeys-overlay,
+  .has-backdrop .accounts-data-window-layer {
+    background: rgb(0 0 0 / 0.25);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    backdrop-filter: blur(10px) saturate(120%);
+  }
+}
+
+@supports (backdrop-filter: url("#liquidGlass")) {
+  .has-liquid .auth-card,
+  .has-liquid .top-toolbar,
+  .has-liquid .mobile-header {
+    backdrop-filter: url("#liquidGlass");
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-bg: rgb(255 255 255 / 0.88);
+    --glass-blur: 0px;
+    --glass-scrim: rgb(0 0 0 / 0);
+  }
+
+  .theme-dark {
+    --glass-bg: rgb(14 22 38 / 0.92);
+    --glass-scrim: rgb(0 0 0 / 0);
+  }
+
+  .generator-overlay,
+  .hotkeys-overlay,
+  .accounts-data-window-layer {
+    background: rgb(0 0 0 / 0.1);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --glass-border-color: rgb(0 0 0 / 0.28);
+    --glass-bg: rgb(255 255 255 / 0.94);
+  }
+
+  .theme-dark {
+    --glass-border-color: rgb(255 255 255 / 0.44);
+    --glass-bg: rgb(7 15 30 / 0.92);
+  }
+}
+
+/* =============================================
+   TRANSPARENT GLASS (requested)
+   ============================================= */
+
+:root {
+  --glass-bg: transparent;
+  --glass-shadow: none;
+  --glass-scrim: transparent;
+  --glass-highlight-top: transparent;
+  --glass-highlight-side: transparent;
+}
+
+.theme-dark {
+  --glass-bg: transparent;
+  --glass-shadow: none;
+  --glass-scrim: transparent;
+  --glass-highlight-top: transparent;
+  --glass-highlight-side: transparent;
+}
+
+.auth-card::before,
+.left-panel::before,
+.top-toolbar::before,
+.panel-card::before,
+.generator-modal::before,
+.hotkeys-modal::before,
+.accounts-data-window::before,
+.mobile-header::before,
+.mobile-status-bar::before,
+.mobile-bottom-nav::before,
+.mobile-tool-card::before,
+.mobile-person-card::before {
+  content: none;
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .has-backdrop .auth-card,
+  .has-backdrop .left-panel,
+  .has-backdrop .top-toolbar,
+  .has-backdrop .panel-card,
+  .has-backdrop .generator-modal,
+  .has-backdrop .hotkeys-modal,
+  .has-backdrop .accounts-data-window,
+  .has-backdrop .mobile-header,
+  .has-backdrop .mobile-status-bar,
+  .has-backdrop .mobile-bottom-nav,
+  .has-backdrop .mobile-tool-card,
+  .has-backdrop .mobile-person-card {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@supports (backdrop-filter: url("#liquidGlass")) {
+  .has-liquid .auth-card,
+  .has-liquid .top-toolbar,
+  .has-liquid .mobile-header {
+    backdrop-filter: none;
+  }
 }

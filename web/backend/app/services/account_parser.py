@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.schemas import VALID_ACCOUNT_STATUSES
+from app.schemas import normalize_account_status
 
 
 @dataclass(slots=True)
@@ -33,8 +33,11 @@ def parse_account_line(raw_line: str) -> ParsedAccount | None:
             else:
                 password_openai = passwords.strip()
                 password_mail = passwords.strip()
-            if len(parts) >= 3 and parts[2] in VALID_ACCOUNT_STATUSES:
-                status = parts[2]
+            if len(parts) >= 3:
+                try:
+                    status = normalize_account_status(parts[2])
+                except ValueError:
+                    pass
     elif ":" in line:
         email, passwords = [p.strip() for p in line.split(":", 1)]
         email = email.lower()
