@@ -310,36 +310,7 @@ export default function Dashboard({ token, user, onLogout }) {
           <button type="button" onClick={banCheckAll} disabled={busy}>Ban чек всех</button>
         </div>
 
-        <form className="manual-form" onSubmit={addManualAccount}>
-          <input
-            placeholder="email"
-            value={manualEmail}
-            onChange={(event) => setManualEmail(event.target.value)}
-            required
-          />
-          <input
-            placeholder="пароль openai"
-            value={manualPasswordOpenai}
-            onChange={(event) => setManualPasswordOpenai(event.target.value)}
-            required
-          />
-          <input
-            placeholder="пароль почты (опц.)"
-            value={manualPasswordMail}
-            onChange={(event) => setManualPasswordMail(event.target.value)}
-          />
-          <button type="submit" disabled={busy}>Добавить вручную</button>
-        </form>
-
-        <textarea
-          className="import-textarea"
-          placeholder="Вставьте аккаунты: email / pass;pass / status"
-          value={importText}
-          onChange={(event) => setImportText(event.target.value)}
-        />
-        <button type="button" onClick={importAccounts} disabled={busy || !importText.trim()}>
-          Импорт из текста
-        </button>
+        <h3 className="section-title">Почты</h3>
 
         <div className="account-list">
           {accounts.map((account) => (
@@ -356,6 +327,40 @@ export default function Dashboard({ token, user, onLogout }) {
             </button>
           ))}
         </div>
+
+        <details className="tools-panel" open>
+          <summary>Управление аккаунтами</summary>
+          <form className="manual-form" onSubmit={addManualAccount}>
+            <input
+              placeholder="email"
+              value={manualEmail}
+              onChange={(event) => setManualEmail(event.target.value)}
+              required
+            />
+            <input
+              placeholder="пароль openai"
+              value={manualPasswordOpenai}
+              onChange={(event) => setManualPasswordOpenai(event.target.value)}
+              required
+            />
+            <input
+              placeholder="пароль почты (опц.)"
+              value={manualPasswordMail}
+              onChange={(event) => setManualPasswordMail(event.target.value)}
+            />
+            <button type="submit" disabled={busy}>Добавить вручную</button>
+          </form>
+
+          <textarea
+            className="import-textarea"
+            placeholder="Вставьте аккаунты: email / pass;pass / status"
+            value={importText}
+            onChange={(event) => setImportText(event.target.value)}
+          />
+          <button type="button" onClick={importAccounts} disabled={busy || !importText.trim()}>
+            Импорт из текста
+          </button>
+        </details>
 
         <div className="button-grid">
           <button type="button" onClick={() => copyAccountField("email")} disabled={!selectedAccount}>Copy email</button>
@@ -440,6 +445,8 @@ export default function Dashboard({ token, user, onLogout }) {
           </div>
           <button type="button" onClick={manualRefresh} disabled={!selectedAccount || busy}>Обновить inbox</button>
         </header>
+
+        <h3 className="section-title right">Письма с почты</h3>
 
         <div className="mail-grid">
           <section className="message-list">
