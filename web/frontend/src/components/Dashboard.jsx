@@ -2430,6 +2430,14 @@ export default function Dashboard({ token, user, onLogout }) {
     applyStatus(`Код ${messageDetail.code} скопирован`);
   };
 
+  const closeMessageDetail = () => {
+    if (!messageDetail) {
+      return;
+    }
+    setMessageDetail(null);
+    applyStatus("Содержимое письма закрыто");
+  };
+
   const handleMinesweeper = () => {
     applyStatus("Сапер пока доступен только в desktop-версии");
   };
@@ -2643,11 +2651,16 @@ export default function Dashboard({ token, user, onLogout }) {
         <section className="panel-card viewer-card">
           <div className="viewer-head">
             <h3>Содержание письма</h3>
-            {messageDetail?.code ? (
-              <button type="button" onClick={copyCode} title="Копировать код">
-                {I.clipboard()} {messageDetail.code}
+            <div className="viewer-actions">
+              {messageDetail?.code ? (
+                <button type="button" onClick={copyCode} title="Копировать код">
+                  {I.clipboard()} {messageDetail.code}
+                </button>
+              ) : null}
+              <button type="button" onClick={closeMessageDetail} disabled={!messageDetail} title="Закрыть содержимое письма">
+                {I.close()}
               </button>
-            ) : null}
+            </div>
           </div>
 
           <div className="viewer-content">
