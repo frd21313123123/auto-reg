@@ -1340,6 +1340,12 @@ textarea {
   line-height: 1;
 }
 
+.viewer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .viewer-content {
   min-height: 0;
   padding: 10px;
@@ -2994,4 +3000,18 @@ textarea {
   .has-liquid .mobile-header {
     backdrop-filter: none;
   }
+}
+
+/* Keep window layers non-modal: no page blur/dim when opening multiple windows. */
+.generator-overlay,
+.hotkeys-overlay,
+.accounts-data-window-layer {
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.accounts-data-window {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
