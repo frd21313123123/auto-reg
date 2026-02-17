@@ -46,11 +46,11 @@ EXCEL_FILE = os.path.join(BASE_DIR, "accounts.xlsx")
 
 # --- ЦВЕТА СТАТУСОВ ---
 STATUS_COLORS = {
-    "not_registered": {"light": "#f7f8fa", "dark": "#17243f"},
-    "registered": {"light": "#dbeafe", "dark": "#1d3d6d"},
-    "plus": {"light": "#c6f6d5", "dark": "#1a5247"},
-    "banned": {"light": "#fed7d7", "dark": "#5b2530"},
-    "invalid_password": {"light": "#e9d5ff", "dark": "#3d355c"}
+    "not_registered": {"dark": "#17243f"},
+    "registered": {"dark": "#1d3d6d"},
+    "plus": {"dark": "#1a5247"},
+    "banned": {"dark": "#5b2530"},
+    "invalid_password": {"dark": "#3d355c"},
 }
 
 # --- ШРИФТЫ ---

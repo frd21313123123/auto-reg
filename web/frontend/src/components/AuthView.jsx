@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { authApi } from "../api";
+import ParallaxDotsBackground from "./ParallaxDotsBackground";
 
 export default function AuthView({ onAuthSuccess }) {
   const [mode, setMode] = useState("login");
@@ -42,7 +43,8 @@ export default function AuthView({ onAuthSuccess }) {
   };
 
   return (
-    <div className="auth-root">
+    <div className="auth-root auth-dark">
+      <ParallaxDotsBackground />
       <div className="auth-card">
         <h1>Auto-reg Web</h1>
         <p className="auth-subtitle">Браузерная версия Mail.tm инструмента</p>
@@ -72,6 +74,7 @@ export default function AuthView({ onAuthSuccess }) {
               onChange={(event) => setUsername(event.target.value)}
               minLength={3}
               required
+              autoComplete="username"
             />
           </label>
 
@@ -83,6 +86,7 @@ export default function AuthView({ onAuthSuccess }) {
               onChange={(event) => setPassword(event.target.value)}
               minLength={6}
               required
+              autoComplete={isRegister ? "new-password" : "current-password"}
             />
           </label>
 
@@ -95,13 +99,14 @@ export default function AuthView({ onAuthSuccess }) {
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 minLength={6}
                 required
+                autoComplete="new-password"
               />
             </label>
           ) : null}
 
           {error ? <div className="form-error">{error}</div> : null}
 
-          <button type="submit" disabled={busy}>
+          <button type="submit" className="auth-submit-btn" disabled={busy}>
             {busy ? "Подождите..." : isRegister ? "Создать аккаунт" : "Войти"}
           </button>
         </form>

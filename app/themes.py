@@ -1,37 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Темы оформления (светлая и темная) — modern flat design
+Темы оформления — modern flat design
 """
 
 THEMES = {
-    "light": {
-        "bg": "#f0f2f5",
-        "fg": "#1a1a2e",
-        "panel_bg": "#ffffff",
-        "header_bg": "#ffffff",
-        "section_bg": "#f7f8fa",
-        "entry_bg": "#f0f2f5",
-        "entry_fg": "#1a1a2e",
-        "list_bg": "#ffffff",
-        "list_fg": "#1a1a2e",
-        "text_bg": "#ffffff",
-        "text_fg": "#1a1a2e",
-        "btn_bg": "#e8edf3",
-        "btn_fg": "#2d3748",
-        "btn_hover": "#d0d8e4",
-        "status_bg": "#f0f2f5",
-        "status_fg": "#718096",
-        "accent": "#4f6df5",
-        "accent_hover": "#3b5bdb",
-        "accent_fg": "#ffffff",
-        "border": "#e2e8f0",
-        "separator": "#e2e8f0",
-        "success": "#38a169",
-        "danger": "#e53e3e",
-        "danger_hover": "#c53030",
-        "warning": "#ed8936",
-        "muted": "#a0aec0",
-    },
     "dark": {
         "bg": "#0b1020",
         "fg": "#eaf1ff",

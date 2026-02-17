@@ -136,11 +136,6 @@ export const mailApi = {
       token,
       query: { sender, subject }
     }),
-  banCheckOne: (token, accountId) =>
-    request(`/mail/accounts/${accountId}/ban-check`, {
-      method: "POST",
-      token
-    }),
   banCheckBulk: (token, accountIds = null) =>
     request(`/mail/ban-check/bulk`, {
       method: "POST",

@@ -37,7 +37,7 @@ from .config import (
     FONT_SECTION,
 )
 from .themes import THEMES
-from .widgets import HoverButton, AnimatedToggle, ThemedCheckbox, SectionLabel
+from .widgets import HoverButton, ThemedCheckbox, SectionLabel
 from .imap_client import IMAPClient
 from .sk_generator import show_sk_window
 from .in_generator import show_in_window
@@ -88,7 +88,7 @@ class MailApp:
         self.is_refreshing = False
         self.auto_refresh_job = None
         self.stop_threads = False
-        self.params = {"theme": "light"}
+        self.params = {"theme": "dark"}
         self.is_pinned = False
         self.accounts_window = None
         self.accounts_window_tree = None
@@ -118,7 +118,7 @@ class MailApp:
         print(f"[*] Используемый файл аккаунтов: {ACCOUNTS_FILE}")
 
         # Применяем тему
-        self.set_theme("light")
+        self.set_theme("dark")
 
         # Загружаем аккаунты
         self.load_accounts_from_file()
@@ -134,7 +134,7 @@ class MailApp:
 
     def _build_ui(self):
         """Построение всего интерфейса."""
-        colors = THEMES["light"]
+        colors = THEMES["dark"]
 
         # Основной контейнер
         self.root_container = tk.Frame(self.root, bg=colors["bg"])
@@ -211,7 +211,7 @@ class MailApp:
 
         row = 0
 
-        # ---- HEADER: Лого + Тема ----
+        # ---- HEADER: Лого ----
         self.left_header = tk.Frame(self.left_panel, bg=colors["panel_bg"])
         self.left_header.grid(row=row, column=0, sticky="ew", padx=self.PAD_X,
                               pady=(self.PAD_X, 4))
@@ -222,22 +222,6 @@ class MailApp:
             bg=colors["panel_bg"], fg=colors["accent"]
         )
         self.lbl_app_title.pack(side=tk.LEFT)
-
-        # Тема toggle (справа в header)
-        self.theme_frame = tk.Frame(self.left_header, bg=colors["panel_bg"])
-        self.theme_frame.pack(side=tk.RIGHT)
-
-        self.lbl_theme_icon = tk.Label(
-            self.theme_frame, text="☀", font=("Segoe UI", 11),
-            bg=colors["panel_bg"], fg=colors["muted"]
-        )
-        self.lbl_theme_icon.pack(side=tk.LEFT, padx=(0, 4))
-
-        self.theme_toggle = AnimatedToggle(
-            self.theme_frame, on_toggle=self.on_theme_toggle_click,
-            width=44, height=22, bg_on=colors["accent"], bg_off=colors["btn_bg"]
-        )
-        self.theme_toggle.pack(side=tk.LEFT)
 
         # Pin button
         self.btn_pin = HoverButton(
@@ -536,9 +520,9 @@ class MailApp:
 
         self.btn_nr = HoverButton(
             self.status_frame, text="Не рег", font=FONT_SMALL,
-            bg=STATUS_COLORS["not_registered"]["light"],
+            bg=STATUS_COLORS["not_registered"]["dark"],
             fg=colors["btn_fg"],
-            hover_bg="#e2e8f0",
+            hover_bg=colors["btn_hover"],
             command=lambda: self.set_account_status("not_registered"),
             padx=6, pady=3,
         )
@@ -546,9 +530,9 @@ class MailApp:
 
         self.btn_reg = HoverButton(
             self.status_frame, text="Рег", font=FONT_SMALL,
-            bg=STATUS_COLORS["registered"]["light"],
+            bg=STATUS_COLORS["registered"]["dark"],
             fg=colors["btn_fg"],
-            hover_bg="#bfdbfe",
+            hover_bg="#25558f",
             command=lambda: self.set_account_status("registered"),
             padx=6, pady=3,
         )
@@ -556,9 +540,9 @@ class MailApp:
 
         self.btn_plus = HoverButton(
             self.status_frame, text="Plus", font=FONT_SMALL,
-            bg=STATUS_COLORS["plus"]["light"],
+            bg=STATUS_COLORS["plus"]["dark"],
             fg=colors["btn_fg"],
-            hover_bg="#9ae6b4",
+            hover_bg="#236052",
             command=lambda: self.set_account_status("plus"),
             padx=6, pady=3,
         )
@@ -928,7 +912,7 @@ class MailApp:
         """Переключение режима 'Поверх всех окон'."""
         self.is_pinned = not self.is_pinned
         self.root.wm_attributes("-topmost", self.is_pinned)
-        colors = THEMES[self.params.get("theme", "light")]
+        colors = THEMES[self.params.get("theme", "dark")]
         if self.is_pinned:
             self.btn_pin.update_colors(
                 bg=colors["accent"], fg=colors["accent_fg"],
@@ -944,19 +928,19 @@ class MailApp:
         """Открыть окно настроек горячих клавиш."""
         def on_save(new_hotkeys):
             self.hotkey_settings.register_all()
-        theme_name = self.params.get("theme", "light")
+        theme_name = self.params.get("theme", "dark")
         show_settings_window(self.root, theme_name, on_save=on_save)
 
     def _show_sk_window(self):
-        theme_name = self.params.get("theme", "light")
+        theme_name = self.params.get("theme", "dark")
         show_sk_window(self.root, theme_name)
 
     def _show_in_window(self):
-        theme_name = self.params.get("theme", "light")
+        theme_name = self.params.get("theme", "dark")
         show_in_window(self.root, theme_name)
 
     def _show_minesweeper(self):
-        theme_name = self.params.get("theme", "light")
+        theme_name = self.params.get("theme", "dark")
         show_minesweeper(self.root, theme_name)
 
     def open_accounts_window(self):
@@ -1131,7 +1115,7 @@ class MailApp:
 
         tree.delete(*tree.get_children())
 
-        theme = self.params.get("theme", "light")
+        theme = self.params.get("theme", "dark")
         colors = THEMES[theme]
         for status_name, palette in STATUS_COLORS.items():
             tree.tag_configure(
@@ -1176,7 +1160,7 @@ class MailApp:
         if not self.accounts_window or not self.accounts_window.winfo_exists():
             return
 
-        colors = THEMES[self.params.get("theme", "light")]
+        colors = THEMES[self.params.get("theme", "dark")]
         self.accounts_window.config(bg=colors["bg"])
 
         if self.accounts_window_header:
@@ -1312,7 +1296,7 @@ class MailApp:
         y = self.root.winfo_y() + (self.root.winfo_height() - 200) // 2
         self.progress_window.geometry(f"+{x}+{y}")
 
-        theme = self.params.get("theme", "light")
+        theme = self.params.get("theme", "dark")
         colors = THEMES[theme]
         self.progress_window.config(bg=colors["panel_bg"])
 
@@ -1977,42 +1961,13 @@ class MailApp:
     #  THEME
     # ================================================================
 
-    def on_theme_toggle_click(self, is_on):
-        """Обработка переключения темы."""
-        self.set_theme("dark" if is_on else "light")
-
     def set_theme(self, theme_name):
         """Установка темы оформления."""
+        theme_name = "dark"
         self.params["theme"] = theme_name
-        colors = THEMES[theme_name]
+        colors = THEMES["dark"]
         accent_bg = colors["accent"]
         accent_fg = colors["accent_fg"]
-
-        # Theme toggle state
-        if hasattr(self, "theme_toggle"):
-            self.theme_toggle.config(bg=colors["panel_bg"])
-            if theme_name == "dark":
-                self.theme_toggle.update_colors(
-                    bg_on=colors["accent"], bg_off=colors["btn_bg"],
-                    handle_color=colors["entry_fg"],
-                    handle_outline=colors["border"],
-                    shadow_color=colors["bg"],
-                )
-            else:
-                self.theme_toggle.update_colors(
-                    bg_on=colors["accent"], bg_off="#cbd5e0",
-                    handle_color="#ffffff",
-                    handle_outline="#e2e8f0",
-                    shadow_color="#d4d4d4",
-                )
-            self.theme_toggle.set_state(theme_name == "dark")
-
-        # Theme icon
-        if hasattr(self, "lbl_theme_icon"):
-            self.lbl_theme_icon.config(
-                text="🌙" if theme_name == "dark" else "☀",
-                bg=colors["panel_bg"], fg=colors["muted"]
-            )
 
         # Root
         self.root.config(bg=colors["bg"])
@@ -2027,8 +1982,6 @@ class MailApp:
         # Left Panel
         self.left_panel.config(bg=colors["panel_bg"])
         self.left_header.config(bg=colors["panel_bg"])
-        if hasattr(self, "theme_frame"):
-            self.theme_frame.config(bg=colors["panel_bg"])
 
         # Pin button
         if hasattr(self, "btn_pin"):
@@ -2152,12 +2105,12 @@ class MailApp:
         self.btn_reg.update_colors(
             bg=STATUS_COLORS["registered"][theme_name],
             fg=status_btn_fg,
-            hover_bg="#bfdbfe" if theme_name == "light" else "#25558f",
+            hover_bg="#25558f",
         )
         self.btn_plus.update_colors(
             bg=STATUS_COLORS["plus"][theme_name],
             fg=status_btn_fg,
-            hover_bg="#9ae6b4" if theme_name == "light" else "#236052",
+            hover_bg="#236052",
         )
 
         # Text
@@ -2205,17 +2158,16 @@ class MailApp:
             lightcolor=colors["list_bg"],
             darkcolor=colors["list_bg"],
         )
-        heading_border = colors["separator"] if theme_name == "dark" else ""
         style.configure(
             "Mail.Treeview.Heading",
             background=colors["header_bg"],
             foreground=colors["fg"],
             relief="flat",
             font=FONT_SMALL,
-            borderwidth=1 if theme_name == "light" else 0,
+            borderwidth=0,
             padding=(8, 4),
             # Перекрашиваем все границы heading (clam рисует их белыми)
-            bordercolor=heading_border or colors["border"],
+            bordercolor=colors["separator"],
             lightcolor=colors["header_bg"],
             darkcolor=colors["header_bg"],
         )
@@ -2273,11 +2225,11 @@ class MailApp:
             self.update_status(f"Дизайн изменен: {selected}")
         except Exception as e:
             self.update_status(f"Ошибка смены дизайна: {e}")
-        self.set_theme(self.params.get("theme", "light"))
+        self.set_theme(self.params.get("theme", "dark"))
 
     def update_listbox_colors(self):
         """Обновление цветов списка аккаунтов."""
-        theme = self.params.get("theme", "light")
+        theme = self.params.get("theme", "dark")
         colors = THEMES[theme]
         for i in range(self.acc_listbox.size()):
             if i < len(self.accounts_data):

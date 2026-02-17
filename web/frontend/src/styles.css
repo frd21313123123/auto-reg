@@ -42,6 +42,15 @@ button {
   padding: 7px 10px;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+button svg {
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 button:hover:enabled {
@@ -102,48 +111,85 @@ textarea {
 }
 
 .auth-root {
+  position: relative;
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 24px;
-  background: radial-gradient(circle at top right, #d8e6ff 0%, #f0f2f5 45%, #e7edf8 100%);
+  background: #0e1420;
+  overflow: hidden;
+}
+
+.auth-root .parallax-dots-bg {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .auth-card {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 420px;
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 12px 32px rgba(28, 50, 93, 0.12);
+  border-radius: 20px;
+  padding: 32px 28px;
 }
 
-.auth-card h1 {
+.auth-dark .auth-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.auth-dark .auth-card h1 {
   margin: 0;
+  color: #e6efff;
+  font-size: 28px;
+  letter-spacing: -0.01em;
 }
 
-.auth-subtitle {
-  margin: 6px 0 18px;
-  color: var(--muted);
+.auth-dark .auth-subtitle {
+  margin: 6px 0 22px;
+  color: #9bb1d4;
 }
 
 .auth-switch {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
-.auth-switch button.active {
-  background: var(--accent);
-  border-color: var(--accent);
+.auth-dark .auth-switch button {
+  color: #c1d3ef;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 14px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.auth-dark .auth-switch button:hover:enabled {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.auth-dark .auth-switch button.active {
+  background: rgba(78, 126, 255, 0.3);
+  border-color: rgba(125, 165, 255, 0.45);
   color: #ffffff;
 }
 
 .auth-form {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .auth-form label {
@@ -152,8 +198,48 @@ textarea {
   font-size: 14px;
 }
 
+.auth-dark .auth-form label {
+  color: #c1d3ef;
+}
+
+.auth-dark .auth-form input {
+  color: #e8efff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  transition: border-color 0.2s ease;
+}
+
+.auth-dark .auth-form input:focus {
+  outline: none;
+  border-color: rgba(125, 165, 255, 0.5);
+}
+
+.auth-dark .auth-submit-btn {
+  margin-top: 4px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(78, 126, 255, 0.35);
+  border: 1px solid rgba(125, 165, 255, 0.45);
+  border-radius: 12px;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.auth-dark .auth-submit-btn:hover:enabled {
+  background: rgba(78, 126, 255, 0.5);
+  border-color: rgba(140, 178, 255, 0.6);
+}
+
+.auth-dark .auth-submit-btn:disabled {
+  opacity: 0.5;
+}
+
 .form-error {
-  color: #b42318;
+  color: #f87171;
   font-size: 13px;
 }
 
@@ -278,7 +364,7 @@ textarea {
 .icon-btn {
   min-width: 30px;
   height: 28px;
-  padding: 0;
+  padding: 4px;
   font-size: 12px;
 }
 
@@ -320,7 +406,7 @@ textarea {
 }
 
 .section-toggle-btn {
-  padding: 3px 8px;
+  padding: 3px 6px;
   font-size: 11px;
   line-height: 1.2;
 }
@@ -332,7 +418,7 @@ textarea {
 }
 
 .mini-controls button {
-  padding: 6px 4px;
+  padding: 6px;
   font-size: 13px;
 }
 
@@ -496,7 +582,7 @@ textarea {
 }
 
 .actions-grid button {
-  padding: 7px 4px;
+  padding: 7px;
 }
 
 .utility-row {
@@ -687,7 +773,7 @@ textarea {
 }
 
 .generator-field-input-row button {
-  min-width: 72px;
+  min-width: 52px;
   font-size: 21px;
   padding: 7px 12px;
 }
@@ -2328,25 +2414,26 @@ textarea {
   }
 
   .auth-card {
-    border-radius: 16px;
-    padding: 20px;
-    box-shadow: 0 8px 24px rgba(28, 50, 93, 0.1);
+    border-radius: 18px;
+    padding: 24px 20px;
   }
 
-  .auth-card h1 {
+  .auth-dark .auth-card h1 {
     font-size: 24px;
   }
 
-  .auth-form input,
-  .auth-form button {
+  .auth-dark .auth-form input {
     font-size: 16px;
     padding: 12px;
-    border-radius: 8px;
   }
 
-  .auth-switch button {
+  .auth-dark .auth-submit-btn {
+    font-size: 16px;
+    padding: 14px;
+  }
+
+  .auth-dark .auth-switch button {
     padding: 10px;
-    border-radius: 8px;
     font-size: 14px;
   }
 }
@@ -2655,7 +2742,7 @@ textarea {
    ============================================= */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   --glass-radius: 18px;
   --glass-blur: 16px;
   --glass-saturate: 160%;

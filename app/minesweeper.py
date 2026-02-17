@@ -11,7 +11,7 @@ import random
 class Minesweeper:
     """Класс игры Сапер"""
     
-    def __init__(self, parent, theme_name="light"):
+    def __init__(self, parent, theme_name="dark"):
         self.window = tk.Toplevel(parent)
         self.window.title("💣 Сапер")
         self.window.geometry("400x480")
@@ -33,17 +33,9 @@ class Minesweeper:
         
     def setup_ui(self):
         """Создание интерфейса"""
-        # Цвета темы
-        if self.theme_name == "dark":
-            bg_color = "#1e293b"
-            fg_color = "#e2e8f0"
-            header_bg = "#111827"
-            btn_bg = "#334155"
-        else:
-            bg_color = "#f0f0f0"
-            fg_color = "#111827"
-            header_bg = "#e0e0e0"
-            btn_bg = "#ffffff"
+        bg_color = "#1e293b"
+        fg_color = "#e2e8f0"
+        header_bg = "#111827"
         
         self.window.config(bg=bg_color)
         
@@ -65,7 +57,7 @@ class Minesweeper:
             text="🔄 Новая игра",
             command=self.reset_game,
             font=("Segoe UI", 10),
-            bg="#2563eb" if self.theme_name == "light" else "#3b82f6",
+            bg="#3b82f6",
             fg="white",
             relief=tk.FLAT,
             padx=10,
@@ -101,14 +93,9 @@ class Minesweeper:
         self.flagged = [[False for _ in range(self.cols)] for _ in range(self.rows)]
         
         # Цвета для кнопок
-        if self.theme_name == "dark":
-            btn_bg = "#334155"
-            btn_fg = "#e2e8f0"
-            btn_active = "#475569"
-        else:
-            btn_bg = "#d1d5db"
-            btn_fg = "#111827"
-            btn_active = "#9ca3af"
+        btn_bg = "#334155"
+        btn_fg = "#e2e8f0"
+        btn_active = "#475569"
         
         # Создаем кнопки
         for i in range(self.rows):
@@ -216,7 +203,7 @@ class Minesweeper:
             7: "#000000", 8: "#6b7280"
         }
         
-        bg_revealed = "#e2e8f0" if self.theme_name == "light" else "#475569"
+        bg_revealed = "#475569"
         
         value = self.board[row][col]
         
@@ -267,6 +254,6 @@ class Minesweeper:
         self.setup_board()
 
 
-def show_minesweeper(parent, theme_name="light"):
+def show_minesweeper(parent, theme_name="dark"):
     """Открыть окно игры Сапер"""
     Minesweeper(parent, theme_name)
