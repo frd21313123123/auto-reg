@@ -13,7 +13,7 @@ from .themes import THEMES
 from .hotkey_settings import HotkeySettings, show_settings_window
 
 
-def show_in_window(parent, theme_name="light"):
+def show_in_window(parent, theme_name="dark"):
     """Открывает окно с генератором данных для Индии."""
     win = tk.Toplevel(parent)
     win.title("India Data Generator")
@@ -323,7 +323,7 @@ def show_in_window(parent, theme_name="light"):
 
     # Hotkey hint
     r += 1
-    extra_color = "#aaa" if theme_name == "dark" else "#555"
+    extra_color = "#aaa"
     hotkeys = hotkey_settings.get_hotkeys()
     hint_text = (
         f"Горячие клавиши: Следующее={hotkeys.get('sk_cycle', '-')}, "

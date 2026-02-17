@@ -98,34 +98,6 @@ def get_message_detail(
     return MessageDetail(**message)
 
 
-@router.post("/accounts/{account_id}/ban-check", response_model=BanCheckResult)
-def ban_check_single(
-    account_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> BanCheckResult:
-    account = _get_owned_account(db, current_user, account_id)
-
-    result, reason = mail_backend_service.check_account_for_ban(
-        account.email,
-        account.password_mail,
-    )
-
-    if result == "banned":
-        account.status = "banned"
-    elif result == "invalid_password":
-        account.status = "invalid_password"
-
-    db.commit()
-
-    return BanCheckResult(
-        account_id=account.id,
-        email=account.email,
-        result=result,
-        reason=reason,
-    )
-
-
 @router.post("/ban-check/bulk", response_model=BulkBanCheckResponse)
 def ban_check_bulk(
     payload: BulkBanCheckRequest,

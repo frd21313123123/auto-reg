@@ -1,6 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { accountsApi, mailApi, toolsApi } from "../api";
+import ParallaxDotsBackground from "./ParallaxDotsBackground";
+
+const I = {
+  refresh: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>,
+  fileImport: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>,
+  table: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>,
+  window: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="2" y1="9" x2="22" y2="9"/><line x1="10" y1="9" x2="10" y2="21"/></svg>,
+  shieldX: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>,
+  at: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>,
+  key: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
+  lock: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+  copy: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+  clipboard: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>,
+  bomb: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="13" r="8"/><path d="M16.2 7.8l2-2"/><path d="M18 4l2 2"/><path d="M21 3l-1 1"/></svg>,
+  gear: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+  chevronUp: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>,
+  chevronDown: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>,
+  sun: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+  moon: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+  logout: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  record: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>,
+  eraser: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  check: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  reset: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 2v6h6"/><path d="M2.5 8a10 10 0 1 1 .5 4"/></svg>,
+  trash: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  mailX: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><line x1="14" y1="14" x2="20" y2="20"/><line x1="20" y1="14" x2="14" y2="20"/></svg>,
+  upload: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+  dice: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="3"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>,
+  close: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+};
 
 const STATUS_OPTIONS = [
   "not_registered",
@@ -508,7 +538,7 @@ async function copyText(value) {
   await navigator.clipboard.writeText(value);
 }
 
-function HtmlEmailViewer({ html, theme }) {
+function HtmlEmailViewer({ html }) {
   const iframeRef = useRef(null);
 
   useEffect(() => {
@@ -517,10 +547,9 @@ function HtmlEmailViewer({ html, theme }) {
       return;
     }
 
-    const isDark = theme === "dark";
     const styleOverride = `<style>
-      body { margin: 0; padding: 10px; font-family: "Segoe UI", Tahoma, sans-serif; font-size: 14px; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere; ${isDark ? "color: #e6efff; background: transparent;" : "color: #1f2937; background: transparent;"} }
-      a { color: ${isDark ? "#6fa0ff" : "#4f66da"}; }
+      body { margin: 0; padding: 10px; font-family: "Segoe UI", Tahoma, sans-serif; font-size: 14px; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere; color: #e6efff; background: transparent; }
+      a { color: #6fa0ff; }
       img { max-width: 100%; height: auto; }
       table { max-width: 100% !important; }
     </style>`;
@@ -541,7 +570,7 @@ function HtmlEmailViewer({ html, theme }) {
     resize();
     const timer = setTimeout(resize, 300);
     return () => clearTimeout(timer);
-  }, [html, theme]);
+  }, [html]);
 
   return (
     <iframe
@@ -553,98 +582,7 @@ function HtmlEmailViewer({ html, theme }) {
   );
 }
 
-function DarkParallaxDotsBackground() {
-  const canvasRef = useRef(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return undefined;
-    }
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      return undefined;
-    }
-
-    const spacing = 22;
-    const radius = 1;
-    const color = "rgba(255,255,255,0.08)";
-    const parallaxStrength = 25;
-    const smoothness = 0.08;
-
-    let mouseX = 0;
-    let mouseY = 0;
-    let offsetX = 0;
-    let offsetY = 0;
-    let targetOffsetX = 0;
-    let targetOffsetY = 0;
-    let cols = 0;
-    let rows = 0;
-    let frameId = 0;
-
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      cols = Math.ceil(canvas.width / spacing) + 2;
-      rows = Math.ceil(canvas.height / spacing) + 2;
-    };
-
-    const updateParallax = () => {
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-
-      targetOffsetX = ((mouseX - centerX) / centerX) * parallaxStrength;
-      targetOffsetY = ((mouseY - centerY) / centerY) * parallaxStrength;
-
-      offsetX += (targetOffsetX - offsetX) * smoothness;
-      offsetY += (targetOffsetY - offsetY) * smoothness;
-    };
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = color;
-
-      const startX = -spacing + offsetX;
-      const startY = -spacing + offsetY;
-
-      for (let i = 0; i < cols; i += 1) {
-        for (let j = 0; j < rows; j += 1) {
-          const x = startX + i * spacing;
-          const y = startY + j * spacing;
-          ctx.beginPath();
-          ctx.arc(x, y, radius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    };
-
-    const animate = () => {
-      updateParallax();
-      draw();
-      frameId = window.requestAnimationFrame(animate);
-    };
-
-    const handleMouseMove = (event) => {
-      mouseX = event.clientX;
-      mouseY = event.clientY;
-    };
-
-    window.addEventListener("mousemove", handleMouseMove, { passive: true });
-    window.addEventListener("resize", resizeCanvas);
-
-    resizeCanvas();
-    animate();
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("resize", resizeCanvas);
-    };
-  }, []);
-
-  return <canvas className="parallax-dots-bg" ref={canvasRef} aria-hidden="true" />;
-}
+// DarkParallaxDotsBackground is now shared — see ParallaxDotsBackground.jsx
 
 function GeneratorPanel({
   title,
@@ -723,8 +661,8 @@ function GeneratorPanel({
                   <div className="generator-field-label">{field.label}</div>
                   <div className={`generator-field-input-row ${activeAction === field.action ? "highlight" : ""}`}>
                     <input value={data?.[field.dataKey] || ""} readOnly />
-                    <button type="button" onClick={() => onCopy(field.action)}>
-                      Copy
+                    <button type="button" onClick={() => onCopy(field.action)} title="Копировать">
+                      {I.clipboard(18)}
                     </button>
                   </div>
                 </div>
@@ -732,11 +670,11 @@ function GeneratorPanel({
             </div>
 
             <div className="generator-modal-actions">
-              <button type="button" className="primary-btn" onClick={onGenerate} disabled={busy}>
-                Сгенерировать
+              <button type="button" className="primary-btn" onClick={onGenerate} disabled={busy} title="Сгенерировать">
+                {I.refresh(18)}
               </button>
-              <button type="button" onClick={onSettings}>
-                Настройки
+              <button type="button" onClick={onSettings} title="Настройки">
+                {I.gear(18)}
               </button>
             </div>
 
@@ -826,25 +764,26 @@ function HotkeySettingsModal({
                     type="button"
                     className={`hotkeys-record-btn ${recordingHotkeyKey === field.key ? "active" : ""}`}
                     onClick={() => onStartRecord(field.key)}
+                    title={recordingHotkeyKey === field.key ? "Нажмите клавишу..." : "Записать"}
                   >
-                    {recordingHotkeyKey === field.key ? "Нажмите..." : "Записать"}
+                    {I.record()}
                   </button>
-                  <button type="button" onClick={() => onClearHotkey(field.key)}>
-                    Очистить
+                  <button type="button" onClick={() => onClearHotkey(field.key)} title="Очистить">
+                    {I.eraser()}
                   </button>
                 </div>
               </label>
             ))}
 
             <div className="hotkeys-actions">
-              <button type="submit" className="primary-btn">
-                Сохранить
+              <button type="submit" className="primary-btn" title="Сохранить">
+                {I.check()}
               </button>
-              <button type="button" onClick={onReset}>
-                Сбросить
+              <button type="button" onClick={onReset} title="Сбросить">
+                {I.reset()}
               </button>
-              <button type="button" onClick={onClose}>
-                Закрыть
+              <button type="button" onClick={onClose} title="Закрыть">
+                {I.close()}
               </button>
             </div>
 
@@ -860,23 +799,26 @@ function HotkeySettingsModal({
                   type="button"
                   onClick={onDeleteAccount}
                   disabled={!selectedAccount || busy}
+                  title="Удалить запись"
                 >
-                  Удалить запись
+                  {I.trash()}
                 </button>
                 <button
                   type="button"
                   onClick={onDeleteMailbox}
                   disabled={!selectedAccount || busy}
+                  title="Удалить почту"
                 >
-                  Удалить почту
+                  {I.mailX()}
                 </button>
                 <button
                   type="button"
                   className="danger-btn"
                   onClick={onDeleteAllAccounts}
                   disabled={!accountsCount || busy}
+                  title="Удалить все записи"
                 >
-                  Удалить все записи ({accountsCount})
+                  {I.trash()} ({accountsCount})
                 </button>
               </div>
             </section>
@@ -903,7 +845,6 @@ function useIsMobile(breakpoint = 768) {
 }
 
 export default function Dashboard({ token, user, onLogout }) {
-  const [theme, setTheme] = useState("dark");
   const [statusMessage, setStatusMessage] = useState("Готово");
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState("accounts");
@@ -2305,18 +2246,6 @@ export default function Dashboard({ token, user, onLogout }) {
     }, "Удаление всех записей...");
   };
 
-  const banCheckOne = () => {
-    if (!selectedAccount) {
-      return;
-    }
-
-    withBusy(async () => {
-      const result = await mailApi.banCheckOne(token, selectedAccount.id);
-      await loadAccounts(selectedAccount.id);
-      applyStatus(`Проверка: ${result.result}`);
-    }, "Проверка аккаунта...");
-  };
-
   const banCheckAll = () =>
     withBusy(async () => {
       const response = await mailApi.banCheckBulk(token, null);
@@ -2544,8 +2473,8 @@ export default function Dashboard({ token, user, onLogout }) {
         <div className="section-caption">АККАУНТЫ</div>
 
         <div className="mini-controls">
-          <button type="button" onClick={refreshAccounts} disabled={busy}>
-            Обновить
+          <button type="button" onClick={refreshAccounts} disabled={busy} title="Обновить список">
+            {I.refresh()}
           </button>
           <button
             type="button"
@@ -2558,17 +2487,18 @@ export default function Dashboard({ token, user, onLogout }) {
               }
             }}
             disabled={busy}
+            title="Импорт из файла"
           >
-            Файл
+            {I.fileImport()}
           </button>
-          <button type="button" onClick={exportAccountsForExcel} disabled={busy}>
-            Excel
+          <button type="button" onClick={exportAccountsForExcel} disabled={busy} title="Экспорт в Excel">
+            {I.table()}
           </button>
-          <button type="button" onClick={openAccountsDataWindow} disabled={busy}>
-            Окно
+          <button type="button" onClick={openAccountsDataWindow} disabled={busy} title="Окно данных">
+            {I.window()}
           </button>
-          <button type="button" className="danger-btn" onClick={banCheckAll} disabled={busy}>
-            Бан
+          <button type="button" className="danger-btn" onClick={banCheckAll} disabled={busy} title="Проверить баны">
+            {I.shieldX()}
           </button>
         </div>
 
@@ -2617,25 +2547,20 @@ export default function Dashboard({ token, user, onLogout }) {
         <div className="section-caption">ДЕЙСТВИЯ</div>
 
         <div className="actions-grid">
-          <button type="button" onClick={() => copyAccountField("email")} disabled={!selectedAccount}>
-            Email
+          <button type="button" onClick={() => copyAccountField("email")} disabled={!selectedAccount} title="Копировать Email">
+            {I.at()}
           </button>
-          <button type="button" onClick={() => copyAccountField("openai")} disabled={!selectedAccount}>
-            OpenAI
+          <button type="button" onClick={() => copyAccountField("openai")} disabled={!selectedAccount} title="Копировать OpenAI пароль">
+            {I.key()}
           </button>
-          <button type="button" onClick={() => copyAccountField("mail")} disabled={!selectedAccount}>
-            Почта
+          <button type="button" onClick={() => copyAccountField("mail")} disabled={!selectedAccount} title="Копировать пароль почты">
+            {I.lock()}
           </button>
-          <button type="button" onClick={() => copyAccountField("full")} disabled={!selectedAccount}>
-            Full
+          <button type="button" onClick={() => copyAccountField("full")} disabled={!selectedAccount} title="Копировать всё">
+            {I.copy()}
           </button>
         </div>
 
-        <div className="utility-row">
-          <button type="button" onClick={banCheckOne} disabled={!selectedAccount || busy}>
-            Бан 1
-          </button>
-        </div>
       </section>
     </>
   );
@@ -2665,8 +2590,9 @@ export default function Dashboard({ token, user, onLogout }) {
             className="primary-btn"
             onClick={manualRefresh}
             disabled={!selectedAccount || busy}
+            title="Обновить почту"
           >
-            Обновить
+            {I.refresh()}
           </button>
 
           <div className="status-switch">
@@ -2747,8 +2673,8 @@ export default function Dashboard({ token, user, onLogout }) {
           <div className="viewer-head">
             <h3>Содержание письма</h3>
             {messageDetail?.code ? (
-              <button type="button" onClick={copyCode}>
-                Копировать код {messageDetail.code}
+              <button type="button" onClick={copyCode} title="Копировать код">
+                {I.clipboard()} {messageDetail.code}
               </button>
             ) : null}
           </div>
@@ -2763,7 +2689,7 @@ export default function Dashboard({ token, user, onLogout }) {
                   <strong>Тема:</strong> {messageDetail.subject}
                 </p>
                 {messageDetail.html ? (
-                  <HtmlEmailViewer html={messageDetail.html} theme={theme} />
+                  <HtmlEmailViewer html={messageDetail.html} />
                 ) : (
                   <pre>{messageDetail.text}</pre>
                 )}
@@ -2817,19 +2743,19 @@ export default function Dashboard({ token, user, onLogout }) {
           <div className="mobile-person-row">
             <span className="mobile-person-label">Имя</span>
             <code className="mobile-person-value">{randomPerson.name || "-"}</code>
-            <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)}>
-              Copy
+            <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)} title="Копировать">
+              {I.clipboard()}
             </button>
           </div>
           <div className="mobile-person-row">
             <span className="mobile-person-label">Дата</span>
             <code className="mobile-person-value">{randomPerson.birthdate || "-"}</code>
-            <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)}>
-              Copy
+            <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)} title="Копировать">
+              {I.clipboard()}
             </button>
           </div>
-          <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy}>
-            Новые данные
+          <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy} title="Новые данные">
+            {I.dice()}
           </button>
         </div>
       </section>
@@ -2944,9 +2870,9 @@ export default function Dashboard({ token, user, onLogout }) {
                 type="button"
                 onClick={copySelectedAccountCredentials}
                 disabled={!selectedAccountsInWindow.length}
-                title="Скопировать выбранные строки: почта:пароль;2пароль"
+                title="Скопировать выбранные строки"
               >
-                Copy
+                {I.clipboard()}
               </button>
             </div>
             <div className="accounts-data-select-hint">
@@ -3061,11 +2987,11 @@ export default function Dashboard({ token, user, onLogout }) {
             />
 
             <div className="import-actions import-window-actions">
-              <button type="button" className="primary-btn" onClick={importAccounts} disabled={busy || !importText.trim()}>
-                Импорт
+              <button type="button" className="primary-btn" onClick={importAccounts} disabled={busy || !importText.trim()} title="Импортировать">
+                {I.upload()}
               </button>
-              <button type="button" onClick={closeImportWindow} disabled={busy}>
-                Закрыть
+              <button type="button" onClick={closeImportWindow} disabled={busy} title="Закрыть">
+                {I.close()}
               </button>
             </div>
           </div>
@@ -3078,8 +3004,8 @@ export default function Dashboard({ token, user, onLogout }) {
 
   if (isMobile) {
     return (
-      <div className={`dashboard-shell theme-${theme} mobile-shell`}>
-        {theme === "dark" ? <DarkParallaxDotsBackground /> : null}
+      <div className="dashboard-shell theme-dark mobile-shell">
+        <ParallaxDotsBackground />
 
         <header className="mobile-header">
           <h1 className="brand-title">
@@ -3087,15 +3013,8 @@ export default function Dashboard({ token, user, onLogout }) {
           </h1>
           <div className="mobile-header-actions">
             <span className="mobile-user-badge">{user.username}</span>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            >
-              {theme === "light" ? "D" : "L"}
-            </button>
-            <button type="button" className="icon-btn" onClick={onLogout}>
-              X
+            <button type="button" className="icon-btn" title="Выйти" onClick={onLogout}>
+              {I.logout()}
             </button>
           </div>
         </header>
@@ -3220,8 +3139,8 @@ export default function Dashboard({ token, user, onLogout }) {
   }
 
   return (
-    <div className={`dashboard-shell theme-${theme}`}>
-      {theme === "dark" ? <DarkParallaxDotsBackground /> : null}
+    <div className="dashboard-shell theme-dark">
+      <ParallaxDotsBackground />
       <div
         className="dashboard-window"
         style={!isMobile ? { gridTemplateColumns: `${sidebarWidth}px auto 1fr` } : undefined}
@@ -3245,16 +3164,8 @@ export default function Dashboard({ token, user, onLogout }) {
               <span>Mail.</span>tm
             </h1>
             <div className="brand-actions">
-              <button
-                type="button"
-                className="icon-btn"
-                title="Переключить тему"
-                onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-              >
-                Т
-              </button>
               <button type="button" className="icon-btn" title="Выйти" onClick={onLogout}>
-                В
+                {I.logout()}
               </button>
             </div>
           </div>
@@ -3280,11 +3191,11 @@ export default function Dashboard({ token, user, onLogout }) {
               >
                 IN
               </button>
-              <button type="button" onClick={handleMinesweeper}>
-                Сапёр
+              <button type="button" onClick={handleMinesweeper} title="Сапёр">
+                {I.bomb()}
               </button>
-              <button type="button" onClick={openGeneratorHotkeys}>
-                Настройки
+              <button type="button" onClick={openGeneratorHotkeys} title="Настройки">
+                {I.gear()}
               </button>
             </div>
           </section>
@@ -3292,8 +3203,8 @@ export default function Dashboard({ token, user, onLogout }) {
           <section className={`side-section generator-section ${showSidebarGenerator ? "" : "collapsed"}`}>
             <div className="section-header">
               <div className="section-caption">ГЕНЕРАТОР</div>
-              <button type="button" className="section-toggle-btn" onClick={toggleSidebarGenerator}>
-                {showSidebarGenerator ? "Скрыть" : "Показать"}
+              <button type="button" className="section-toggle-btn" onClick={toggleSidebarGenerator} title={showSidebarGenerator ? "Скрыть" : "Показать"}>
+                {showSidebarGenerator ? I.chevronUp() : I.chevronDown()}
               </button>
             </div>
 
@@ -3302,21 +3213,21 @@ export default function Dashboard({ token, user, onLogout }) {
                 <div className="generator-row">
                   <span>Name</span>
                   <code>{randomPerson.name || "-"}</code>
-                  <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)}>
-                    Копировать
+                  <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)} title="Копировать">
+                    {I.clipboard()}
                   </button>
                 </div>
 
                 <div className="generator-row">
                   <span>Дата</span>
                   <code>{randomPerson.birthdate || "-"}</code>
-                  <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)}>
-                    Копировать
+                  <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)} title="Копировать">
+                    {I.clipboard()}
                   </button>
                 </div>
 
-                <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy}>
-                  Новые данные
+                <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy} title="Новые данные">
+                  {I.dice()}
                 </button>
               </>
             ) : (

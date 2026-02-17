@@ -161,7 +161,7 @@ class HotkeySettings:
         self._registered = False
 
 
-def show_settings_window(parent, theme_name="light", on_save=None):
+def show_settings_window(parent, theme_name="dark", on_save=None):
     """Open hotkey settings window."""
     win = tk.Toplevel(parent)
     win.title("⚙ Настройки горячих клавиш")
