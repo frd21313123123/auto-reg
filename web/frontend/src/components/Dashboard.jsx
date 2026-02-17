@@ -16,8 +16,6 @@ const I = {
   clipboard: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>,
   bomb: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="13" r="8"/><path d="M16.2 7.8l2-2"/><path d="M18 4l2 2"/><path d="M21 3l-1 1"/></svg>,
   gear: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
-  chevronUp: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>,
-  chevronDown: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>,
   sun: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
   moon: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
   logout: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
@@ -66,7 +64,6 @@ function normalizeAccountStatus(status) {
 }
 
 const GENERATOR_HOTKEYS_STORAGE_KEY = "auto_reg_generator_hotkeys";
-const SIDEBAR_GENERATOR_VISIBILITY_KEY = "auto_reg_sidebar_generator_visible";
 
 const GENERATOR_CYCLE_ORDER = ["card", "exp_date", "cvv", "name", "city", "street", "postcode"];
 
@@ -875,17 +872,6 @@ export default function Dashboard({ token, user, onLogout }) {
   const [busy, setBusy] = useState(false);
   const [showInPanel, setShowInPanel] = useState(false);
   const [showSkPanel, setShowSkPanel] = useState(false);
-  const [showSidebarGenerator, setShowSidebarGenerator] = useState(() => {
-    try {
-      const raw = localStorage.getItem(SIDEBAR_GENERATOR_VISIBILITY_KEY);
-      if (raw === null) {
-        return true;
-      }
-      return raw === "1";
-    } catch {
-      return true;
-    }
-  });
   const [showGeneratorHotkeys, setShowGeneratorHotkeys] = useState(false);
   const [generatorHotkeys, setGeneratorHotkeys] = useState(() => loadGeneratorHotkeys());
   const [draftHotkeys, setDraftHotkeys] = useState(() => loadGeneratorHotkeys());
@@ -1403,13 +1389,6 @@ export default function Dashboard({ token, user, onLogout }) {
       JSON.stringify(normalizeHotkeyMap(generatorHotkeys))
     );
   }, [generatorHotkeys]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      SIDEBAR_GENERATOR_VISIBILITY_KEY,
-      showSidebarGenerator ? "1" : "0"
-    );
-  }, [showSidebarGenerator]);
 
   useEffect(() => {
     if (!showGeneratorHotkeys || !recordingHotkeyKey) {
@@ -2455,14 +2434,6 @@ export default function Dashboard({ token, user, onLogout }) {
     applyStatus("Сапер пока доступен только в desktop-версии");
   };
 
-  const toggleSidebarGenerator = () => {
-    setShowSidebarGenerator((prev) => {
-      const next = !prev;
-      applyStatus(next ? "Генератор показан" : "Генератор скрыт");
-      return next;
-    });
-  };
-
   const accountsPanel = (
     <>
       <button type="button" className="primary-btn create-btn" onClick={createMailTm} disabled={busy}>
@@ -3200,44 +3171,6 @@ export default function Dashboard({ token, user, onLogout }) {
             </div>
           </section>
 
-          <section className={`side-section generator-section ${showSidebarGenerator ? "" : "collapsed"}`}>
-            <div className="section-header">
-              <div className="section-caption">ГЕНЕРАТОР</div>
-              <button type="button" className="section-toggle-btn" onClick={toggleSidebarGenerator} title={showSidebarGenerator ? "Скрыть" : "Показать"}>
-                {showSidebarGenerator ? I.chevronUp() : I.chevronDown()}
-              </button>
-            </div>
-
-            {showSidebarGenerator ? (
-              <>
-                <div className="generator-row">
-                  <span>Name</span>
-                  <code>{randomPerson.name || "-"}</code>
-                  <button type="button" onClick={() => copyGeneratorField("name", randomPerson.name)} title="Копировать">
-                    {I.clipboard()}
-                  </button>
-                </div>
-
-                <div className="generator-row">
-                  <span>Дата</span>
-                  <code>{randomPerson.birthdate || "-"}</code>
-                  <button type="button" onClick={() => copyGeneratorField("birthdate", randomPerson.birthdate)} title="Копировать">
-                    {I.clipboard()}
-                  </button>
-                </div>
-
-                <button type="button" className="primary-btn" onClick={regenerateRandomPerson} disabled={busy} title="Новые данные">
-                  {I.dice()}
-                </button>
-              </>
-            ) : (
-              <div className="generator-collapsed-note">Блок генератора скрыт</div>
-            )}
-          </section>
-
-          {showSidebarGenerator ? (
-            <div className="side-footer">Сгенерировано: {randomPerson.name || "-"}</div>
-          ) : null}
         </aside>
 
         {!isMobile ? (
