@@ -243,6 +243,11 @@ class MailBackendService:
         response = requests.request(method, url, timeout=timeout, **kwargs)
         return response
 
+    @staticmethod
+    def _normalize_credentials(email_addr: str, password: str) -> tuple[str, str]:
+        """Trim accidental whitespace from credentials (common on mobile copy/paste)."""
+        return email_addr.strip(), password.strip()
+
     def load_mail_tm_domains(self, force: bool = False) -> list[str]:
         with self._domains_lock:
             if self._domains_loaded and not force:
@@ -297,6 +302,7 @@ class MailBackendService:
             self._close_state(state)
 
     def connect(self, user_id: int, account_id: int, email_addr: str, password: str) -> dict[str, object]:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         key = (user_id, account_id)
         old_state: ConnectionState | None = None
         with self._connections_lock:
@@ -357,6 +363,7 @@ class MailBackendService:
         email_addr: str,
         password: str,
     ) -> ConnectionState:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         key = (user_id, account_id)
         with self._connections_lock:
             state = self._connections.get(key)
@@ -378,6 +385,7 @@ class MailBackendService:
         email_addr: str,
         password: str,
     ) -> list[dict[str, str]]:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         state = self._ensure_connection(user_id, account_id, email_addr, password)
 
         if state.account_type == "api":
@@ -438,6 +446,7 @@ class MailBackendService:
         sender_hint: str | None = None,
         subject_hint: str | None = None,
     ) -> dict[str, str | None]:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         state = self._ensure_connection(user_id, account_id, email_addr, password)
 
         if state.account_type == "api":
@@ -514,6 +523,7 @@ class MailBackendService:
         return email_addr, password
 
     def delete_mail_tm_account(self, email_addr: str, password: str) -> None:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         if not self._is_mail_tm(email_addr):
             raise RuntimeError("mailbox delete is supported only for mail.tm accounts")
 
@@ -546,6 +556,7 @@ class MailBackendService:
             raise RuntimeError(f"mail.tm delete failed: {delete_res.status_code}")
 
     def check_account_for_ban(self, email_addr: str, password: str) -> tuple[str, str]:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         domain = email_addr.split("@")[-1].lower()
         is_mail_tm = self._is_mail_tm(email_addr)
 
