@@ -5,6 +5,7 @@ IMAP клиент для работы с почтой
 
 import imaplib
 import email
+import re
 from email.header import decode_header
 
 
@@ -45,6 +46,81 @@ class IMAPClient:
                 self.mail.logout()
         except:
             pass
+
+    @staticmethod
+    def _normalize_folder_name(folder):
+        if not folder:
+            return "INBOX"
+        return str(folder).strip().strip('"') or "INBOX"
+
+    def _parse_folder_name(self, folder_info):
+        """Извлекает имя папки из ответа IMAP LIST."""
+        if isinstance(folder_info, bytes):
+            raw = folder_info.decode("utf-8", errors="ignore")
+        else:
+            raw = str(folder_info)
+        raw = raw.strip()
+        if not raw:
+            return None
+
+        quoted_parts = re.findall(r'"([^"]+)"', raw)
+        if quoted_parts:
+            return self._normalize_folder_name(quoted_parts[-1])
+
+        parts = raw.rsplit(" ", 1)
+        if len(parts) == 2:
+            return self._normalize_folder_name(parts[-1])
+        return self._normalize_folder_name(raw)
+
+    def _select_folder(self, folder="INBOX"):
+        """Пытается выбрать папку, при ошибке откатывается на INBOX."""
+        if not self.mail:
+            return "NO", "INBOX"
+
+        folder_name = self._normalize_folder_name(folder)
+        candidates = [folder_name]
+        if folder_name.upper() != "INBOX":
+            candidates.append("INBOX")
+
+        for candidate in candidates:
+            try:
+                status, _ = self.mail.select(f'"{candidate}"')
+                if status == "OK":
+                    return "OK", candidate
+            except Exception:
+                pass
+        return "NO", folder_name
+
+    def list_folders(self):
+        """Возвращает список доступных папок IMAP."""
+        if not self.mail:
+            return ["INBOX"]
+        try:
+            status, folders = self.mail.list()
+            if status != "OK":
+                return ["INBOX"]
+
+            result = []
+            for folder_info in folders or []:
+                folder_name = self._parse_folder_name(folder_info)
+                if folder_name and folder_name not in result:
+                    result.append(folder_name)
+
+            inbox_index = None
+            for i, folder_name in enumerate(result):
+                if folder_name.upper() == "INBOX":
+                    inbox_index = i
+                    break
+
+            if inbox_index is None:
+                result.insert(0, "INBOX")
+            elif inbox_index != 0:
+                result.insert(0, result.pop(inbox_index))
+
+            return result or ["INBOX"]
+        except Exception as e:
+            print(f"IMAP LIST Error: {e}")
+            return ["INBOX"]
     
     def _decode_header_str(self, header_value):
         """Декодирование заголовка письма"""
@@ -68,12 +144,15 @@ class IMAPClient:
         except Exception:
             return str(header_value)
     
-    def get_messages(self, limit=20):
+    def get_messages(self, limit=20, folder="INBOX"):
         """Получение списка писем"""
         if not self.mail:
             return []
         try:
-            self.mail.select("inbox")
+            status, selected_folder = self._select_folder(folder)
+            if status != "OK":
+                return []
+
             status, messages = self.mail.search(None, "ALL")
             if status != "OK":
                 return []
@@ -98,6 +177,7 @@ class IMAPClient:
                                 "from": {"address": sender},
                                 "subject": subject,
                                 "createdAt": date_str,
+                                "folder": selected_folder,
                                 "source": "imap"
                             })
                 except Exception as e:
@@ -107,12 +187,15 @@ class IMAPClient:
             print(f"IMAP Fetch Error: {e}")
             return []
     
-    def get_message_content(self, msg_id):
+    def get_message_content(self, msg_id, folder="INBOX"):
         """Получение содержимого письма"""
         if not self.mail:
             return "Not connected"
         try:
-            self.mail.select("inbox")
+            status, _ = self._select_folder(folder)
+            if status != "OK":
+                return f"Error: cannot open folder {folder}"
+
             typ, data = self.mail.fetch(str(msg_id), "(RFC822)")
             
             raw_email = b""

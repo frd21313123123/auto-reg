@@ -16,7 +16,11 @@
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "mcp__plugin_playwright_playwright__browser_resize",
       "Bash(npx --yes vite build:*)",
-      "Bash(npx vite build:*)"
+      "Bash(npx vite build:*)",
+      "Bash(dir:*)",
+      "Bash(npx vite:*)",
+      "mcp__plugin_playwright_playwright__browser_close",
+      "Bash(npm run build:*)"
     ]
   }
 }

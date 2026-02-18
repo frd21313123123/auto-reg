@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+DEFAULT_ACCOUNT_FOLDER_NAME = "Основная"
+
 CANONICAL_ACCOUNT_STATUSES = {
     "not_registered",
     "registered",
@@ -24,6 +26,15 @@ def normalize_account_status(value: str) -> str:
     if status not in CANONICAL_ACCOUNT_STATUSES:
         raise ValueError("invalid status")
     return status
+
+
+def normalize_account_folder(value: str | None) -> str:
+    folder = str(value or "").strip()
+    if not folder:
+        return DEFAULT_ACCOUNT_FOLDER_NAME
+    if " / " in folder or "\n" in folder or "\r" in folder:
+        raise ValueError("invalid folder")
+    return folder
 
 
 class UserCreate(BaseModel):
@@ -55,6 +66,7 @@ class AccountCreate(BaseModel):
     password_openai: str = Field(min_length=1, max_length=255)
     password_mail: str | None = Field(default=None, max_length=255)
     status: str = "not_registered"
+    folder: str = DEFAULT_ACCOUNT_FOLDER_NAME
 
     @field_validator("email")
     @classmethod
@@ -67,6 +79,11 @@ class AccountCreate(BaseModel):
     @classmethod
     def _validate_status(cls, value: str) -> str:
         return normalize_account_status(value)
+
+    @field_validator("folder")
+    @classmethod
+    def _validate_folder(cls, value: str) -> str:
+        return normalize_account_folder(value)
 
 
 class AccountUpdateStatus(BaseModel):
@@ -86,12 +103,21 @@ class AccountOut(BaseModel):
     password_openai: str
     password_mail: str
     status: str
+    folder: str
     created_at: datetime
     updated_at: datetime
 
 
 class AccountImportRequest(BaseModel):
     text: str = Field(min_length=1)
+    folder: str | None = None
+
+    @field_validator("folder")
+    @classmethod
+    def _validate_folder(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_account_folder(value)
 
 
 class AccountImportResponse(BaseModel):
@@ -102,6 +128,57 @@ class AccountImportResponse(BaseModel):
 
 class MailTmCreateRequest(BaseModel):
     password_length: int = Field(default=12, ge=8, le=32)
+    folder: str = DEFAULT_ACCOUNT_FOLDER_NAME
+
+    @field_validator("folder")
+    @classmethod
+    def _validate_folder(cls, value: str) -> str:
+        return normalize_account_folder(value)
+
+
+class AccountUpdateFolder(BaseModel):
+    folder: str
+
+    @field_validator("folder")
+    @classmethod
+    def _validate_folder(cls, value: str) -> str:
+        return normalize_account_folder(value)
+
+
+class AccountFolderCreate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        return normalize_account_folder(value)
+
+
+class AccountFolderRename(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        return normalize_account_folder(value)
+
+
+class AccountFolderDeleteRequest(BaseModel):
+    move_to: str = DEFAULT_ACCOUNT_FOLDER_NAME
+
+    @field_validator("move_to")
+    @classmethod
+    def _validate_move_to(cls, value: str) -> str:
+        return normalize_account_folder(value)
+
+
+class AccountFolderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class ConnectResponse(BaseModel):
