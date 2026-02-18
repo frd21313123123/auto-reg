@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.schemas import DEFAULT_ACCOUNT_FOLDER_NAME, normalize_account_folder, normalize_account_status
+from app.schemas import normalize_account_folder, normalize_account_status
 
 
 @dataclass(slots=True)
@@ -9,7 +9,7 @@ class ParsedAccount:
     password_openai: str
     password_mail: str
     status: str = "not_registered"
-    folder: str = DEFAULT_ACCOUNT_FOLDER_NAME
+    folder: str | None = None
 
 
 def parse_account_line(raw_line: str) -> ParsedAccount | None:
@@ -21,7 +21,7 @@ def parse_account_line(raw_line: str) -> ParsedAccount | None:
     password_openai = ""
     password_mail = ""
     status = "not_registered"
-    folder = DEFAULT_ACCOUNT_FOLDER_NAME
+    folder = None
 
     if " / " in line:
         parts = [p.strip() for p in line.split(" / ")]
@@ -44,7 +44,7 @@ def parse_account_line(raw_line: str) -> ParsedAccount | None:
                 try:
                     folder = normalize_account_folder(parts[3])
                 except ValueError:
-                    folder = DEFAULT_ACCOUNT_FOLDER_NAME
+                    folder = None
     elif ":" in line:
         email, passwords = [p.strip() for p in line.split(":", 1)]
         email = email.lower()
