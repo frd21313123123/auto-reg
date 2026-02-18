@@ -1,5 +1,6 @@
 import email
 import imaplib
+import logging
 import random
 import re
 import string
@@ -12,6 +13,8 @@ from email.utils import parsedate_to_datetime
 import requests
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 BAN_KEYWORDS = [
     "access deactivated",
@@ -322,6 +325,7 @@ class MailBackendService:
 
         # Always try mail.tm API first — domains may not end with "mail.tm"
         # (e.g. dollicons.com) and the domain list may not be loaded yet.
+        api_error = ""
         try:
             payload = {"address": email_addr, "password": password}
             res = self._request("POST", f"{settings.mail_tm_api_url}/token", json=payload)
@@ -333,28 +337,63 @@ class MailBackendService:
                     with self._connections_lock:
                         self._connections[key] = state
                     return {"connected": True, "account_type": state.account_type}
-        except requests.RequestException:
-            pass
+            api_error = f"status {res.status_code}"
+            logger.info("mail.tm API auth failed for %s: %s", domain, api_error)
+        except requests.RequestException as exc:
+            api_error = str(exc)
+            logger.info("mail.tm API request error for %s: %s", domain, api_error)
 
-        for host in self._get_imap_hosts(domain):
-            client = IMAPSimpleClient(host=host, timeout=8)
-            try:
-                ok = client.login(email_addr, password)
-            except (OSError, ConnectionError, TimeoutError):
+        imap_errors: list[str] = []
+        imap_auth_failed = False
+        hosts = self._get_imap_hosts(domain)
+        imap_timeouts = [10, 15]
+
+        for host in hosts:
+            connected = False
+            for attempt, timeout in enumerate(imap_timeouts):
+                client = IMAPSimpleClient(host=host, timeout=timeout)
+                try:
+                    ok = client.login(email_addr, password)
+                except (OSError, ConnectionError, TimeoutError) as exc:
+                    detail = f"{host}: {type(exc).__name__}"
+                    logger.info("IMAP connect failed %s (attempt %d, timeout %ds): %s", host, attempt + 1, timeout, exc)
+                    if attempt == len(imap_timeouts) - 1:
+                        imap_errors.append(detail)
+                    continue
+                except Exception as exc:
+                    imap_errors.append(f"{host}: {exc}")
+                    logger.info("IMAP unexpected error %s: %s", host, exc)
+                    break
+
+                if ok:
+                    state.account_type = "imap"
+                    state.imap_client = client
+                    state.imap_host = host
+                    self._remember_imap_host(domain, host)
+                    with self._connections_lock:
+                        self._connections[key] = state
+                    return {"connected": True, "account_type": state.account_type}
+
+                imap_auth_failed = True
+                imap_errors.append(f"{host}: auth failed")
+                logger.info("IMAP auth failed for %s@%s", email_addr, host)
+                client.logout()
+                connected = True
+                break
+
+            if connected:
                 continue
 
-            if ok:
-                state.account_type = "imap"
-                state.imap_client = client
-                state.imap_host = host
-                self._remember_imap_host(domain, host)
-                with self._connections_lock:
-                    self._connections[key] = state
-                return {"connected": True, "account_type": state.account_type}
+        if imap_auth_failed:
+            raise RuntimeError("Неверный пароль (IMAP auth failed)")
 
-            client.logout()
-
-        raise RuntimeError("Failed to login with API and IMAP")
+        detail_parts = []
+        if api_error:
+            detail_parts.append(f"API: {api_error}")
+        if imap_errors:
+            detail_parts.append("IMAP: " + "; ".join(imap_errors))
+        detail = (" | ".join(detail_parts)) if detail_parts else "unknown"
+        raise RuntimeError(f"Не удалось подключиться ({detail})")
 
     def _ensure_connection(
         self,
