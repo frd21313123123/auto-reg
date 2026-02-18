@@ -422,6 +422,37 @@ textarea {
   font-size: 13px;
 }
 
+.folder-controls {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 6px;
+}
+
+.folder-controls select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 6px 8px;
+}
+
+.folder-controls button {
+  min-width: 32px;
+  padding: 6px 8px;
+}
+
+.folder-actions-row {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.folder-actions-row button {
+  width: 100%;
+  padding: 7px 8px;
+}
+
 .import-textarea {
   min-height: 74px;
 }
@@ -1158,18 +1189,23 @@ textarea {
 
 .accounts-data-table th:nth-child(1),
 .accounts-data-table td:nth-child(1) {
-  width: 34%;
+  width: 30%;
 }
 
 .accounts-data-table th:nth-child(2),
 .accounts-data-table td:nth-child(2),
 .accounts-data-table th:nth-child(3),
 .accounts-data-table td:nth-child(3) {
-  width: 24%;
+  width: 20%;
 }
 
 .accounts-data-table th:nth-child(4),
 .accounts-data-table td:nth-child(4) {
+  width: 12%;
+}
+
+.accounts-data-table th:nth-child(5),
+.accounts-data-table td:nth-child(5) {
   width: 18%;
 }
 
@@ -2571,6 +2607,12 @@ textarea {
 
 .theme-dark input,
 .theme-dark textarea {
+  color: #e8efff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.theme-dark .folder-controls select {
   color: #e8efff;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.15);

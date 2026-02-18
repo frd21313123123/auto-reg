@@ -65,7 +65,7 @@ popd
 
 echo.
 echo [3/4] Starting backend on port %BACKEND_PORT%...
-start "Auto-reg Backend" cmd /k "cd /d ""%BACKEND_DIR%"" && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
+start "Auto-reg Backend" cmd /k "cd /d ""%BACKEND_DIR%"" && python -m uvicorn app.main:app --host 127.0.0.1 --port %BACKEND_PORT%"
 
 echo [4/4] Starting frontend on port %FRONTEND_PORT%...
 start "Auto-reg Frontend" cmd /k "cd /d ""%FRONTEND_DIR%"" && npm run dev -- --port %FRONTEND_PORT%"

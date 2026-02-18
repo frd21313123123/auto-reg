@@ -7,7 +7,8 @@ function resolveApiBase() {
   if (hostname.endsWith(".github.io")) {
     return "";
   }
-  const host = window.location.hostname || "127.0.0.1";
+  const isLocalHostName = hostname === "localhost" || hostname === "::1" || hostname === "[::1]";
+  const host = isLocalHostName ? "127.0.0.1" : window.location.hostname || "127.0.0.1";
   return `http://${host}:8000/api`;
 }
 
@@ -94,23 +95,48 @@ export const authApi = {
 export const accountsApi = {
   list: (token) => request("/accounts", { token }),
   create: (token, data) => request("/accounts", { method: "POST", token, body: data }),
-  createMailTm: (token, passwordLength = 12) =>
+  createMailTm: (token, passwordLength = 12, folder = undefined) =>
     request("/accounts/create-mailtm", {
       method: "POST",
       token,
-      body: { password_length: passwordLength }
+      body: { password_length: passwordLength, folder }
     }),
-  importAccounts: (token, text) =>
+  importAccounts: (token, text, folder = undefined) =>
     request("/accounts/import", {
       method: "POST",
       token,
-      body: { text }
+      body: { text, folder }
     }),
   updateStatus: (token, accountId, status) =>
     request(`/accounts/${accountId}/status`, {
       method: "PATCH",
       token,
       body: { status }
+    }),
+  updateFolder: (token, accountId, folder) =>
+    request(`/accounts/${accountId}/folder`, {
+      method: "PATCH",
+      token,
+      body: { folder }
+    }),
+  listFolders: (token) => request("/accounts/folders", { token }),
+  createFolder: (token, name) =>
+    request("/accounts/folders", {
+      method: "POST",
+      token,
+      body: { name }
+    }),
+  renameFolder: (token, folderId, name) =>
+    request(`/accounts/folders/${folderId}`, {
+      method: "PATCH",
+      token,
+      body: { name }
+    }),
+  removeFolder: (token, folderId, moveTo = undefined) =>
+    request(`/accounts/folders/${folderId}`, {
+      method: "DELETE",
+      token,
+      body: moveTo ? { move_to: moveTo } : undefined
     }),
   removeMailbox: (token, accountId) =>
     request(`/accounts/${accountId}/mailbox`, {

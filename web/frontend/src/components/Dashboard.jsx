@@ -63,6 +63,14 @@ function normalizeAccountStatus(status) {
   return status === "busnis" ? "business" : status;
 }
 
+const DEFAULT_ACCOUNT_FOLDER = "Основная";
+const ALL_ACCOUNT_FOLDERS = "Все папки";
+
+function normalizeAccountFolder(folder) {
+  const normalized = String(folder || "").trim();
+  return normalized || DEFAULT_ACCOUNT_FOLDER;
+}
+
 const GENERATOR_HOTKEYS_STORAGE_KEY = "auto_reg_generator_hotkeys";
 
 const GENERATOR_CYCLE_ORDER = ["card", "exp_date", "cvv", "name", "city", "street", "postcode"];
@@ -490,15 +498,15 @@ function validateImportAccountsText(text) {
     const lineNumber = index + 1;
     const parts = line.split(" / ");
 
-    if (parts.length !== 3) {
+    if (parts.length !== 3 && parts.length !== 4) {
       return {
         ok: false,
         lineNumber,
-        reason: "используйте формат: email / pass;pass / status"
+        reason: "используйте формат: email / pass;pass / status [ / folder ]"
       };
     }
 
-    const [emailRaw, passwordsRaw, statusRaw] = parts.map((part) => part.trim());
+    const [emailRaw, passwordsRaw, statusRaw, folderRaw] = parts.map((part) => part.trim());
     if (!emailRaw || !emailRaw.includes("@")) {
       return { ok: false, lineNumber, reason: "некорректный email" };
     }
@@ -515,6 +523,10 @@ function validateImportAccountsText(text) {
         lineNumber,
         reason: `неизвестный статус "${statusRaw}" (допустимо: ${STATUS_OPTIONS.join(", ")})`
       };
+    }
+
+    if (parts.length === 4 && !folderRaw) {
+      return { ok: false, lineNumber, reason: "папка не может быть пустой" };
     }
   }
 
@@ -847,6 +859,8 @@ export default function Dashboard({ token, user, onLogout }) {
   const [mobileTab, setMobileTab] = useState("accounts");
 
   const [accounts, setAccounts] = useState([]);
+  const [accountFolders, setAccountFolders] = useState([]);
+  const [accountsFolderFilter, setAccountsFolderFilter] = useState(ALL_ACCOUNT_FOLDERS);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageDetail, setMessageDetail] = useState(null);
@@ -913,6 +927,35 @@ export default function Dashboard({ token, user, onLogout }) {
   const mailPanelsRef = useRef(null);
   const mailPanelsResizeRef = useRef(null);
 
+  const availableFolderNames = useMemo(() => {
+    const normalized = new Map();
+    normalized.set(DEFAULT_ACCOUNT_FOLDER.toLowerCase(), DEFAULT_ACCOUNT_FOLDER);
+    for (const folder of accountFolders) {
+      const name = normalizeAccountFolder(folder?.name ?? folder);
+      const key = name.toLowerCase();
+      if (!normalized.has(key)) {
+        normalized.set(key, name);
+      }
+    }
+    for (const account of accounts) {
+      const name = normalizeAccountFolder(account.folder);
+      const key = name.toLowerCase();
+      if (!normalized.has(key)) {
+        normalized.set(key, name);
+      }
+    }
+    return Array.from(normalized.values());
+  }, [accountFolders, accounts]);
+
+  const filteredAccounts = useMemo(() => {
+    if (accountsFolderFilter === ALL_ACCOUNT_FOLDERS) {
+      return accounts;
+    }
+    return accounts.filter(
+      (item) => normalizeAccountFolder(item.folder) === accountsFolderFilter
+    );
+  }, [accounts, accountsFolderFilter]);
+
   const selectedAccount = useMemo(
     () => accounts.find((item) => item.id === selectedAccountId) || null,
     [accounts, selectedAccountId]
@@ -937,6 +980,31 @@ export default function Dashboard({ token, user, onLogout }) {
   );
   const activeGeneratorType = showSkPanel ? "sk" : showInPanel ? "in" : null;
   const isGeneratorWindowVisible = Boolean(activeGeneratorType);
+
+  useEffect(() => {
+    if (accountsFolderFilter === ALL_ACCOUNT_FOLDERS) {
+      return;
+    }
+    const hasFolder = availableFolderNames.some(
+      (folder) => folder.toLowerCase() === accountsFolderFilter.toLowerCase()
+    );
+    if (!hasFolder) {
+      setAccountsFolderFilter(ALL_ACCOUNT_FOLDERS);
+    }
+  }, [accountsFolderFilter, availableFolderNames]);
+
+  useEffect(() => {
+    if (!filteredAccounts.length) {
+      setSelectedAccountId(null);
+      setMessages([]);
+      setMessageDetail(null);
+      return;
+    }
+    if (filteredAccounts.some((item) => item.id === selectedAccountId)) {
+      return;
+    }
+    setSelectedAccountId(filteredAccounts[0].id);
+  }, [filteredAccounts, selectedAccountId]);
 
   const applyStatus = (message) => {
     setStatusMessage(message);
@@ -1297,7 +1365,8 @@ export default function Dashboard({ token, user, onLogout }) {
     const response = await accountsApi.list(token);
     const normalizedResponse = response.map((item) => ({
       ...item,
-      status: normalizeAccountStatus(item.status)
+      status: normalizeAccountStatus(item.status),
+      folder: normalizeAccountFolder(item.folder)
     }));
     setAccounts(normalizedResponse);
 
@@ -1308,14 +1377,57 @@ export default function Dashboard({ token, user, onLogout }) {
       return;
     }
 
+    const visibleAccounts =
+      accountsFolderFilter === ALL_ACCOUNT_FOLDERS
+        ? normalizedResponse
+        : normalizedResponse.filter(
+            (item) => normalizeAccountFolder(item.folder) === accountsFolderFilter
+          );
+
+    if (!visibleAccounts.length) {
+      setSelectedAccountId(null);
+      setMessages([]);
+      setMessageDetail(null);
+      return;
+    }
+
     const desiredId = nextSelectedId ?? selectedAccountId;
-    const hasDesired = normalizedResponse.some((item) => item.id === desiredId);
-    setSelectedAccountId(hasDesired ? desiredId : normalizedResponse[0].id);
+    const hasDesired = visibleAccounts.some((item) => item.id === desiredId);
+    setSelectedAccountId(hasDesired ? desiredId : visibleAccounts[0].id);
+  };
+
+  const loadAccountFolders = async () => {
+    const response = await accountsApi.listFolders(token);
+    const normalizedFolders = [];
+    const seen = new Set();
+    for (const folder of response || []) {
+      const normalizedName = normalizeAccountFolder(folder?.name);
+      const key = normalizedName.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      normalizedFolders.push({
+        ...folder,
+        name: normalizedName
+      });
+    }
+    setAccountFolders(normalizedFolders);
   };
 
   const loadRandomPerson = async () => {
     const person = await toolsApi.randomPerson(token);
     setRandomPerson(person);
+  };
+
+  const getTargetFolderName = () =>
+    accountsFolderFilter === ALL_ACCOUNT_FOLDERS
+      ? DEFAULT_ACCOUNT_FOLDER
+      : normalizeAccountFolder(accountsFolderFilter);
+
+  const refreshAccountsAndFolders = async (nextSelectedId = null) => {
+    await loadAccountFolders();
+    await loadAccounts(nextSelectedId);
   };
 
   const connectSelected = async () => {
@@ -1364,6 +1476,7 @@ export default function Dashboard({ token, user, onLogout }) {
 
   useEffect(() => {
     withBusy(async () => {
+      await loadAccountFolders();
       await loadAccounts();
       await loadRandomPerson();
       setInData(await toolsApi.generatorIn(token));
@@ -2080,8 +2193,8 @@ export default function Dashboard({ token, user, onLogout }) {
 
   const createMailTm = () =>
     withBusy(async () => {
-      const created = await accountsApi.createMailTm(token, 12);
-      await loadAccounts(created.id);
+      const created = await accountsApi.createMailTm(token, 12, getTargetFolderName());
+      await refreshAccountsAndFolders(created.id);
       applyStatus(`Создан аккаунт ${created.email}`);
     }, "Создание аккаунта...");
 
@@ -2094,8 +2207,12 @@ export default function Dashboard({ token, user, onLogout }) {
     }
 
     withBusy(async () => {
-      const result = await accountsApi.importAccounts(token, importText);
-      await loadAccounts();
+      const result = await accountsApi.importAccounts(
+        token,
+        importText,
+        getTargetFolderName()
+      );
+      await refreshAccountsAndFolders();
       applyStatus(
         `Импорт: добавлено ${result.added}, дубли ${result.duplicates}, пропущено ${result.skipped}`
       );
@@ -2106,24 +2223,25 @@ export default function Dashboard({ token, user, onLogout }) {
 
   const refreshAccounts = () =>
     withBusy(async () => {
-      await loadAccounts(selectedAccountId);
+      await refreshAccountsAndFolders(selectedAccountId);
       applyStatus("Список аккаунтов обновлен");
     }, "Обновление списка аккаунтов...");
 
   const exportAccountsForExcel = () => {
-    if (!accounts.length) {
+    if (!filteredAccounts.length) {
       applyStatus("Нет аккаунтов для экспорта");
       return;
     }
 
-    const lines = ["email;password_openai;password_mail;status"];
-    for (const account of accounts) {
+    const lines = ["email;password_openai;password_mail;status;folder"];
+    for (const account of filteredAccounts) {
       lines.push(
         [
           escapeCsvValue(account.email),
           escapeCsvValue(account.password_openai),
           escapeCsvValue(account.password_mail),
-          escapeCsvValue(account.status)
+          escapeCsvValue(account.status),
+          escapeCsvValue(normalizeAccountFolder(account.folder))
         ].join(";")
       );
     }
@@ -2155,7 +2273,7 @@ export default function Dashboard({ token, user, onLogout }) {
 
     withBusy(async () => {
       await accountsApi.updateStatus(token, selectedAccount.id, status);
-      await loadAccounts(selectedAccount.id);
+      await refreshAccountsAndFolders(selectedAccount.id);
       const statusLabel = STATUS_LABELS[status] || status;
       applyStatus(`Статус изменен: ${statusLabel}`);
     }, "Обновление статуса...");
@@ -2168,7 +2286,7 @@ export default function Dashboard({ token, user, onLogout }) {
 
     withBusy(async () => {
       await accountsApi.remove(token, selectedAccount.id);
-      await loadAccounts();
+      await refreshAccountsAndFolders();
       applyStatus("Аккаунт удален");
     }, "Удаление аккаунта...");
   };
@@ -2182,7 +2300,7 @@ export default function Dashboard({ token, user, onLogout }) {
       // Remove account from the user's list for any mailbox domain.
       await accountsApi.remove(token, account.id);
       setWindowSelectedAccountIds((prev) => prev.filter((id) => id !== account.id));
-      await loadAccounts();
+      await refreshAccountsAndFolders();
       applyStatus(`Почта убрана из списка: ${account.email}`);
     }, "Удаление почты...");
   };
@@ -2215,7 +2333,7 @@ export default function Dashboard({ token, user, onLogout }) {
 
       setWindowSelectedAccountIds([]);
       accountsSelectionAnchorRef.current = null;
-      await loadAccounts();
+      await refreshAccountsAndFolders();
 
       if (failed > 0) {
         applyStatus(`Удалено ${deleted} из ${total}. Ошибок: ${failed}`);
@@ -2228,11 +2346,187 @@ export default function Dashboard({ token, user, onLogout }) {
   const banCheckAll = () =>
     withBusy(async () => {
       const response = await mailApi.banCheckBulk(token, null);
-      await loadAccounts(selectedAccountId);
+      await refreshAccountsAndFolders(selectedAccountId);
       applyStatus(
         `Проверено ${response.checked}. Banned: ${response.banned}, invalid_password: ${response.invalid_password}, errors: ${response.errors}`
       );
     }, "Массовая проверка...");
+
+  const getFolderRecordByName = (folderName) => {
+    const normalized = normalizeAccountFolder(folderName).toLowerCase();
+    return accountFolders.find(
+      (item) => normalizeAccountFolder(item?.name).toLowerCase() === normalized
+    );
+  };
+
+  const normalizeNewFolderName = (rawName) => {
+    const trimmed = String(rawName || "").trim();
+    if (!trimmed) {
+      return "";
+    }
+    if (trimmed === ALL_ACCOUNT_FOLDERS) {
+      throw new Error(`Имя '${ALL_ACCOUNT_FOLDERS}' зарезервировано`);
+    }
+    if (trimmed.includes(" / ")) {
+      throw new Error("Имя папки не должно содержать ' / '");
+    }
+    return normalizeAccountFolder(trimmed);
+  };
+
+  const createFolder = () => {
+    const input = window.prompt("Введите имя новой папки:", "");
+    if (input === null) {
+      return;
+    }
+
+    let folderName = "";
+    try {
+      folderName = normalizeNewFolderName(input);
+    } catch (error) {
+      applyStatus(`Ошибка: ${error.message}`);
+      return;
+    }
+    if (!folderName) {
+      applyStatus("Имя папки не может быть пустым");
+      return;
+    }
+
+    const existing = getFolderRecordByName(folderName);
+    if (existing) {
+      setAccountsFolderFilter(existing.name);
+      applyStatus(`Папка уже существует: ${existing.name}`);
+      return;
+    }
+
+    withBusy(async () => {
+      await accountsApi.createFolder(token, folderName);
+      await loadAccountFolders();
+      setAccountsFolderFilter(folderName);
+      applyStatus(`Папка создана: ${folderName}`);
+    }, "Создание папки...");
+  };
+
+  const renameCurrentFolder = () => {
+    if (accountsFolderFilter === ALL_ACCOUNT_FOLDERS) {
+      applyStatus("Выберите конкретную папку для переименования");
+      return;
+    }
+    if (normalizeAccountFolder(accountsFolderFilter) === DEFAULT_ACCOUNT_FOLDER) {
+      applyStatus("Системную папку 'Основная' переименовать нельзя");
+      return;
+    }
+
+    const folder = getFolderRecordByName(accountsFolderFilter);
+    if (!folder) {
+      applyStatus("Папка не найдена, обновите список");
+      return;
+    }
+
+    const input = window.prompt("Новое имя папки:", folder.name);
+    if (input === null) {
+      return;
+    }
+
+    let nextName = "";
+    try {
+      nextName = normalizeNewFolderName(input);
+    } catch (error) {
+      applyStatus(`Ошибка: ${error.message}`);
+      return;
+    }
+    if (!nextName) {
+      applyStatus("Имя папки не может быть пустым");
+      return;
+    }
+    if (nextName.toLowerCase() === folder.name.toLowerCase()) {
+      return;
+    }
+
+    const existing = getFolderRecordByName(nextName);
+    if (existing && existing.id !== folder.id) {
+      applyStatus(`Папка уже существует: ${existing.name}`);
+      return;
+    }
+
+    withBusy(async () => {
+      await accountsApi.renameFolder(token, folder.id, nextName);
+      await refreshAccountsAndFolders(selectedAccountId);
+      setAccountsFolderFilter(nextName);
+      applyStatus(`Папка переименована: ${folder.name} -> ${nextName}`);
+    }, "Переименование папки...");
+  };
+
+  const deleteCurrentFolder = () => {
+    if (accountsFolderFilter === ALL_ACCOUNT_FOLDERS) {
+      applyStatus("Выберите конкретную папку для удаления");
+      return;
+    }
+    const current = normalizeAccountFolder(accountsFolderFilter);
+    if (current === DEFAULT_ACCOUNT_FOLDER) {
+      applyStatus("Системную папку 'Основная' удалить нельзя");
+      return;
+    }
+
+    const folder = getFolderRecordByName(current);
+    if (!folder) {
+      applyStatus("Папка не найдена, обновите список");
+      return;
+    }
+
+    const count = accounts.filter(
+      (item) => normalizeAccountFolder(item.folder).toLowerCase() === folder.name.toLowerCase()
+    ).length;
+    const confirmed = window.confirm(
+      `Удалить папку '${folder.name}'?\nПочт в папке: ${count}\nПочты будут перенесены в '${DEFAULT_ACCOUNT_FOLDER}'.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    withBusy(async () => {
+      await accountsApi.removeFolder(token, folder.id, DEFAULT_ACCOUNT_FOLDER);
+      setAccountsFolderFilter(DEFAULT_ACCOUNT_FOLDER);
+      await refreshAccountsAndFolders(selectedAccountId);
+      applyStatus(`Папка удалена: ${folder.name}`);
+    }, "Удаление папки...");
+  };
+
+  const moveSelectedAccountToFolder = () => {
+    if (!selectedAccount) {
+      applyStatus("Выберите почту для перемещения");
+      return;
+    }
+
+    const currentFolder = normalizeAccountFolder(selectedAccount.folder);
+    const input = window.prompt(
+      `Введите папку для ${selectedAccount.email}:`,
+      currentFolder
+    );
+    if (input === null) {
+      return;
+    }
+
+    let targetFolder = "";
+    try {
+      targetFolder = normalizeNewFolderName(input);
+    } catch (error) {
+      applyStatus(`Ошибка: ${error.message}`);
+      return;
+    }
+    if (!targetFolder) {
+      applyStatus("Имя папки не может быть пустым");
+      return;
+    }
+    if (targetFolder.toLowerCase() === currentFolder.toLowerCase()) {
+      return;
+    }
+
+    withBusy(async () => {
+      await accountsApi.updateFolder(token, selectedAccount.id, targetFolder);
+      await refreshAccountsAndFolders(selectedAccount.id);
+      applyStatus(`Почта перемещена в папку: ${targetFolder}`);
+    }, "Перемещение почты...");
+  };
 
   const manualRefresh = () =>
     withBusy(async () => {
@@ -2481,8 +2775,44 @@ export default function Dashboard({ token, user, onLogout }) {
           </button>
         </div>
 
+        <div className="folder-controls">
+          <select
+            value={accountsFolderFilter}
+            onChange={(event) => setAccountsFolderFilter(event.target.value)}
+            disabled={busy}
+            title="Фильтр по папке"
+          >
+            <option value={ALL_ACCOUNT_FOLDERS}>{ALL_ACCOUNT_FOLDERS}</option>
+            {availableFolderNames.map((folderName) => (
+              <option key={folderName} value={folderName}>
+                {folderName}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={createFolder} disabled={busy} title="Создать папку">
+            +
+          </button>
+          <button type="button" onClick={renameCurrentFolder} disabled={busy} title="Переименовать папку">
+            R
+          </button>
+          <button type="button" onClick={deleteCurrentFolder} disabled={busy} title="Удалить папку">
+            -
+          </button>
+        </div>
+
+        <div className="folder-actions-row">
+          <button
+            type="button"
+            onClick={moveSelectedAccountToFolder}
+            disabled={!selectedAccount || busy}
+            title="Переместить выбранную почту в папку"
+          >
+            Переместить почту
+          </button>
+        </div>
+
         <div className="account-list">
-          {accounts.map((account) => (
+          {filteredAccounts.map((account) => (
             <button
               key={account.id}
               type="button"
@@ -2498,7 +2828,10 @@ export default function Dashboard({ token, user, onLogout }) {
             >
               <span className="account-item-main">
                 <span className="account-email">{account.email}</span>
-                <small>{STATUS_LABELS[account.status] || account.status}</small>
+                <small>
+                  {(STATUS_LABELS[account.status] || account.status)} •{" "}
+                  {normalizeAccountFolder(account.folder)}
+                </small>
               </span>
               <span
                 className="account-mail-delete"
@@ -2518,7 +2851,13 @@ export default function Dashboard({ token, user, onLogout }) {
             </button>
           ))}
 
-          {!accounts.length ? <div className="empty-list">Аккаунтов пока нет</div> : null}
+          {!filteredAccounts.length ? (
+            <div className="empty-list">
+              {accountsFolderFilter === ALL_ACCOUNT_FOLDERS
+                ? "Аккаунтов пока нет"
+                : `В папке "${accountsFolderFilter}" пока нет аккаунтов`}
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -2868,6 +3207,7 @@ export default function Dashboard({ token, user, onLogout }) {
                   <th>Email</th>
                   <th>OpenAI</th>
                   <th>Почта</th>
+                  <th>Папка</th>
                   <th>Статус</th>
                 </tr>
               </thead>
@@ -2888,12 +3228,13 @@ export default function Dashboard({ token, user, onLogout }) {
                     <td title={account.email}>{account.email}</td>
                     <td title={account.password_openai}>{account.password_openai}</td>
                     <td title={account.password_mail}>{account.password_mail}</td>
+                    <td>{normalizeAccountFolder(account.folder)}</td>
                     <td>{STATUS_LABELS[account.status] || account.status}</td>
                   </tr>
                 ))}
                 {!accounts.length ? (
                   <tr>
-                    <td colSpan={4} className="accounts-data-empty">
+                    <td colSpan={5} className="accounts-data-empty">
                       Аккаунтов пока нет
                     </td>
                   </tr>
@@ -2920,7 +3261,7 @@ export default function Dashboard({ token, user, onLogout }) {
         >
           <div className="accounts-data-window-title">
             <strong>Импорт аккаунтов</strong>
-            <span>Вставьте аккаунты: email / pass;pass / status</span>
+            <span>Вставьте аккаунты: email / pass;pass / status [ / folder ]</span>
           </div>
           <div className="accounts-data-window-actions" onMouseDown={(event) => event.stopPropagation()}>
             <button
@@ -2965,7 +3306,7 @@ export default function Dashboard({ token, user, onLogout }) {
           <div className="accounts-data-window-body import-accounts-window-body">
             <textarea
               className="import-textarea import-window-textarea"
-              placeholder="Вставьте аккаунты: email / pass;pass / status"
+              placeholder="Вставьте аккаунты: email / pass;pass / status [ / folder ]"
               value={importText}
               onChange={(event) => setImportText(event.target.value)}
             />

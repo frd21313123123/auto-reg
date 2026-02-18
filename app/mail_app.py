@@ -4,7 +4,7 @@
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -51,6 +51,8 @@ class MailApp:
     # Отступы
     PAD_X = 12
     PAD_Y = 6
+    ACCOUNT_FOLDER_ALL = "Все папки"
+    ACCOUNT_FOLDER_DEFAULT = "Основная"
 
     def __init__(self, root):
         self.root = root
@@ -70,6 +72,10 @@ class MailApp:
 
         # Переменные состояния
         self.accounts_data = []
+        self.account_folders = [self.ACCOUNT_FOLDER_DEFAULT]
+        self.current_accounts_folder = self.ACCOUNT_FOLDER_ALL
+        self.visible_account_indices = []
+        self.accounts_folder_var = tk.StringVar(value=self.ACCOUNT_FOLDER_ALL)
         self.last_message_ids = set()
         self.refresh_interval_ms = 5000
 
@@ -77,6 +83,9 @@ class MailApp:
         self.account_type = "api"  # "api" or "imap"
         self.imap_client = None
         self.mail_tm_domains = []
+        self.current_folder = "INBOX"
+        self.available_folders = ["INBOX"]
+        self.folder_var = tk.StringVar(value="INBOX")
 
         # Сохраняем учетные данные для переподключения при смене VPN
         self.current_email = None
@@ -299,6 +308,92 @@ class MailApp:
         )
         self.btn_check_ban.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(2, 0))
 
+        # ---- ПАПКИ АККАУНТОВ ----
+        self.account_folder_frame = tk.Frame(self.left_panel, bg=colors["panel_bg"])
+        self.account_folder_frame.grid(
+            row=row, column=0, sticky="ew", padx=self.PAD_X, pady=(0, 4)
+        )
+        row += 1
+
+        self.lbl_accounts_folder = tk.Label(
+            self.account_folder_frame,
+            text="Папка:",
+            font=FONT_SMALL,
+            bg=colors["panel_bg"],
+            fg=colors["muted"],
+        )
+        self.lbl_accounts_folder.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.accounts_folder_combo = ttk.Combobox(
+            self.account_folder_frame,
+            textvariable=self.accounts_folder_var,
+            values=[self.ACCOUNT_FOLDER_ALL] + self.account_folders,
+            state="readonly",
+            width=16,
+            style="Folder.TCombobox",
+        )
+        self.accounts_folder_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.accounts_folder_combo.bind(
+            "<<ComboboxSelected>>", self.on_accounts_folder_filter_change
+        )
+
+        self.btn_folder_create = HoverButton(
+            self.account_folder_frame,
+            text="+",
+            font=FONT_SMALL,
+            bg=colors["btn_bg"],
+            fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.create_account_folder,
+            padx=6,
+            pady=2,
+        )
+        self.btn_folder_create.pack(side=tk.LEFT, padx=(4, 2))
+
+        self.btn_folder_rename = HoverButton(
+            self.account_folder_frame,
+            text="Переим.",
+            font=FONT_SMALL,
+            bg=colors["btn_bg"],
+            fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.rename_current_account_folder,
+            padx=6,
+            pady=2,
+        )
+        self.btn_folder_rename.pack(side=tk.LEFT, padx=2)
+
+        self.btn_folder_delete = HoverButton(
+            self.account_folder_frame,
+            text="-",
+            font=FONT_SMALL,
+            bg=colors["btn_bg"],
+            fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.delete_current_account_folder,
+            padx=6,
+            pady=2,
+        )
+        self.btn_folder_delete.pack(side=tk.LEFT, padx=(2, 0))
+
+        self.account_folder_actions = tk.Frame(self.left_panel, bg=colors["panel_bg"])
+        self.account_folder_actions.grid(
+            row=row, column=0, sticky="ew", padx=self.PAD_X, pady=(0, 4)
+        )
+        row += 1
+
+        self.btn_move_to_folder = HoverButton(
+            self.account_folder_actions,
+            text="Переместить почту в папку",
+            font=FONT_SMALL,
+            bg=colors["btn_bg"],
+            fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self.move_selected_account_to_folder,
+            pady=3,
+        )
+        self.btn_move_to_folder.pack(fill=tk.X)
+
         # ---- СПИСОК АККАУНТОВ (с scrollbar) ----
         acc_frame = tk.Frame(self.left_panel, bg=colors["panel_bg"])
         acc_frame.grid(row=row, column=0, sticky="nsew",
@@ -344,6 +439,11 @@ class MailApp:
         self.context_menu.add_command(
             label="Статус: Неверный пароль",
             command=lambda: self.set_account_status("invalid_password"),
+        )
+        self.context_menu.add_separator()
+        self.context_menu.add_command(
+            label="Переместить в папку...",
+            command=self.move_selected_account_to_folder,
         )
         self.acc_listbox.bind("<Button-3>", self.show_context_menu)
 
@@ -558,6 +658,30 @@ class MailApp:
         )
         self.btn_refresh.pack(side=tk.RIGHT, padx=(4, self.PAD_X))
 
+        # Выбор папки
+        self.folder_frame = tk.Frame(self.header_frame, bg=colors["header_bg"])
+        self.folder_frame.pack(side=tk.RIGHT, padx=(0, 4))
+
+        self.lbl_folder = tk.Label(
+            self.folder_frame,
+            text="Папка:",
+            font=FONT_SMALL,
+            bg=colors["header_bg"],
+            fg=colors["muted"],
+        )
+        self.lbl_folder.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.combo_folder = ttk.Combobox(
+            self.folder_frame,
+            textvariable=self.folder_var,
+            values=self.available_folders,
+            state="disabled",
+            width=18,
+            style="Folder.TCombobox",
+        )
+        self.combo_folder.pack(side=tk.LEFT)
+        self.combo_folder.bind("<<ComboboxSelected>>", self.on_folder_change)
+
         # Разделитель под header
         self.header_separator = tk.Frame(
             self.right_panel, bg=colors["separator"], height=1
@@ -568,7 +692,7 @@ class MailApp:
         self.tree_frame = tk.Frame(self.right_panel, bg=colors["bg"])
         self.tree_frame.pack(fill=tk.X, padx=self.PAD_X, pady=(8, 0))
 
-        columns = ("sender", "subject", "date", "msg_id")
+        columns = ("sender", "subject", "date", "msg_id", "folder")
         self.tree = ttk.Treeview(
             self.tree_frame,
             columns=columns,
@@ -584,6 +708,7 @@ class MailApp:
         self.tree.column("subject", width=300, minwidth=150)
         self.tree.column("date", width=80, anchor="center", minwidth=70)
         self.tree.column("msg_id", width=0, stretch=False)
+        self.tree.column("folder", width=0, stretch=False)
 
         self.tree_scrollbar = ttk.Scrollbar(
             self.tree_frame, orient=tk.VERTICAL, command=self.tree.yview,
@@ -744,6 +869,305 @@ class MailApp:
         self.hotkey_settings.register_all()
 
     # ================================================================
+    #  ACCOUNT FOLDERS
+    # ================================================================
+
+    def _normalize_accounts_folder_name(self, folder_name):
+        if not folder_name:
+            return self.ACCOUNT_FOLDER_DEFAULT
+        normalized = str(folder_name).strip()
+        if not normalized:
+            return self.ACCOUNT_FOLDER_DEFAULT
+        if normalized == self.ACCOUNT_FOLDER_ALL:
+            return self.ACCOUNT_FOLDER_DEFAULT
+        return normalized
+
+    def _find_existing_account_folder(self, folder_name):
+        target = self._normalize_accounts_folder_name(folder_name).lower()
+        for existing in self.account_folders:
+            if existing.lower() == target:
+                return existing
+        return None
+
+    def _ensure_account_folder_field(self, account):
+        folder = self._normalize_accounts_folder_name(account.get("folder"))
+        account["folder"] = folder
+        return folder
+
+    def _update_accounts_folder_combo(self):
+        values = [self.ACCOUNT_FOLDER_ALL] + self.account_folders
+        if self.current_accounts_folder != self.ACCOUNT_FOLDER_ALL:
+            existing = self._find_existing_account_folder(self.current_accounts_folder)
+            self.current_accounts_folder = (
+                existing if existing else self.ACCOUNT_FOLDER_ALL
+            )
+        self.accounts_folder_var.set(self.current_accounts_folder)
+        if hasattr(self, "accounts_folder_combo"):
+            self.accounts_folder_combo.configure(values=values)
+
+    def _sync_account_folders(self):
+        """Собирает список папок из данных и текущего состояния."""
+        normalized_existing = []
+        seen = set()
+        for folder in self.account_folders:
+            normalized = self._normalize_accounts_folder_name(folder)
+            key = normalized.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized_existing.append(normalized)
+
+        discovered = []
+        discovered_seen = set()
+        for account in self.accounts_data:
+            folder = self._ensure_account_folder_field(account)
+            key = folder.lower()
+            if key in discovered_seen:
+                continue
+            discovered_seen.add(key)
+            discovered.append(folder)
+
+        merged = []
+        merged_seen = set()
+        for folder in normalized_existing + discovered:
+            key = folder.lower()
+            if key in merged_seen:
+                continue
+            merged_seen.add(key)
+            merged.append(folder)
+
+        default_folder = None
+        for folder in merged:
+            if folder.lower() == self.ACCOUNT_FOLDER_DEFAULT.lower():
+                default_folder = folder
+                break
+        if default_folder is None:
+            merged.insert(0, self.ACCOUNT_FOLDER_DEFAULT)
+        elif merged and merged[0] != default_folder:
+            merged.insert(0, merged.pop(merged.index(default_folder)))
+
+        self.account_folders = merged or [self.ACCOUNT_FOLDER_DEFAULT]
+        self._update_accounts_folder_combo()
+
+    def _get_selected_account_index(self):
+        selection = self.acc_listbox.curselection()
+        if not selection:
+            return None
+        list_idx = selection[0]
+        if list_idx >= len(self.visible_account_indices):
+            return None
+        return self.visible_account_indices[list_idx]
+
+    def _select_account_by_real_index(self, real_idx, trigger_select=False):
+        if real_idx is None:
+            return False
+        if real_idx not in self.visible_account_indices:
+            return False
+        list_idx = self.visible_account_indices.index(real_idx)
+        self.acc_listbox.selection_clear(0, tk.END)
+        self.acc_listbox.selection_set(list_idx)
+        self.acc_listbox.activate(list_idx)
+        self.acc_listbox.see(list_idx)
+        if trigger_select:
+            self.on_account_select(None)
+        else:
+            self._sync_accounts_window_selection_from_main()
+        return True
+
+    def _refresh_accounts_listbox(self, preferred_real_idx=None):
+        if preferred_real_idx is None:
+            preferred_real_idx = self._get_selected_account_index()
+
+        self.acc_listbox.delete(0, tk.END)
+        self.visible_account_indices = []
+
+        for idx, account in enumerate(self.accounts_data):
+            folder = self._ensure_account_folder_field(account)
+            if (
+                self.current_accounts_folder != self.ACCOUNT_FOLDER_ALL
+                and folder != self.current_accounts_folder
+            ):
+                continue
+            self.visible_account_indices.append(idx)
+            self.acc_listbox.insert(tk.END, account.get("email", ""))
+
+        self.update_listbox_colors()
+
+        if preferred_real_idx is not None:
+            self._select_account_by_real_index(preferred_real_idx, trigger_select=False)
+
+    def _set_current_accounts_folder(self, folder_name, refresh=True):
+        if folder_name == self.ACCOUNT_FOLDER_ALL:
+            self.current_accounts_folder = self.ACCOUNT_FOLDER_ALL
+        else:
+            existing = self._find_existing_account_folder(folder_name)
+            self.current_accounts_folder = (
+                existing if existing else self.ACCOUNT_FOLDER_DEFAULT
+            )
+        self._update_accounts_folder_combo()
+        if refresh:
+            self._refresh_accounts_listbox()
+
+    def on_accounts_folder_filter_change(self, event=None):
+        selected = self.accounts_folder_var.get()
+        self._set_current_accounts_folder(selected, refresh=True)
+        self.update_status(f"Фильтр папки: {self.current_accounts_folder}")
+
+    def _prompt_folder_name(self, title, prompt, initial=""):
+        folder_name = simpledialog.askstring(
+            title,
+            prompt,
+            initialvalue=initial,
+            parent=self.root,
+        )
+        if folder_name is None:
+            return None
+
+        raw_value = str(folder_name).strip()
+        if raw_value == self.ACCOUNT_FOLDER_ALL:
+            messagebox.showwarning(
+                "Некорректное имя",
+                f"Имя '{self.ACCOUNT_FOLDER_ALL}' зарезервировано.",
+            )
+            return None
+
+        normalized = self._normalize_accounts_folder_name(raw_value)
+        if not normalized:
+            self.update_status("Имя папки не может быть пустым")
+            return None
+        if " / " in normalized or "\n" in normalized or "\r" in normalized:
+            messagebox.showwarning(
+                "Некорректное имя",
+                "Имя папки не должно содержать ' / ' или переносы строк.",
+            )
+            return None
+        return normalized
+
+    def create_account_folder(self):
+        folder_name = self._prompt_folder_name("Новая папка", "Введите имя новой папки:")
+        if not folder_name:
+            return
+
+        existing = self._find_existing_account_folder(folder_name)
+        if existing:
+            self._set_current_accounts_folder(existing, refresh=True)
+            self.update_status(f"Папка уже существует: {existing}")
+            return
+
+        self.account_folders.append(folder_name)
+        self._sync_account_folders()
+        self._set_current_accounts_folder(folder_name, refresh=True)
+        self.save_accounts_to_file()
+        self.update_status(f"Папка создана: {folder_name}")
+
+    def rename_current_account_folder(self):
+        current = self.current_accounts_folder
+        if current == self.ACCOUNT_FOLDER_ALL:
+            self.update_status("Выберите конкретную папку для переименования")
+            return
+        if current == self.ACCOUNT_FOLDER_DEFAULT:
+            self.update_status("Системную папку 'Основная' переименовать нельзя")
+            return
+
+        new_name = self._prompt_folder_name(
+            "Переименовать папку",
+            "Введите новое имя папки:",
+            initial=current,
+        )
+        if not new_name:
+            return
+
+        if new_name.lower() == current.lower():
+            return
+
+        existing = self._find_existing_account_folder(new_name)
+        if existing and existing.lower() != current.lower():
+            self.update_status(f"Папка уже существует: {existing}")
+            return
+
+        for account in self.accounts_data:
+            folder = self._ensure_account_folder_field(account)
+            if folder.lower() == current.lower():
+                account["folder"] = new_name
+
+        for idx, folder in enumerate(self.account_folders):
+            if folder.lower() == current.lower():
+                self.account_folders[idx] = new_name
+                break
+
+        self._sync_account_folders()
+        self._set_current_accounts_folder(new_name, refresh=True)
+        self.save_accounts_to_file()
+        self.update_status(f"Папка переименована: {current} -> {new_name}")
+
+    def delete_current_account_folder(self):
+        current = self.current_accounts_folder
+        if current == self.ACCOUNT_FOLDER_ALL:
+            self.update_status("Выберите конкретную папку для удаления")
+            return
+        if current == self.ACCOUNT_FOLDER_DEFAULT:
+            self.update_status("Системную папку 'Основная' удалить нельзя")
+            return
+
+        affected = [
+            account
+            for account in self.accounts_data
+            if self._ensure_account_folder_field(account).lower() == current.lower()
+        ]
+        count = len(affected)
+        if not messagebox.askyesno(
+            "Удаление папки",
+            f"Удалить папку '{current}'?\n"
+            f"Почт в папке: {count}\n"
+            f"Почты будут перенесены в '{self.ACCOUNT_FOLDER_DEFAULT}'.",
+        ):
+            return
+
+        for account in affected:
+            account["folder"] = self.ACCOUNT_FOLDER_DEFAULT
+
+        self.account_folders = [
+            folder
+            for folder in self.account_folders
+            if folder.lower() != current.lower()
+        ]
+        self._sync_account_folders()
+        self._set_current_accounts_folder(self.ACCOUNT_FOLDER_DEFAULT, refresh=True)
+        self.save_accounts_to_file()
+        self.update_status(f"Папка удалена: {current}")
+
+    def move_selected_account_to_folder(self):
+        selected_idx = self._get_selected_account_index()
+        if selected_idx is None:
+            self.update_status("Выберите почту для перемещения")
+            return
+
+        account = self.accounts_data[selected_idx]
+        current_folder = self._ensure_account_folder_field(account)
+
+        hint = ", ".join(self.account_folders[:8])
+        folder_name = self._prompt_folder_name(
+            "Переместить в папку",
+            f"Введите папку для {account.get('email', '')}\n"
+            f"Текущая: {current_folder}\n"
+            f"Доступно: {hint}",
+            initial=current_folder,
+        )
+        if not folder_name:
+            return
+
+        existing = self._find_existing_account_folder(folder_name)
+        target_folder = existing if existing else folder_name
+        if not existing:
+            self.account_folders.append(target_folder)
+
+        account["folder"] = target_folder
+        self._sync_account_folders()
+        self.save_accounts_to_file()
+        self._refresh_accounts_listbox(preferred_real_idx=selected_idx)
+        self.update_status(f"Почта перемещена в папку: {target_folder}")
+
+    # ================================================================
     #  CLIPBOARD OPERATIONS
     # ================================================================
 
@@ -757,6 +1181,11 @@ class MailApp:
 
             lines = clipboard_text.strip().split("\n")
             added_count = 0
+            target_folder = (
+                self.current_accounts_folder
+                if self.current_accounts_folder != self.ACCOUNT_FOLDER_ALL
+                else self.ACCOUNT_FOLDER_DEFAULT
+            )
 
             for line in lines:
                 line = line.strip()
@@ -811,13 +1240,14 @@ class MailApp:
                                 "password_mail": password_mail,
                                 "password": password_mail,
                                 "status": "not_registered",
+                                "folder": target_folder,
                             }
                         )
-                        self.acc_listbox.insert(tk.END, email)
                         added_count += 1
 
             if added_count > 0:
-                self.update_listbox_colors()
+                self._sync_account_folders()
+                self._refresh_accounts_listbox()
                 self.save_accounts_to_file()
                 self.update_status(f"Добавлено аккаунтов: {added_count}")
             else:
@@ -828,62 +1258,57 @@ class MailApp:
 
     def copy_full_account(self):
         """Копировать полный аккаунт (email:password_openai;password_mail)."""
-        selection = self.acc_listbox.curselection()
-        if not selection:
+        idx = self._get_selected_account_index()
+        if idx is None:
             self.update_status("Выберите аккаунт для копирования")
             return
 
-        idx = selection[0]
-        if idx < len(self.accounts_data):
-            acc = self.accounts_data[idx]
-            password_openai = acc.get("password_openai", acc.get("password", ""))
-            password_mail = acc.get("password_mail", acc.get("password", ""))
+        acc = self.accounts_data[idx]
+        password_openai = acc.get("password_openai", acc.get("password", ""))
+        password_mail = acc.get("password_mail", acc.get("password", ""))
 
-            if password_openai != password_mail:
-                full_text = f"{acc['email']}:{password_openai};{password_mail}"
-            else:
-                full_text = f"{acc['email']}:{password_openai}"
+        if password_openai != password_mail:
+            full_text = f"{acc['email']}:{password_openai};{password_mail}"
+        else:
+            full_text = f"{acc['email']}:{password_openai}"
 
-            pyperclip.copy(full_text)
-            self.update_status(f"Скопировано: {acc['email']}:***")
+        pyperclip.copy(full_text)
+        self.update_status(f"Скопировано: {acc['email']}:***")
 
     def copy_email(self):
         """Копировать email выбранного аккаунта."""
-        selection = self.acc_listbox.curselection()
-        if not selection:
+        idx = self._get_selected_account_index()
+        if idx is None:
             self.update_status("Выберите аккаунт для копирования")
             return
-        idx = selection[0]
-        if idx < len(self.accounts_data):
-            acc = self.accounts_data[idx]
-            pyperclip.copy(acc["email"])
-            self.update_status(f"Скопирован email: {acc['email']}")
+
+        acc = self.accounts_data[idx]
+        pyperclip.copy(acc["email"])
+        self.update_status(f"Скопирован email: {acc['email']}")
 
     def copy_pass_openai(self):
         """Копировать пароль OpenAI выбранного аккаунта."""
-        selection = self.acc_listbox.curselection()
-        if not selection:
+        idx = self._get_selected_account_index()
+        if idx is None:
             self.update_status("Выберите аккаунт для копирования")
             return
-        idx = selection[0]
-        if idx < len(self.accounts_data):
-            acc = self.accounts_data[idx]
-            password = acc.get("password_openai", acc.get("password", ""))
-            pyperclip.copy(password)
-            self.update_status(f"Скопирован пароль OpenAI для: {acc['email']}")
+
+        acc = self.accounts_data[idx]
+        password = acc.get("password_openai", acc.get("password", ""))
+        pyperclip.copy(password)
+        self.update_status(f"Скопирован пароль OpenAI для: {acc['email']}")
 
     def copy_pass(self):
         """Копировать пароль от почты выбранного аккаунта."""
-        selection = self.acc_listbox.curselection()
-        if not selection:
+        idx = self._get_selected_account_index()
+        if idx is None:
             self.update_status("Выберите аккаунт для копирования")
             return
-        idx = selection[0]
-        if idx < len(self.accounts_data):
-            acc = self.accounts_data[idx]
-            password = acc.get("password_mail", acc.get("password", ""))
-            pyperclip.copy(password)
-            self.update_status(f"Скопирован пароль почты для: {acc['email']}")
+
+        acc = self.accounts_data[idx]
+        password = acc.get("password_mail", acc.get("password", ""))
+        pyperclip.copy(password)
+        self.update_status(f"Скопирован пароль почты для: {acc['email']}")
 
     def copy_random_name(self):
         """Копировать случайное имя."""
@@ -1011,7 +1436,7 @@ class MailApp:
             fill=tk.BOTH, expand=True, padx=self.PAD_X, pady=(0, self.PAD_X)
         )
 
-        columns = ("email", "password_openai", "password_mail", "status")
+        columns = ("email", "password_openai", "password_mail", "folder", "status")
         self.accounts_window_tree = ttk.Treeview(
             self.accounts_window_body,
             columns=columns,
@@ -1022,12 +1447,14 @@ class MailApp:
         self.accounts_window_tree.heading("email", text="Email")
         self.accounts_window_tree.heading("password_openai", text="Пароль OpenAI")
         self.accounts_window_tree.heading("password_mail", text="Пароль почты")
+        self.accounts_window_tree.heading("folder", text="Папка")
         self.accounts_window_tree.heading("status", text="Статус")
 
-        self.accounts_window_tree.column("email", width=300, minwidth=180)
-        self.accounts_window_tree.column("password_openai", width=210, minwidth=140)
-        self.accounts_window_tree.column("password_mail", width=210, minwidth=140)
-        self.accounts_window_tree.column("status", width=140, minwidth=100, anchor="center")
+        self.accounts_window_tree.column("email", width=280, minwidth=170)
+        self.accounts_window_tree.column("password_openai", width=180, minwidth=130)
+        self.accounts_window_tree.column("password_mail", width=180, minwidth=130)
+        self.accounts_window_tree.column("folder", width=120, minwidth=90, anchor="center")
+        self.accounts_window_tree.column("status", width=120, minwidth=90, anchor="center")
 
         self.accounts_window_scrollbar = ttk.Scrollbar(
             self.accounts_window_body,
@@ -1079,10 +1506,18 @@ class MailApp:
         if idx >= len(self.accounts_data):
             return
 
-        self.acc_listbox.selection_clear(0, tk.END)
-        self.acc_listbox.selection_set(idx)
-        self.acc_listbox.activate(idx)
-        self.acc_listbox.see(idx)
+        account_folder = self._ensure_account_folder_field(self.accounts_data[idx])
+        if (
+            self.current_accounts_folder != self.ACCOUNT_FOLDER_ALL
+            and account_folder != self.current_accounts_folder
+        ):
+            self._set_current_accounts_folder(account_folder, refresh=True)
+
+        if not self._select_account_by_real_index(idx, trigger_select=False):
+            self._set_current_accounts_folder(self.ACCOUNT_FOLDER_ALL, refresh=True)
+            if not self._select_account_by_real_index(idx, trigger_select=False):
+                return
+
         self.on_account_select(None)
 
     def _sync_accounts_window_selection_from_main(self):
@@ -1095,7 +1530,10 @@ class MailApp:
             self.accounts_window_tree.selection_remove(self.accounts_window_tree.selection())
             return
 
-        idx = selection[0]
+        idx = self._get_selected_account_index()
+        if idx is None:
+            self.accounts_window_tree.selection_remove(self.accounts_window_tree.selection())
+            return
         row_id = str(idx)
         if self.accounts_window_tree.exists(row_id):
             self.accounts_window_tree.selection_set(row_id)
@@ -1128,12 +1566,13 @@ class MailApp:
             email = account.get("email", "")
             password_openai = account.get("password_openai", account.get("password", ""))
             password_mail = account.get("password_mail", account.get("password", ""))
+            folder = self._ensure_account_folder_field(account)
             status = account.get("status", "not_registered")
             tree.insert(
                 "",
                 tk.END,
                 iid=str(idx),
-                values=(email, password_openai, password_mail, status),
+                values=(email, password_openai, password_mail, folder, status),
                 tags=(status,),
             )
 
@@ -1685,7 +2124,7 @@ class MailApp:
             ws = wb.active
             ws.title = "Аккаунты"
 
-            headers = ["Логин/Пароль", "Логин", "Пароль"]
+            headers = ["Логин/Пароль", "Логин", "Пароль", "Папка"]
             header_fill = PatternFill(
                 start_color="4CAF50", end_color="4CAF50", fill_type="solid"
             )
@@ -1701,6 +2140,7 @@ class MailApp:
             ws.column_dimensions["A"].width = 50
             ws.column_dimensions["B"].width = 35
             ws.column_dimensions["C"].width = 20
+            ws.column_dimensions["D"].width = 20
 
             status_fills = {
                 "not_registered": PatternFill(
@@ -1724,12 +2164,14 @@ class MailApp:
                 email = account.get("email", "")
                 password = account.get("password", "")
                 status = account.get("status", "not_registered")
+                folder = self._ensure_account_folder_field(account)
 
                 ws.cell(row=row, column=1, value=f"{email} / {password}")
                 ws.cell(row=row, column=2, value=email)
                 ws.cell(row=row, column=3, value=password)
+                ws.cell(row=row, column=4, value=folder)
                 row_fill = status_fills.get(status, status_fills["not_registered"])
-                for col in range(1, 4):
+                for col in range(1, 5):
                     cell = ws.cell(row=row, column=col)
                     cell.fill = row_fill
                     cell.font = data_font
@@ -1747,10 +2189,13 @@ class MailApp:
         """Загрузка аккаунтов из файла."""
         self.acc_listbox.delete(0, tk.END)
         self.accounts_data = []
+        self.visible_account_indices = []
+        self.account_folders = [self.ACCOUNT_FOLDER_DEFAULT]
 
         if os.path.exists(ACCOUNTS_FILE):
             try:
                 needs_save = False
+                declared_folders = []
 
                 with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
                     lines = f.readlines()
@@ -1759,11 +2204,21 @@ class MailApp:
                     line = line.strip()
                     if not line:
                         continue
+                    if line.startswith("#FOLDER:"):
+                        folder_decl = self._normalize_accounts_folder_name(
+                            line.split(":", 1)[1].strip()
+                        )
+                        if not self._find_existing_account_folder(folder_decl):
+                            declared_folders.append(folder_decl)
+                        continue
+                    if line.startswith("#"):
+                        continue
 
                     email = ""
                     password_openai = ""
                     password_mail = ""
                     status = "not_registered"
+                    folder = self.ACCOUNT_FOLDER_DEFAULT
 
                     if " / " in line:
                         parts = line.split(" / ")
@@ -1781,6 +2236,10 @@ class MailApp:
 
                             if len(parts) >= 3:
                                 status = parts[2].strip()
+                            if len(parts) >= 4:
+                                folder = self._normalize_accounts_folder_name(parts[3])
+                            else:
+                                needs_save = True
                     elif ":" in line:
                         parts = line.split(":", 1)
                         if len(parts) == 2:
@@ -1805,9 +2264,17 @@ class MailApp:
                                 "password_mail": password_mail,
                                 "password": password_mail,
                                 "status": status,
+                                "folder": folder,
                             }
                         )
-                        self.acc_listbox.insert(tk.END, email)
+
+                for folder_name in declared_folders:
+                    if not self._find_existing_account_folder(folder_name):
+                        self.account_folders.append(folder_name)
+
+                self._sync_account_folders()
+                self._set_current_accounts_folder(self.current_accounts_folder, refresh=False)
+                self._refresh_accounts_listbox()
 
                 if needs_save:
                     self.save_accounts_to_file()
@@ -1820,31 +2287,41 @@ class MailApp:
                         f"Загружено аккаунтов: {len(self.accounts_data)}"
                     )
 
-                self.update_listbox_colors()
-
             except Exception as e:
                 messagebox.showerror("Ошибка чтения файла", str(e))
-                self.update_listbox_colors()
+                self._sync_account_folders()
+                self._refresh_accounts_listbox()
         else:
             self.update_status("Файл accounts.txt не найден")
-            self.update_listbox_colors()
+            self._sync_account_folders()
+            self._refresh_accounts_listbox()
 
     def save_accounts_to_file(self):
         """Сохранение аккаунтов в файл."""
         try:
+            self._sync_account_folders()
             with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
+                for folder_name in self.account_folders:
+                    f.write(f"#FOLDER: {folder_name}\n")
+
+                if self.account_folders:
+                    f.write("\n")
+
                 for item in self.accounts_data:
                     password_openai = item.get(
                         "password_openai", item.get("password", "")
                     )
                     password_mail = item.get("password_mail", item.get("password", ""))
+                    folder = self._ensure_account_folder_field(item)
 
                     if password_openai != password_mail:
                         passwords = f"{password_openai};{password_mail}"
                     else:
                         passwords = password_openai
 
-                    line = f"{item['email']} / {passwords} / {item['status']}\n"
+                    line = (
+                        f"{item['email']} / {passwords} / {item['status']} / {folder}\n"
+                    )
                     f.write(line)
             self.save_accounts_to_excel()
         except Exception as e:
@@ -1922,6 +2399,11 @@ class MailApp:
 
     def _on_account_created(self, email, password):
         """Обработка созданного аккаунта."""
+        target_folder = (
+            self.current_accounts_folder
+            if self.current_accounts_folder != self.ACCOUNT_FOLDER_ALL
+            else self.ACCOUNT_FOLDER_DEFAULT
+        )
         self.accounts_data.append(
             {
                 "email": email,
@@ -1929,14 +2411,13 @@ class MailApp:
                 "password_mail": password,
                 "password": password,
                 "status": "not_registered",
+                "folder": target_folder,
             }
         )
 
-        self.acc_listbox.insert(tk.END, email)
-        self.update_listbox_colors()
-
-        self.acc_listbox.selection_clear(0, tk.END)
-        self.acc_listbox.selection_set(tk.END)
+        new_idx = len(self.accounts_data) - 1
+        self._sync_account_folders()
+        self._refresh_accounts_listbox(preferred_real_idx=new_idx)
 
         self.save_accounts_to_file()
         self.status_var.set(f"Создан: {email}")
@@ -2009,6 +2490,12 @@ class MailApp:
 
         # File buttons frame
         self.file_btn_frame.config(bg=colors["panel_bg"])
+        if hasattr(self, "account_folder_frame"):
+            self.account_folder_frame.config(bg=colors["panel_bg"])
+        if hasattr(self, "account_folder_actions"):
+            self.account_folder_actions.config(bg=colors["panel_bg"])
+        if hasattr(self, "lbl_accounts_folder"):
+            self.lbl_accounts_folder.config(bg=colors["panel_bg"], fg=colors["muted"])
         self.btn_frame.config(bg=colors["panel_bg"])
         self.tools_frame.config(bg=colors["panel_bg"])
 
@@ -2016,6 +2503,8 @@ class MailApp:
         generic_btns = [
             self.btn_reload, self.btn_open_file, self.btn_open_excel,
             self.btn_accounts_window,
+            self.btn_folder_create, self.btn_folder_rename, self.btn_folder_delete,
+            self.btn_move_to_folder,
             self.btn_copy_email, self.btn_copy_pass_openai, self.btn_copy_pass,
             self.btn_sk, self.btn_in, self.btn_minesweeper, self.btn_hotkey_settings,
             self.btn_copy_random_name, self.btn_copy_random_bdate,
@@ -2081,6 +2570,10 @@ class MailApp:
             self.msg_text_frame.config(bg=colors["bg"])
         self.status_frame.config(bg=colors["header_bg"])
         self.lbl_current_email.config(bg=colors["header_bg"], fg=colors["fg"])
+        if hasattr(self, "folder_frame"):
+            self.folder_frame.config(bg=colors["header_bg"])
+        if hasattr(self, "lbl_folder"):
+            self.lbl_folder.config(bg=colors["header_bg"], fg=colors["muted"])
         self.lbl_msg_title.config(bg=colors["bg"], fg=colors["fg"])
 
         # Refresh button
@@ -2194,7 +2687,28 @@ class MailApp:
             ("Treeview.treearea", {"sticky": "nswe"})
         ])
 
+        style.configure(
+            "Folder.TCombobox",
+            fieldbackground=colors["entry_bg"],
+            background=colors["btn_bg"],
+            foreground=colors["fg"],
+            arrowcolor=colors["fg"],
+            bordercolor=colors["border"],
+            lightcolor=colors["border"],
+            darkcolor=colors["border"],
+        )
+        style.map(
+            "Folder.TCombobox",
+            fieldbackground=[("readonly", colors["entry_bg"]), ("disabled", colors["panel_bg"])],
+            background=[("readonly", colors["btn_bg"]), ("disabled", colors["panel_bg"])],
+            foreground=[("readonly", colors["fg"]), ("disabled", colors["muted"])],
+            arrowcolor=[("readonly", colors["fg"]), ("disabled", colors["muted"])],
+        )
+
         self.tree.configure(style="Mail.Treeview")
+        self.combo_folder.configure(style="Folder.TCombobox")
+        if hasattr(self, "accounts_folder_combo"):
+            self.accounts_folder_combo.configure(style="Folder.TCombobox")
 
         # Scrollbars (ttk — обновляем стиль ПОСЛЕ theme_use)
         style.configure(
@@ -2231,12 +2745,14 @@ class MailApp:
         """Обновление цветов списка аккаунтов."""
         theme = self.params.get("theme", "dark")
         colors = THEMES[theme]
-        for i in range(self.acc_listbox.size()):
-            if i < len(self.accounts_data):
-                status = self.accounts_data[i].get("status", "not_registered")
-                color = STATUS_COLORS.get(status, {}).get(theme, colors["list_bg"])
-                fg_color = colors["list_fg"]
-                self.acc_listbox.itemconfig(i, {"bg": color, "fg": fg_color})
+        for list_idx in range(self.acc_listbox.size()):
+            if list_idx < len(self.visible_account_indices):
+                real_idx = self.visible_account_indices[list_idx]
+                if real_idx < len(self.accounts_data):
+                    status = self.accounts_data[real_idx].get("status", "not_registered")
+                    color = STATUS_COLORS.get(status, {}).get(theme, colors["list_bg"])
+                    fg_color = colors["list_fg"]
+                    self.acc_listbox.itemconfig(list_idx, {"bg": color, "fg": fg_color})
 
         self._refresh_accounts_window_data()
 
@@ -2244,16 +2760,92 @@ class MailApp:
     #  ACCOUNT SELECTION / EMAIL
     # ================================================================
 
+    @staticmethod
+    def _normalize_folder_name(folder_name):
+        if not folder_name:
+            return "INBOX"
+        return str(folder_name).strip().strip('"') or "INBOX"
+
+    @staticmethod
+    def _find_folder_case_insensitive(folder_name, folders):
+        if not folder_name:
+            return None
+        lowered = str(folder_name).lower()
+        for candidate in folders:
+            if str(candidate).lower() == lowered:
+                return candidate
+        return None
+
+    def _set_folder_options(
+        self, folders, selected_folder=None, disable_selector=False
+    ):
+        """Обновляет список доступных папок и текущий выбор."""
+        normalized = []
+        seen = set()
+        for folder in folders or []:
+            folder_name = self._normalize_folder_name(folder)
+            key = folder_name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(folder_name)
+
+        if not normalized:
+            normalized = ["INBOX"]
+
+        inbox_name = self._find_folder_case_insensitive("INBOX", normalized)
+        if inbox_name is None:
+            normalized.insert(0, "INBOX")
+        elif normalized[0] != inbox_name:
+            normalized.insert(0, normalized.pop(normalized.index(inbox_name)))
+
+        preferred = self._find_folder_case_insensitive(selected_folder, normalized)
+        current = self._find_folder_case_insensitive(self.current_folder, normalized)
+        target_folder = preferred or current or normalized[0]
+
+        self.available_folders = normalized
+        self.current_folder = target_folder
+        self.folder_var.set(target_folder)
+        self.combo_folder.configure(values=normalized)
+        self.combo_folder.configure(
+            state="disabled" if disable_selector else "readonly"
+        )
+
+    def on_folder_change(self, event=None):
+        """Обработчик выбора папки."""
+        selected_folder = self._normalize_folder_name(self.folder_var.get())
+        current = self._normalize_folder_name(self.current_folder)
+        if selected_folder.lower() == current.lower():
+            return
+
+        self.current_folder = selected_folder
+        self.last_message_ids = set()
+
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        self.btn_copy_code.pack_forget()
+        self.msg_text.delete(1.0, tk.END)
+        self.msg_text.insert(tk.END, "Загрузка...")
+
+        has_active_session = (
+            (self.account_type == "api" and self.current_token)
+            or (self.account_type == "imap" and self.imap_client)
+        )
+        if not has_active_session:
+            return
+
+        self.update_status(f"Папка: {selected_folder}. Обновление...")
+        threading.Thread(
+            target=lambda: self.refresh_inbox_thread(show_loading=True), daemon=True
+        ).start()
+
     def on_account_select(self, event):
         """Выбор аккаунта."""
         self._sync_accounts_window_selection_from_main()
 
-        selection = self.acc_listbox.curselection()
-        if not selection:
-            return
-
-        idx = selection[0]
-        if idx >= len(self.accounts_data):
+        idx = self._get_selected_account_index()
+        if idx is None or idx >= len(self.accounts_data):
             return
 
         acc = self.accounts_data[idx]
@@ -2265,6 +2857,7 @@ class MailApp:
 
         self.lbl_current_email.config(text=email)
         self.last_message_ids = set()
+        self._set_folder_options(["INBOX"], selected_folder="INBOX", disable_selector=True)
 
         for item in self.tree.get_children():
             self.tree.delete(item)
@@ -2291,8 +2884,11 @@ class MailApp:
         self.current_email = email_addr
         self.current_password = password
         self._reset_http_session()
+        preferred_folder = self.current_folder
 
         success = False
+        folder_options = ["INBOX"]
+        disable_folder_selector = True
 
         # Always try mail.tm API first — domains may not end with "mail.tm"
         # (e.g. dollicons.com) and the async domain list may not be loaded yet.
@@ -2320,6 +2916,8 @@ class MailApp:
                 self.imap_client = IMAPClient(host="imap.firstmail.ltd")
                 if self.imap_client.login(email_addr, password):
                     self.account_type = "imap"
+                    folder_options = self.imap_client.list_folders()
+                    disable_folder_selector = False
                     success = True
             except (OSError, ConnectionError, TimeoutError):
                 print("IMAP firstmail.ltd: connection failed")
@@ -2331,11 +2929,19 @@ class MailApp:
                     self.imap_client = IMAPClient(host=fallback_host)
                     if self.imap_client.login(email_addr, password):
                         self.account_type = "imap"
+                        folder_options = self.imap_client.list_folders()
+                        disable_folder_selector = False
                         success = True
                 except (OSError, ConnectionError, TimeoutError):
                     print(f"IMAP {domain}: connection failed")
 
         if success:
+            self.root.after(
+                0,
+                lambda folders=folder_options, disabled=disable_folder_selector, preferred=preferred_folder: self._set_folder_options(
+                    folders, selected_folder=preferred, disable_selector=disabled
+                ),
+            )
             self.last_message_ids = set()
             self.update_status(
                 f"Вход выполнен ({self.account_type.upper()}). Получаю письма..."
@@ -2345,10 +2951,17 @@ class MailApp:
             self.update_status("Ошибка входа (API и IMAP недоступны)")
             self.current_token = None
             self.imap_client = None
+            self.root.after(
+                0,
+                lambda: self._set_folder_options(
+                    ["INBOX"], selected_folder="INBOX", disable_selector=True
+                ),
+            )
 
     def on_manual_refresh(self):
         """Ручное обновление писем."""
-        self.update_status("Обновление писем...")
+        folder = self._normalize_folder_name(self.current_folder)
+        self.update_status(f"Обновление папки {folder}...")
         threading.Thread(
             target=lambda: self.refresh_inbox_thread(show_loading=True), daemon=True
         ).start()
@@ -2375,9 +2988,16 @@ class MailApp:
         if self.account_type == "imap" and not self.imap_client:
             return
 
+        selected_folder = (
+            "INBOX"
+            if self.account_type == "api"
+            else self._normalize_folder_name(self.current_folder)
+        )
         self.is_refreshing = True
         if show_loading:
-            self.root.after(0, self.show_inbox_loading_state)
+            self.root.after(
+                0, lambda folder=selected_folder: self.show_inbox_loading_state(folder)
+            )
             self.root.after(0, self.show_loading_messages_text)
         try:
             messages = []
@@ -2396,6 +3016,8 @@ class MailApp:
                     )
                 elif res.status_code == 200:
                     messages = res.json()["hydra:member"]
+                    for msg in messages:
+                        msg["folder"] = "INBOX"
                     should_update_ui = True
                 elif res.status_code == 401:
                     self.root.after(
@@ -2414,7 +3036,9 @@ class MailApp:
                     )
             elif self.account_type == "imap":
                 try:
-                    messages = self.imap_client.get_messages(limit=20)
+                    messages = self.imap_client.get_messages(
+                        limit=20, folder=selected_folder
+                    )
                     should_update_ui = True
                 except Exception as imap_err:
                     print(f"IMAP error: {imap_err}")
@@ -2427,20 +3051,34 @@ class MailApp:
                     self._try_reauth()
 
             if should_update_ui:
-                self.root.after(0, lambda msgs=messages: self._update_inbox_ui(msgs))
+                self.root.after(
+                    0,
+                    lambda msgs=messages, folder=selected_folder: self._update_inbox_ui(
+                        msgs, folder
+                    ),
+                )
         except Exception as e:
             print(f"Background update error: {e}")
         finally:
             self.is_refreshing = False
 
-    def _update_inbox_ui(self, messages):
+    @staticmethod
+    def _build_message_key(msg_id, folder_name):
+        if not msg_id:
+            return None
+        return f"{folder_name}::{msg_id}"
+
+    def _update_inbox_ui(self, messages, folder_name=None):
         """Обновление таблицы писем."""
         selected = self.tree.selection()
         selected_id = None
+        selected_folder = None
         if selected:
             values = self.tree.item(selected[0]).get("values", [])
-            if len(values) >= 4:
+            if len(values) >= 5:
                 selected_id = values[3]
+                selected_folder = values[4]
+        selected_key = self._build_message_key(selected_id, selected_folder)
 
         for item in self.tree.get_children():
             self.tree.delete(item)
@@ -2453,6 +3091,9 @@ class MailApp:
             subject = msg.get("subject") or "(без темы)"
             date_raw = msg.get("createdAt") or ""
             msg_id = msg.get("id")
+            msg_folder = self._normalize_folder_name(
+                msg.get("folder") or folder_name or self.current_folder
+            )
             try:
                 dt = datetime.fromisoformat(str(date_raw).replace("Z", "+00:00"))
                 date_str = dt.strftime("%H:%M:%S")
@@ -2460,11 +3101,13 @@ class MailApp:
                 date_str = date_raw
 
             item_id = self.tree.insert(
-                "", 0, values=(sender, subject, date_str, msg_id)
+                "", 0, values=(sender, subject, date_str, msg_id, msg_folder)
             )
-            seen_ids.add(msg_id)
+            msg_key = self._build_message_key(msg_id, msg_folder)
+            if msg_key:
+                seen_ids.add(msg_key)
 
-            if selected_id and msg_id == selected_id:
+            if selected_key and msg_key == selected_key:
                 new_selection = item_id
 
         if new_selection:
@@ -2480,16 +3123,20 @@ class MailApp:
             self.play_notification_sound(len(new_ids))
         self.last_message_ids = seen_ids
 
+        active_folder = self._normalize_folder_name(folder_name or self.current_folder)
         self.status_var.set(
-            f"Обновлено: {datetime.now().strftime('%H:%M:%S')} | Писем: {len(messages)}"
+            f"Обновлено: {datetime.now().strftime('%H:%M:%S')} | Папка: {active_folder} | Писем: {len(messages)}"
         )
 
-    def show_inbox_loading_state(self):
+    def show_inbox_loading_state(self, folder_name="INBOX"):
         """Показываем индикатор загрузки."""
         try:
             for item in self.tree.get_children():
                 self.tree.delete(item)
-            self.tree.insert("", 0, values=("Загрузка писем...", "", "", "loading"))
+            folder = self._normalize_folder_name(folder_name)
+            self.tree.insert(
+                "", 0, values=(f"Загрузка {folder}...", "", "", "loading", folder)
+            )
         except Exception:
             pass
 
@@ -2500,7 +3147,8 @@ class MailApp:
                 return
             self.btn_copy_code.pack_forget()
             self.msg_text.delete(1.0, tk.END)
-            self.msg_text.insert(tk.END, "Загрузка сообщений...")
+            folder = self._normalize_folder_name(self.current_folder)
+            self.msg_text.insert(tk.END, f"Загрузка сообщений из {folder}...")
         except Exception:
             pass
 
@@ -2512,21 +3160,26 @@ class MailApp:
 
         item = self.tree.item(selected_item)
         values = item.get("values", [])
-        if len(values) < 4:
+        if len(values) < 5:
             return
         msg_id = values[3]
         sender = values[0]
         subject = values[1]
+        folder_name = values[4]
+        if msg_id == "loading":
+            return
 
         self.btn_copy_code.pack_forget()
         self.msg_text.delete(1.0, tk.END)
         self.msg_text.insert(tk.END, "Загрузка...")
 
         threading.Thread(
-            target=self.load_message_thread, args=(msg_id, sender, subject), daemon=True
+            target=self.load_message_thread,
+            args=(msg_id, sender, subject, folder_name),
+            daemon=True,
         ).start()
 
-    def load_message_thread(self, msg_id, sender=None, subject=None):
+    def load_message_thread(self, msg_id, sender=None, subject=None, folder_name=None):
         """Поток загрузки письма."""
         if self.account_type == "api" and not self.current_token:
             return
@@ -2574,7 +3227,12 @@ class MailApp:
                     )
             elif self.account_type == "imap":
                 try:
-                    text = self.imap_client.get_message_content(msg_id)
+                    selected_folder = self._normalize_folder_name(
+                        folder_name or self.current_folder
+                    )
+                    text = self.imap_client.get_message_content(
+                        msg_id, folder=selected_folder
+                    )
                     data = {
                         "from": {"address": sender or "IMAP Sender"},
                         "subject": subject or "IMAP Message",
@@ -2621,19 +3279,23 @@ class MailApp:
     def show_context_menu(self, event):
         """Показ контекстного меню."""
         try:
+            if self.acc_listbox.size() == 0:
+                return
+            nearest = self.acc_listbox.nearest(event.y)
+            if nearest < 0:
+                return
             self.acc_listbox.selection_clear(0, tk.END)
-            self.acc_listbox.selection_set(self.acc_listbox.nearest(event.y))
-            self.acc_listbox.activate(self.acc_listbox.nearest(event.y))
+            self.acc_listbox.selection_set(nearest)
+            self.acc_listbox.activate(nearest)
             self.context_menu.tk_popup(event.x_root, event.y_root)
         finally:
             self.context_menu.grab_release()
 
     def set_account_status(self, status):
         """Установка статуса аккаунта."""
-        selection = self.acc_listbox.curselection()
-        if not selection:
+        idx = self._get_selected_account_index()
+        if idx is None:
             return
-        idx = selection[0]
         if idx < len(self.accounts_data):
             self.accounts_data[idx]["status"] = status
             self.update_listbox_colors()
