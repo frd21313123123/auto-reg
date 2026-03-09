@@ -1,6 +1,7 @@
 import email
 import html as html_lib
 import imaplib
+import logging
 import re
 import secrets
 import string
@@ -13,6 +14,8 @@ from email.utils import parsedate_to_datetime
 import requests
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 BAN_KEYWORDS = [
     "access deactivated",
@@ -272,6 +275,11 @@ class MailBackendService:
         response = requests.request(method, url, timeout=timeout, **kwargs)
         return response
 
+    @staticmethod
+    def _normalize_credentials(email_addr: str, password: str) -> tuple[str, str]:
+        """Trim accidental whitespace from credentials (common on mobile copy/paste)."""
+        return email_addr.strip(), password.strip()
+
     def load_mail_tm_domains(self, force: bool = False) -> list[str]:
         with self._domains_lock:
             if self._domains_loaded and not force:
@@ -326,6 +334,7 @@ class MailBackendService:
             self._close_state(state)
 
     def connect(self, user_id: int, account_id: int, email_addr: str, password: str) -> dict[str, object]:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         key = (user_id, account_id)
         old_state: ConnectionState | None = None
         with self._connections_lock:
@@ -345,6 +354,7 @@ class MailBackendService:
 
         # Always try mail.tm API first — domains may not end with "mail.tm"
         # (e.g. dollicons.com) and the domain list may not be loaded yet.
+        api_error = ""
         try:
             payload = {"address": email_addr, "password": password}
             res = self._request("POST", f"{settings.mail_tm_api_url}/token", json=payload)
@@ -356,28 +366,63 @@ class MailBackendService:
                     with self._connections_lock:
                         self._connections[key] = state
                     return {"connected": True, "account_type": state.account_type}
-        except requests.RequestException:
-            pass
+            api_error = f"status {res.status_code}"
+            logger.info("mail.tm API auth failed for %s: %s", domain, api_error)
+        except requests.RequestException as exc:
+            api_error = str(exc)
+            logger.info("mail.tm API request error for %s: %s", domain, api_error)
 
-        for host in self._get_imap_hosts(domain):
-            client = IMAPSimpleClient(host=host, timeout=8)
-            try:
-                ok = client.login(email_addr, password)
-            except (OSError, ConnectionError, TimeoutError):
+        imap_errors: list[str] = []
+        imap_auth_failed = False
+        hosts = self._get_imap_hosts(domain)
+        imap_timeouts = [10, 15]
+
+        for host in hosts:
+            connected = False
+            for attempt, timeout in enumerate(imap_timeouts):
+                client = IMAPSimpleClient(host=host, timeout=timeout)
+                try:
+                    ok = client.login(email_addr, password)
+                except (OSError, ConnectionError, TimeoutError) as exc:
+                    detail = f"{host}: {type(exc).__name__}"
+                    logger.info("IMAP connect failed %s (attempt %d, timeout %ds): %s", host, attempt + 1, timeout, exc)
+                    if attempt == len(imap_timeouts) - 1:
+                        imap_errors.append(detail)
+                    continue
+                except Exception as exc:
+                    imap_errors.append(f"{host}: {exc}")
+                    logger.info("IMAP unexpected error %s: %s", host, exc)
+                    break
+
+                if ok:
+                    state.account_type = "imap"
+                    state.imap_client = client
+                    state.imap_host = host
+                    self._remember_imap_host(domain, host)
+                    with self._connections_lock:
+                        self._connections[key] = state
+                    return {"connected": True, "account_type": state.account_type}
+
+                imap_auth_failed = True
+                imap_errors.append(f"{host}: auth failed")
+                logger.info("IMAP auth failed for %s@%s", email_addr, host)
+                client.logout()
+                connected = True
+                break
+
+            if connected:
                 continue
 
-            if ok:
-                state.account_type = "imap"
-                state.imap_client = client
-                state.imap_host = host
-                self._remember_imap_host(domain, host)
-                with self._connections_lock:
-                    self._connections[key] = state
-                return {"connected": True, "account_type": state.account_type}
+        if imap_auth_failed:
+            raise RuntimeError("Неверный пароль (IMAP auth failed)")
 
-            client.logout()
-
-        raise RuntimeError("Failed to login with API and IMAP")
+        detail_parts = []
+        if api_error:
+            detail_parts.append(f"API: {api_error}")
+        if imap_errors:
+            detail_parts.append("IMAP: " + "; ".join(imap_errors))
+        detail = (" | ".join(detail_parts)) if detail_parts else "unknown"
+        raise RuntimeError(f"Не удалось подключиться ({detail})")
 
     def _ensure_connection(
         self,
@@ -386,6 +431,7 @@ class MailBackendService:
         email_addr: str,
         password: str,
     ) -> ConnectionState:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         key = (user_id, account_id)
         with self._connections_lock:
             state = self._connections.get(key)
@@ -407,6 +453,7 @@ class MailBackendService:
         email_addr: str,
         password: str,
     ) -> list[dict[str, str]]:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         state = self._ensure_connection(user_id, account_id, email_addr, password)
 
         if state.account_type == "api":
@@ -467,6 +514,7 @@ class MailBackendService:
         sender_hint: str | None = None,
         subject_hint: str | None = None,
     ) -> dict[str, str | None]:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         state = self._ensure_connection(user_id, account_id, email_addr, password)
 
         if state.account_type == "api":
@@ -495,7 +543,9 @@ class MailBackendService:
             subject = data.get("subject") or "(без темы)"
             raw_text = data.get("text") or ""
             raw_html = data.get("html") or ""
-            text_source = raw_text or self._html_to_text(raw_html) or "Нет текстового содержимого"
+            text_source = (
+                raw_text or self._html_to_text(raw_html) or "Нет текстового содержимого"
+            )
             text = self._sanitize_message_text(text_source)
             return {
                 "id": str(message_id),
@@ -531,9 +581,13 @@ class MailBackendService:
             raise RuntimeError("Could not load mail.tm domains")
 
         domain = secrets.choice(domains)
-        username = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(10))
+        username = "".join(
+            secrets.choice(string.ascii_lowercase + string.digits) for _ in range(10)
+        )
         password_chars = string.ascii_letters + string.digits
-        password = "".join(secrets.choice(password_chars) for _ in range(password_length))
+        password = "".join(
+            secrets.choice(password_chars) for _ in range(password_length)
+        )
         email_addr = f"{username}@{domain}"
 
         payload = {
@@ -547,6 +601,7 @@ class MailBackendService:
         return email_addr, password
 
     def delete_mail_tm_account(self, email_addr: str, password: str) -> None:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         if not self._is_mail_tm(email_addr):
             raise RuntimeError("mailbox delete is supported only for mail.tm accounts")
 
@@ -579,6 +634,7 @@ class MailBackendService:
             raise RuntimeError(f"mail.tm delete failed: {delete_res.status_code}")
 
     def check_account_for_ban(self, email_addr: str, password: str) -> tuple[str, str]:
+        email_addr, password = self._normalize_credentials(email_addr, password)
         domain = email_addr.split("@")[-1].lower()
         is_mail_tm = self._is_mail_tm(email_addr)
 
