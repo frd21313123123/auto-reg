@@ -998,3 +998,335 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.offline-dashboard {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+
+.offline-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px;
+}
+
+.offline-sidebar,
+.offline-main {
+  min-height: 0;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.offline-card {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(220, 227, 235, 0.94);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.offline-sidebar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.offline-sidebar-head h1,
+.offline-account-head h2,
+.offline-panel-heading h3 {
+  margin: 0;
+}
+
+.offline-sidebar-user,
+.offline-panel-heading p,
+.offline-account-meta {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.offline-create-button {
+  min-height: 52px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #111827 0%, #293244 100%);
+  border-color: #111827;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.offline-create-button:hover:enabled {
+  background: linear-gradient(180deg, #0f172a 0%, #1f2937 100%);
+  border-color: #0f172a;
+}
+
+.offline-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.offline-section-heading span {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.offline-section-heading strong {
+  font-size: 13px;
+}
+
+.offline-inline-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.offline-inline-buttons.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.offline-inline-buttons + .offline-inline-buttons,
+.offline-inline-buttons + .offline-import-panel,
+.offline-generator-card + .offline-generator-card {
+  margin-top: 10px;
+}
+
+.offline-inline-buttons button,
+.offline-status-button {
+  min-height: 38px;
+  border-radius: 14px;
+  justify-content: center;
+}
+
+.offline-account-list,
+.offline-message-list {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.offline-account-item,
+.offline-message-row {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(220, 227, 235, 0.92);
+  background: #f8fbff;
+  text-align: left;
+  padding: 12px 14px;
+}
+
+.offline-account-item.active,
+.offline-message-row.active {
+  background: #dbeafe;
+  border-color: rgba(11, 87, 208, 0.22);
+}
+
+.offline-account-item-top,
+.offline-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.offline-account-item strong,
+.offline-message-main strong {
+  display: block;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.offline-account-item small,
+.offline-message-main span,
+.offline-message-row time {
+  color: var(--muted);
+}
+
+.offline-status-chip {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.offline-import-panel {
+  margin-top: 12px;
+}
+
+.offline-generator-card {
+  border-radius: 18px;
+  border: 1px solid rgba(220, 227, 235, 0.92);
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
+  padding: 12px;
+}
+
+.offline-generator-card.compact {
+  padding: 10px 12px;
+}
+
+.offline-generator-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.offline-generator-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.offline-generator-row {
+  display: grid;
+  grid-template-columns: minmax(52px, auto) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.offline-generator-row span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.offline-generator-row code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 12px;
+  border: 1px solid rgba(220, 227, 235, 0.92);
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.offline-main {
+  grid-template-rows: auto minmax(220px, 0.92fr) minmax(280px, 1fr);
+}
+
+.offline-account-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.offline-head-actions {
+  display: grid;
+  gap: 8px;
+  min-width: min(100%, 420px);
+}
+
+.offline-messages-card,
+.offline-viewer-card {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.offline-message-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.offline-message-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.offline-message-main strong,
+.offline-message-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.offline-message-detail {
+  min-height: 0;
+  overflow: auto;
+}
+
+.offline-message-detail pre {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+}
+
+.offline-status-bar {
+  margin: 0 18px 18px;
+}
+
+.status-business {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.theme-dark .offline-card {
+  background: rgba(22, 33, 51, 0.94);
+  border-color: rgba(49, 66, 93, 0.96);
+}
+
+.theme-dark .offline-account-item,
+.theme-dark .offline-message-row,
+.theme-dark .offline-generator-card,
+.theme-dark .offline-generator-row code {
+  background: #111b2c;
+  border-color: rgba(49, 66, 93, 0.96);
+}
+
+.theme-dark .offline-account-item.active,
+.theme-dark .offline-message-row.active {
+  background: rgba(138, 180, 248, 0.18);
+}
+
+.theme-dark .offline-create-button {
+  background: linear-gradient(180deg, #8ab4f8 0%, #4c7bc8 100%);
+  border-color: #8ab4f8;
+  color: #0f1724;
+}
+
+@media (max-width: 1180px) {
+  .offline-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .offline-main {
+    grid-template-rows: auto auto auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .offline-shell {
+    padding: 14px;
+  }
+
+  .offline-status-bar {
+    margin-inline: 14px;
+  }
+
+  .offline-account-head,
+  .offline-panel-heading,
+  .offline-generator-row {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .offline-inline-buttons,
+  .offline-inline-buttons.compact {
+    grid-template-columns: 1fr 1fr;
+  }
+}

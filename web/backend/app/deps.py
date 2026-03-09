@@ -2,11 +2,12 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token, oauth2_scheme
-from app.database import SessionLocal
+from app.database import SessionLocal, init_db
 from app.models import User
 
 
 def get_db():
+    init_db()
     db = SessionLocal()
     try:
         yield db

@@ -1,804 +1,833 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { accountsApi, mailApi, toolsApi } from "../api";
 
-const STATUS_OPTIONS = [
-  "not_registered",
-  "registered",
-  "plus",
-  "banned",
-  "invalid_password"
+const QUICK_STATUS_OPTIONS = [
+  { value: "not_registered", label: "Не рег" },
+  { value: "registered", label: "Рег" },
+  { value: "plus", label: "Plus" }
+];
+
+const EXTRA_STATUS_OPTIONS = [
+  { value: "banned", label: "Banned" },
+  { value: "invalid_password", label: "Пароль" }
 ];
 
 const STATUS_LABELS = {
   not_registered: "Не зарегистрирован",
-  registered: "Registered",
+  registered: "Зарегистрирован",
   plus: "Plus",
   banned: "Banned",
-  invalid_password: "Неверный пароль"
+  invalid_password: "Неверный пароль",
+  business: "Business"
 };
 
-function statusClass(status) {
-  return `status-${status}`;
-}
+const GENERATOR_LABELS = {
+  card: "Карта",
+  exp: "Срок",
+  cvv: "CVV",
+  name: "Имя",
+  city: "Город",
+  street: "Улица",
+  postcode: "Индекс",
+  address_en: "Адрес"
+};
 
-function formatMessageTime(value) {
+function formatTimestamp(value) {
   if (!value) {
-    return "";
+    return "—";
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
     return value;
   }
 
-  const now = new Date();
-  const isSameDay =
-    now.getFullYear() === date.getFullYear() &&
-    now.getMonth() === date.getMonth() &&
-    now.getDate() === date.getDate();
-
-  if (isSameDay) {
-    return new Intl.DateTimeFormat("ru-RU", {
-      hour: "2-digit",
-      minute: "2-digit"
-    }).format(date);
-  }
-
   return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "short"
-  }).format(date);
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(parsed);
 }
 
-function formatAccountMeta(account) {
-  if (!account) {
-    return "";
-  }
+function makeAccountLine(account) {
+  const mailPassword = account.password_mail || account.password_openai || "";
+  const openAiPassword = account.password_openai || mailPassword;
+  const passwords =
+    openAiPassword && mailPassword && openAiPassword !== mailPassword
+      ? `${openAiPassword};${mailPassword}`
+      : openAiPassword || mailPassword;
 
-  return account.password_openai === account.password_mail
-    ? "Один пароль для OpenAI и почты"
-    : "Раздельные пароли OpenAI и почты";
+  return `${account.email} / ${passwords} / ${account.status}`;
+}
+
+function downloadText(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function buildExcelDocument(accounts) {
+  const statusColors = {
+    not_registered: "#ffffff",
+    registered: "#d9e1f2",
+    plus: "#46bdc6",
+    banned: "#fecaca",
+    invalid_password: "#e9d5ff",
+    business: "#c7f9cc"
+  };
+
+  const rows = accounts
+    .map((account) => {
+      const color = statusColors[account.status] || "#ffffff";
+      return `
+        <tr style="background:${color}">
+          <td>${escapeHtml(makeAccountLine(account))}</td>
+          <td>${escapeHtml(account.email)}</td>
+          <td>${escapeHtml(account.password_openai)}</td>
+          <td>${escapeHtml(account.password_mail)}</td>
+          <td>${escapeHtml(STATUS_LABELS[account.status] || account.status)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <html>
+      <head>
+        <meta charset="utf-8" />
+      </head>
+      <body>
+        <table border="1">
+          <thead>
+            <tr>
+              <th>Полная строка</th>
+              <th>Email</th>
+              <th>OpenAI</th>
+              <th>Почта</th>
+              <th>Статус</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body>
+    </html>
+  `;
 }
 
 async function copyText(value) {
   if (!value) {
     return;
   }
-  await navigator.clipboard.writeText(value);
+
+  await navigator.clipboard.writeText(String(value));
 }
 
 export default function Dashboard({ token, user, onLogout }) {
-  const [theme, setTheme] = useState("light");
-  const [statusMessage, setStatusMessage] = useState("Готово");
+  const importFileRef = useRef(null);
+  const inboxRefreshRef = useRef(false);
 
   const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [messageDetail, setMessageDetail] = useState(null);
-  const [activeMessageId, setActiveMessageId] = useState(null);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLowerCase());
-
   const [importText, setImportText] = useState("");
-  const [manualEmail, setManualEmail] = useState("");
-  const [manualPasswordOpenai, setManualPasswordOpenai] = useState("");
-  const [manualPasswordMail, setManualPasswordMail] = useState("");
-
   const [randomPerson, setRandomPerson] = useState({ name: "", birthdate: "" });
-  const [inData, setInData] = useState(null);
-  const [skData, setSkData] = useState(null);
+  const [inGenerator, setInGenerator] = useState({});
+  const [skGenerator, setSkGenerator] = useState({});
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [banBusy, setBanBusy] = useState(false);
+  const [randomBusy, setRandomBusy] = useState(false);
+  const [generatorBusy, setGeneratorBusy] = useState({ in: false, sk: false });
+  const [statusText, setStatusText] = useState("Готов к работе");
 
-  const [busy, setBusy] = useState(false);
+  const selectedAccount =
+    accounts.find((account) => account.id === selectedAccountId) || null;
+  const selectedMessage =
+    messages.find((message) => message.id === selectedMessageId) || null;
 
-  const selectedAccount = useMemo(
-    () => accounts.find((item) => item.id === selectedAccountId) || null,
-    [accounts, selectedAccountId]
-  );
-
-  const filteredAccounts = useMemo(() => {
-    if (!deferredSearchQuery) {
-      return accounts;
-    }
-
-    return accounts.filter((account) => {
-      const haystack = [
-        account.email,
-        account.status,
-        STATUS_LABELS[account.status] || account.status
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(deferredSearchQuery);
-    });
-  }, [accounts, deferredSearchQuery]);
-
-  const filteredMessages = useMemo(() => {
-    if (!deferredSearchQuery) {
-      return messages;
-    }
-
-    return messages.filter((message) => {
-      const haystack = [message.sender, message.subject, message.created_at]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(deferredSearchQuery);
-    });
-  }, [messages, deferredSearchQuery]);
-
-  const accountStats = useMemo(() => {
-    const stats = {
-      total: accounts.length,
-      registered: 0,
-      plus: 0,
-      banned: 0
-    };
-
-    accounts.forEach((account) => {
-      if (account.status === "registered") {
-        stats.registered += 1;
-      }
-      if (account.status === "plus") {
-        stats.plus += 1;
-      }
-      if (account.status === "banned") {
-        stats.banned += 1;
-      }
-    });
-
-    return stats;
-  }, [accounts]);
-
-  const applyStatus = (message) => {
-    setStatusMessage(message);
-  };
-
-  const withBusy = async (operation, loadingText = "Загрузка...") => {
-    setBusy(true);
-    applyStatus(loadingText);
+  const loadAccounts = async (preferredAccountId = null) => {
     try {
-      await operation();
+      setAccountsLoading(true);
+      const nextAccounts = await accountsApi.list(token);
+      setAccounts(nextAccounts);
+
+      setSelectedAccountId((currentValue) => {
+        if (
+          preferredAccountId &&
+          nextAccounts.some((account) => account.id === preferredAccountId)
+        ) {
+          return preferredAccountId;
+        }
+        if (currentValue && nextAccounts.some((account) => account.id === currentValue)) {
+          return currentValue;
+        }
+        return nextAccounts[0]?.id ?? null;
+      });
+
+      if (!nextAccounts.length) {
+        setMessages([]);
+        setSelectedMessageId(null);
+        setMessageDetail(null);
+      }
+
+      setStatusText(`Аккаунтов: ${nextAccounts.length}`);
     } catch (error) {
-      applyStatus(`Ошибка: ${error.message}`);
+      setStatusText(error.message);
     } finally {
-      setBusy(false);
+      setAccountsLoading(false);
     }
   };
 
-  const loadAccounts = async (nextSelectedId = null) => {
-    const response = await accountsApi.list(token);
-    setAccounts(response);
-
-    if (!response.length) {
-      setSelectedAccountId(null);
-      setMessages([]);
-      setMessageDetail(null);
-      setActiveMessageId(null);
+  const loadMessages = async (accountId, options = {}) => {
+    const { ensureConnection = false, silent = false } = options;
+    if (!accountId || inboxRefreshRef.current) {
       return;
     }
 
-    const desiredId = nextSelectedId ?? selectedAccountId;
-    const hasDesired = response.some((item) => item.id === desiredId);
-    setSelectedAccountId(hasDesired ? desiredId : response[0].id);
+    inboxRefreshRef.current = true;
+
+    try {
+      if (!silent) {
+        setMessagesLoading(true);
+        setStatusText("Обновление писем...");
+      }
+
+      if (ensureConnection) {
+        try {
+          await mailApi.connect(token, accountId);
+        } catch (error) {
+          if (!silent) {
+            setStatusText(error.message);
+          }
+        }
+      }
+
+      const nextMessages = await mailApi.messages(token, accountId);
+      setMessages(nextMessages);
+      setSelectedMessageId((currentValue) => {
+        if (currentValue && nextMessages.some((message) => message.id === currentValue)) {
+          return currentValue;
+        }
+        return nextMessages[0]?.id ?? null;
+      });
+      if (!nextMessages.length) {
+        setMessageDetail(null);
+      }
+      if (!silent) {
+        setStatusText(`Писем: ${nextMessages.length}`);
+      }
+    } catch (error) {
+      if (!silent) {
+        setStatusText(error.message);
+      }
+    } finally {
+      inboxRefreshRef.current = false;
+      setMessagesLoading(false);
+    }
+  };
+
+  const loadMessageDetail = async (accountId, message) => {
+    if (!accountId || !message) {
+      setMessageDetail(null);
+      return;
+    }
+
+    try {
+      setDetailLoading(true);
+      const detail = await mailApi.messageDetail(
+        token,
+        accountId,
+        message.id,
+        message.sender,
+        message.subject
+      );
+      setMessageDetail(detail);
+    } catch (error) {
+      setMessageDetail({
+        id: message.id,
+        sender: message.sender,
+        subject: message.subject,
+        text: error.message,
+        code: null
+      });
+      setStatusText(error.message);
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const loadRandomPerson = async () => {
-    const person = await toolsApi.randomPerson(token);
-    setRandomPerson(person);
+    try {
+      setRandomBusy(true);
+      const nextPerson = await toolsApi.randomPerson(token);
+      setRandomPerson(nextPerson);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setRandomBusy(false);
+    }
   };
 
-  const connectSelected = async () => {
-    if (!selectedAccount) {
-      return;
+  const loadGenerator = async (kind) => {
+    try {
+      setGeneratorBusy((currentValue) => ({ ...currentValue, [kind]: true }));
+      const nextData =
+        kind === "in" ? await toolsApi.generatorIn(token) : await toolsApi.generatorSk(token);
+      if (kind === "in") {
+        setInGenerator(nextData);
+      } else {
+        setSkGenerator(nextData);
+      }
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setGeneratorBusy((currentValue) => ({ ...currentValue, [kind]: false }));
     }
-    await mailApi.connect(token, selectedAccount.id);
-  };
-
-  const refreshMessages = async () => {
-    if (!selectedAccount) {
-      return;
-    }
-    const inbox = await mailApi.messages(token, selectedAccount.id);
-    setMessages(inbox);
-
-    if (!inbox.length) {
-      setMessageDetail(null);
-      setActiveMessageId(null);
-    } else if (activeMessageId && !inbox.some((item) => item.id === activeMessageId)) {
-      setMessageDetail(null);
-      setActiveMessageId(null);
-    }
-
-    applyStatus(`Писем: ${inbox.length}`);
-  };
-
-  const openMessage = async (message) => {
-    if (!selectedAccount) {
-      return;
-    }
-
-    setActiveMessageId(message.id);
-
-    const detail = await mailApi.messageDetail(
-      token,
-      selectedAccount.id,
-      message.id,
-      message.sender,
-      message.subject
-    );
-    setMessageDetail(detail);
   };
 
   useEffect(() => {
-    withBusy(async () => {
-      await loadAccounts();
-      await loadRandomPerson();
-      setInData(await toolsApi.generatorIn(token));
-      setSkData(await toolsApi.generatorSk(token));
-      applyStatus("Готово");
-    }, "Инициализация...");
-  }, []);
+    loadAccounts();
+    loadRandomPerson();
+    loadGenerator("in");
+    loadGenerator("sk");
+  }, [token]);
 
   useEffect(() => {
     if (!selectedAccountId) {
+      setMessages([]);
+      setSelectedMessageId(null);
+      setMessageDetail(null);
       return;
     }
-    setActiveMessageId(null);
-    setMessageDetail(null);
-    withBusy(async () => {
-      await connectSelected();
-      await refreshMessages();
-    }, "Подключение к почте...");
+
+    loadMessages(selectedAccountId, { ensureConnection: true });
   }, [selectedAccountId]);
 
-  const createMailTm = () =>
-    withBusy(async () => {
-      const created = await accountsApi.createMailTm(token, 12);
-      await loadAccounts(created.id);
-      applyStatus(`Создан аккаунт ${created.email}`);
-    }, "Создание аккаунта...");
+  useEffect(() => {
+    if (!selectedAccountId) {
+      return undefined;
+    }
 
-  const addManualAccount = (event) => {
-    event.preventDefault();
+    const timer = window.setInterval(() => {
+      loadMessages(selectedAccountId, { silent: true });
+    }, 5000);
 
-    withBusy(async () => {
-      const payload = {
-        email: manualEmail,
-        password_openai: manualPasswordOpenai,
-        password_mail: manualPasswordMail || manualPasswordOpenai,
-        status: "not_registered"
-      };
-      const created = await accountsApi.create(token, payload);
-      setManualEmail("");
-      setManualPasswordOpenai("");
-      setManualPasswordMail("");
-      await loadAccounts(created.id);
-      applyStatus(`Добавлен ${created.email}`);
-    }, "Добавление аккаунта...");
+    return () => window.clearInterval(timer);
+  }, [selectedAccountId]);
+
+  useEffect(() => {
+    if (!selectedAccountId || !selectedMessageId) {
+      setMessageDetail(null);
+      return;
+    }
+
+    const nextMessage = messages.find((message) => message.id === selectedMessageId);
+    if (!nextMessage) {
+      setMessageDetail(null);
+      return;
+    }
+
+    loadMessageDetail(selectedAccountId, nextMessage);
+  }, [messages, selectedAccountId, selectedMessageId]);
+
+  const handleCreateAccount = async () => {
+    try {
+      setCreateBusy(true);
+      const createdAccount = await accountsApi.createMailTm(token, 12);
+      await loadAccounts(createdAccount.id);
+      setStatusText(`Создан: ${createdAccount.email}`);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setCreateBusy(false);
+    }
   };
 
-  const importAccounts = () =>
-    withBusy(async () => {
-      const result = await accountsApi.importAccounts(token, importText);
-      await loadAccounts();
-      applyStatus(
-        `Импорт: добавлено ${result.added}, дубли ${result.duplicates}, пропущено ${result.skipped}`
-      );
-      setImportText("");
-    }, "Импорт аккаунтов...");
+  const handleRefreshWorkspace = async () => {
+    await loadAccounts(selectedAccountId);
+    if (selectedAccountId) {
+      await loadMessages(selectedAccountId, { ensureConnection: true });
+    }
+  };
 
-  const setSelectedStatus = (status) => {
+  const handleUpdateStatus = async (status) => {
     if (!selectedAccount) {
       return;
     }
 
-    withBusy(async () => {
+    try {
       await accountsApi.updateStatus(token, selectedAccount.id, status);
       await loadAccounts(selectedAccount.id);
-      applyStatus(`Статус изменен: ${status}`);
-    }, "Обновление статуса...");
+      setStatusText(`Статус обновлён: ${STATUS_LABELS[status] || status}`);
+    } catch (error) {
+      setStatusText(error.message);
+    }
   };
 
-  const deleteSelectedAccount = () => {
-    if (!selectedAccount) {
+  const handleBanCheck = async () => {
+    const accountIds = accounts
+      .filter((account) => !["banned", "invalid_password"].includes(account.status))
+      .map((account) => account.id);
+
+    if (!accountIds.length) {
+      setStatusText("Нет аккаунтов для проверки");
       return;
     }
 
-    if (!window.confirm(`Удалить ${selectedAccount.email}?`)) {
-      return;
-    }
-
-    withBusy(async () => {
-      await accountsApi.remove(token, selectedAccount.id);
-      await loadAccounts();
-      applyStatus("Аккаунт удален");
-    }, "Удаление аккаунта...");
-  };
-
-  const banCheckOne = () => {
-    if (!selectedAccount) {
-      return;
-    }
-
-    withBusy(async () => {
-      const result = await mailApi.banCheckOne(token, selectedAccount.id);
-      await loadAccounts(selectedAccount.id);
-      applyStatus(`Ban check: ${result.result}`);
-    }, "Проверка аккаунта...");
-  };
-
-  const banCheckAll = () =>
-    withBusy(async () => {
-      const response = await mailApi.banCheckBulk(token, null);
+    try {
+      setBanBusy(true);
+      const result = await mailApi.banCheckBulk(token, accountIds);
       await loadAccounts(selectedAccountId);
-      applyStatus(
-        `Проверено ${response.checked}. Banned: ${response.banned}, invalid_password: ${response.invalid_password}, errors: ${response.errors}`
+      setStatusText(
+        `Проверено: ${result.checked} | Забанено: ${result.banned} | Неверный пароль: ${result.invalid_password}`
       );
-    }, "Массовая проверка...");
-
-  const manualRefresh = () =>
-    withBusy(async () => {
-      await refreshMessages();
-      applyStatus("Inbox обновлен");
-    }, "Обновление inbox...");
-
-  const regenerateRandomPerson = () =>
-    withBusy(async () => {
-      await loadRandomPerson();
-      applyStatus("Случайные данные обновлены");
-    }, "Генерация данных...");
-
-  const regenerateIn = () =>
-    withBusy(async () => {
-      setInData(await toolsApi.generatorIn(token));
-      applyStatus("IN-генератор обновлен");
-    }, "Генерация IN данных...");
-
-  const regenerateSk = () =>
-    withBusy(async () => {
-      setSkData(await toolsApi.generatorSk(token));
-      applyStatus("SK-генератор обновлен");
-    }, "Генерация SK данных...");
-
-  const copyAccountField = async (field) => {
-    if (!selectedAccount) {
-      return;
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setBanBusy(false);
     }
-
-    let value = "";
-    if (field === "email") {
-      value = selectedAccount.email;
-    }
-    if (field === "openai") {
-      value = selectedAccount.password_openai;
-    }
-    if (field === "mail") {
-      value = selectedAccount.password_mail;
-    }
-    if (field === "full") {
-      if (selectedAccount.password_openai !== selectedAccount.password_mail) {
-        value = `${selectedAccount.email}:${selectedAccount.password_openai};${selectedAccount.password_mail}`;
-      } else {
-        value = `${selectedAccount.email}:${selectedAccount.password_openai}`;
-      }
-    }
-
-    await copyText(value);
-    applyStatus(`Скопировано: ${field}`);
   };
 
-  const copyCode = async () => {
-    if (!messageDetail?.code) {
+  const handleImport = async (rawText = importText) => {
+    const cleanText = rawText.trim();
+    if (!cleanText) {
+      setStatusText("Вставьте аккаунты для импорта");
       return;
     }
-    await copyText(messageDetail.code);
-    applyStatus(`Код ${messageDetail.code} скопирован`);
+
+    try {
+      setImportBusy(true);
+      const result = await accountsApi.importAccounts(token, cleanText);
+      await loadAccounts(selectedAccountId);
+      setStatusText(
+        `Импорт: +${result.added} | Дубликаты: ${result.duplicates} | Пропущено: ${result.skipped}`
+      );
+      setImportText(cleanText);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const handleClipboardPaste = async () => {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      setImportText(clipboardText);
+      setStatusText("Текст из буфера вставлен");
+    } catch (error) {
+      setStatusText(error.message || "Не удалось прочитать буфер");
+    }
+  };
+
+  const handleImportFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const fileText = await file.text();
+      setImportText(fileText);
+      setStatusText(`Файл загружен: ${file.name}`);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handleExportTxt = () => {
+    downloadText("accounts.txt", accounts.map(makeAccountLine).join("\n"), "text/plain;charset=utf-8");
+    setStatusText("TXT экспорт готов");
+  };
+
+  const handleExportExcel = () => {
+    downloadText(
+      "accounts.xls",
+      buildExcelDocument(accounts),
+      "application/vnd.ms-excel;charset=utf-8"
+    );
+    setStatusText("Excel экспорт готов");
+  };
+
+  const handleCopyField = async (value, label) => {
+    try {
+      await copyText(value);
+      setStatusText(`Скопировано: ${label}`);
+    } catch (error) {
+      setStatusText(error.message || "Не удалось скопировать");
+    }
+  };
+
+  const renderGenerator = (title, data, busy, kind) => {
+    const entries = Object.entries(data);
+    if (!entries.length) {
+      return null;
+    }
+
+    return (
+      <div className="offline-generator-card">
+        <div className="offline-generator-head">
+          <strong>{title}</strong>
+          <button type="button" onClick={() => loadGenerator(kind)} disabled={busy}>
+            {busy ? "..." : "Обновить"}
+          </button>
+        </div>
+        <div className="offline-generator-grid">
+          {entries.map(([key, value]) => (
+            <div key={`${title}-${key}`} className="offline-generator-row">
+              <span>{GENERATOR_LABELS[key] || key}</span>
+              <code>{value}</code>
+              <button type="button" onClick={() => handleCopyField(value, `${title} ${key}`)}>
+                Копия
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className={`dashboard theme-${theme}`}>
-      <header className="app-topbar">
-        <div className="brand-lockup">
-          <div className="brand-mark">M</div>
-          <div>
-            <strong>Mail.tm Workspace</strong>
-            <span>Почтовая консоль регистрации</span>
-          </div>
-        </div>
+    <div className="dashboard offline-dashboard">
+      <div className="offline-shell">
+        <aside className="offline-sidebar">
+          <section className="offline-card offline-sidebar-head">
+            <div>
+              <p className="offline-eyebrow">Auto-Reg Web</p>
+              <h1>Mail.tm</h1>
+              <p className="offline-sidebar-user">{user.username}</p>
+            </div>
+            <button type="button" className="ghost-button" onClick={onLogout}>
+              Выйти
+            </button>
+          </section>
 
-        <label className="search-shell">
-          <span>Поиск</span>
-          <input
-            type="search"
-            placeholder="Ищите аккаунты, статусы и письма"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-          />
-        </label>
-
-        <div className="topbar-actions">
-          <div className="user-chip">
-            <span className="user-chip-label">Профиль</span>
-            <strong>{user.username}</strong>
-          </div>
           <button
             type="button"
-            className="ghost-button"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            className="offline-create-button"
+            onClick={handleCreateAccount}
+            disabled={createBusy}
           >
-            {theme === "light" ? "Темная тема" : "Светлая тема"}
-          </button>
-          <button type="button" className="ghost-button" onClick={onLogout}>
-            Выйти
-          </button>
-        </div>
-      </header>
-
-      <div className="workspace-layout">
-        <aside className="workspace-sidebar">
-          <button type="button" className="compose-button" onClick={createMailTm} disabled={busy}>
-            Создать mail.tm
+            {createBusy ? "Создание..." : "+ Создать аккаунт"}
           </button>
 
-          <section className="sidebar-card">
-            <div className="card-heading">
-              <div>
-                <p className="eyebrow">Навигация</p>
-                <h2>Почтовые ящики</h2>
-              </div>
-              <span className="count-pill">{filteredAccounts.length}</span>
+          <section className="offline-card">
+            <div className="offline-section-heading">
+              <span>АККАУНТЫ</span>
+              <strong>{accounts.length}</strong>
             </div>
 
-            <div className="account-list gmail-list">
-              {filteredAccounts.map((account) => (
+            <div className="offline-inline-buttons">
+              <button type="button" onClick={handleRefreshWorkspace} disabled={accountsLoading}>
+                Обновить
+              </button>
+              <button type="button" onClick={handleExportTxt} disabled={!accounts.length}>
+                TXT
+              </button>
+              <button type="button" onClick={handleExportExcel} disabled={!accounts.length}>
+                Excel
+              </button>
+              <button type="button" onClick={handleBanCheck} disabled={banBusy || !accounts.length}>
+                {banBusy ? "..." : "Бан"}
+              </button>
+            </div>
+
+            <div className="offline-account-list">
+              {accountsLoading ? <div className="empty-state compact">Загрузка аккаунтов...</div> : null}
+
+              {!accountsLoading && !accounts.length ? (
+                <div className="empty-state compact">
+                  Аккаунтов пока нет. Создайте mail.tm аккаунт или импортируйте список ниже.
+                </div>
+              ) : null}
+
+              {accounts.map((account) => (
                 <button
                   key={account.id}
                   type="button"
-                  className={`account-item account-nav-item ${statusClass(account.status)} ${
+                  className={`offline-account-item ${
                     account.id === selectedAccountId ? "active" : ""
                   }`}
                   onClick={() => setSelectedAccountId(account.id)}
                 >
-                  <div className="account-nav-top">
-                    <span className="account-email">{account.email}</span>
-                    <span className={`status-pill status-pill-${account.status}`}>
+                  <div className="offline-account-item-top">
+                    <strong>{account.email}</strong>
+                    <span className={`offline-status-chip status-${account.status}`}>
                       {STATUS_LABELS[account.status] || account.status}
                     </span>
                   </div>
-                  <small>{formatAccountMeta(account)}</small>
+                  <small>{formatTimestamp(account.updated_at)}</small>
                 </button>
               ))}
-
-              {!filteredAccounts.length ? (
-                <div className="empty-state compact">Ничего не найдено по текущему поиску.</div>
-              ) : null}
             </div>
           </section>
 
-          <section className="sidebar-card">
-            <div className="card-heading">
-              <div>
-                <p className="eyebrow">Импорт</p>
-                <h2>Добавление аккаунтов</h2>
+          <section className="offline-card">
+            <div className="offline-section-heading">
+              <span>ДЕЙСТВИЯ</span>
+            </div>
+
+            <div className="offline-inline-buttons">
+              <button
+                type="button"
+                onClick={() => handleCopyField(selectedAccount?.email, "Email")}
+                disabled={!selectedAccount}
+              >
+                Email
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCopyField(selectedAccount?.password_openai, "OpenAI")}
+                disabled={!selectedAccount}
+              >
+                OpenAI
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCopyField(selectedAccount?.password_mail, "Почта")}
+                disabled={!selectedAccount}
+              >
+                Почта
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleCopyField(selectedAccount ? makeAccountLine(selectedAccount) : "", "Полный")
+                }
+                disabled={!selectedAccount}
+              >
+                Полный
+              </button>
+            </div>
+
+            <div className="offline-inline-buttons">
+              <button
+                type="button"
+                onClick={() => handleCopyField(inGenerator.address_en, "IN адрес")}
+                disabled={!inGenerator.address_en}
+              >
+                IN
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCopyField(skGenerator.address_en, "SK адрес")}
+                disabled={!skGenerator.address_en}
+              >
+                SK
+              </button>
+              <button type="button" disabled title="Доступно только в офлайн версии">
+                Сапёр
+              </button>
+              <button type="button" disabled title="Доступно только в офлайн версии">
+                Настройки
+              </button>
+            </div>
+
+            <div className="offline-import-panel">
+              <textarea
+                className="import-textarea"
+                value={importText}
+                onChange={(event) => setImportText(event.target.value)}
+                placeholder="email / password_openai;password_mail / status"
+              />
+              <div className="offline-inline-buttons">
+                <button type="button" onClick={() => handleImport()} disabled={importBusy}>
+                  {importBusy ? "Импорт..." : "Импорт"}
+                </button>
+                <button type="button" onClick={() => importFileRef.current?.click()}>
+                  Файл
+                </button>
+                <button type="button" onClick={handleClipboardPaste}>
+                  Буфер
+                </button>
+              </div>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".txt,.csv,.tsv"
+                hidden
+                onChange={handleImportFileChange}
+              />
+            </div>
+          </section>
+
+          <section className="offline-card">
+            <div className="offline-section-heading">
+              <span>ГЕНЕРАТОР</span>
+              <button type="button" onClick={loadRandomPerson} disabled={randomBusy}>
+                {randomBusy ? "..." : "Новые данные"}
+              </button>
+            </div>
+
+            <div className="offline-generator-card compact">
+              <div className="offline-generator-row">
+                <span>Имя</span>
+                <code>{randomPerson.name || "—"}</code>
+                <button type="button" onClick={() => handleCopyField(randomPerson.name, "Имя")}>
+                  Копия
+                </button>
+              </div>
+              <div className="offline-generator-row">
+                <span>Дата</span>
+                <code>{randomPerson.birthdate || "—"}</code>
+                <button
+                  type="button"
+                  onClick={() => handleCopyField(randomPerson.birthdate, "Дата рождения")}
+                >
+                  Копия
+                </button>
               </div>
             </div>
 
-            <form className="manual-form" onSubmit={addManualAccount}>
-              <input
-                placeholder="email"
-                value={manualEmail}
-                onChange={(event) => setManualEmail(event.target.value)}
-                required
-              />
-              <input
-                placeholder="пароль openai"
-                value={manualPasswordOpenai}
-                onChange={(event) => setManualPasswordOpenai(event.target.value)}
-                required
-              />
-              <input
-                placeholder="пароль почты (опц.)"
-                value={manualPasswordMail}
-                onChange={(event) => setManualPasswordMail(event.target.value)}
-              />
-              <button type="submit" disabled={busy}>
-                Добавить вручную
-              </button>
-            </form>
-
-            <textarea
-              className="import-textarea"
-              placeholder="Вставьте аккаунты: email / pass или pass;pass / status"
-              value={importText}
-              onChange={(event) => setImportText(event.target.value)}
-            />
-            <button type="button" onClick={importAccounts} disabled={busy || !importText.trim()}>
-              Импорт из текста
-            </button>
+            {renderGenerator("IN", inGenerator, generatorBusy.in, "in")}
+            {renderGenerator("SK", skGenerator, generatorBusy.sk, "sk")}
           </section>
         </aside>
 
-        <main className="mail-column">
-          <section className="hero-card">
+        <main className="offline-main">
+          <section className="offline-card offline-account-head">
             <div>
-              <p className="eyebrow">Inbox workspace</p>
-              <h1>{selectedAccount ? selectedAccount.email : "Выберите аккаунт"}</h1>
-              <p className="hero-subtitle">
+              <p className="offline-eyebrow">Аккаунт</p>
+              <h2>{selectedAccount?.email || "Аккаунт не выбран"}</h2>
+              <p className="offline-account-meta">
                 {selectedAccount
-                  ? `${STATUS_LABELS[selectedAccount.status]} · ${formatAccountMeta(selectedAccount)}`
-                  : "Слева находятся временные почты, а справа инструменты регистрации и чтения писем."}
+                  ? `Почта: ${selectedAccount.password_mail} | OpenAI: ${selectedAccount.password_openai}`
+                  : "Выберите аккаунт слева, чтобы открыть inbox и письмо."}
               </p>
             </div>
 
-            <div className="hero-actions">
-              <button type="button" onClick={manualRefresh} disabled={!selectedAccount || busy}>
-                Обновить inbox
-              </button>
-              <button type="button" onClick={banCheckOne} disabled={!selectedAccount || busy}>
-                Ban чек
-              </button>
-              <button type="button" onClick={deleteSelectedAccount} disabled={!selectedAccount || busy}>
-                Удалить
-              </button>
-            </div>
-          </section>
-
-          <section className="toolbar-card">
-            <div className="stat-strip">
-              <article className="stat-card">
-                <span>Всего</span>
-                <strong>{accountStats.total}</strong>
-              </article>
-              <article className="stat-card">
-                <span>Registered</span>
-                <strong>{accountStats.registered}</strong>
-              </article>
-              <article className="stat-card">
-                <span>Plus</span>
-                <strong>{accountStats.plus}</strong>
-              </article>
-              <article className="stat-card">
-                <span>Banned</span>
-                <strong>{accountStats.banned}</strong>
-              </article>
-            </div>
-
-            <div className="action-clusters">
-              <div className="button-grid compact-grid">
-                <button
-                  type="button"
-                  onClick={() => copyAccountField("email")}
-                  disabled={!selectedAccount}
-                >
-                  Copy email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => copyAccountField("openai")}
-                  disabled={!selectedAccount}
-                >
-                  Copy openai
-                </button>
-                <button
-                  type="button"
-                  onClick={() => copyAccountField("mail")}
-                  disabled={!selectedAccount}
-                >
-                  Copy mail
-                </button>
-                <button
-                  type="button"
-                  onClick={() => copyAccountField("full")}
-                  disabled={!selectedAccount}
-                >
-                  Copy full
-                </button>
-              </div>
-
-              <div className="status-actions">
-                {STATUS_OPTIONS.map((status) => (
+            <div className="offline-head-actions">
+              <div className="offline-inline-buttons compact">
+                {QUICK_STATUS_OPTIONS.map((option) => (
                   <button
+                    key={option.value}
                     type="button"
-                    key={status}
-                    className={`status-switch status-switch-${status}`}
-                    onClick={() => setSelectedStatus(status)}
-                    disabled={!selectedAccount || busy}
+                    className={`offline-status-button status-${option.value}`}
+                    onClick={() => handleUpdateStatus(option.value)}
+                    disabled={!selectedAccount}
                   >
-                    {STATUS_LABELS[status]}
+                    {option.label}
                   </button>
                 ))}
               </div>
+
+              <div className="offline-inline-buttons compact">
+                {EXTRA_STATUS_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`offline-status-button status-${option.value}`}
+                    onClick={() => handleUpdateStatus(option.value)}
+                    disabled={!selectedAccount}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="primary-inline"
+                  onClick={() =>
+                    selectedAccountId && loadMessages(selectedAccountId, { ensureConnection: true })
+                  }
+                  disabled={!selectedAccountId}
+                >
+                  Обновить
+                </button>
+              </div>
             </div>
           </section>
 
-          <section className="mail-list-card">
-            <div className="card-heading border-bottom">
+          <section className="offline-card offline-messages-card">
+            <div className="offline-panel-heading border-bottom">
               <div>
-                <p className="eyebrow">Письма</p>
-                <h2>Лента inbox</h2>
+                <h3>Входящие</h3>
+                <p>{selectedAccount ? `Всего писем: ${messages.length}` : "Нет выбранного аккаунта"}</p>
               </div>
-              <span className="count-pill">{filteredMessages.length}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  selectedAccountId && loadMessages(selectedAccountId, { ensureConnection: true })
+                }
+                disabled={!selectedAccountId}
+              >
+                {messagesLoading ? "Загрузка..." : "Обновить"}
+              </button>
             </div>
 
-            <div className="message-stack">
-              {filteredMessages.map((message) => (
+            <div className="offline-message-list">
+              {!selectedAccount ? (
+                <div className="empty-state">Выберите аккаунт в левом списке.</div>
+              ) : null}
+
+              {selectedAccount && !messages.length && !messagesLoading ? (
+                <div className="empty-state">Писем пока нет.</div>
+              ) : null}
+
+              {messages.map((message) => (
                 <button
                   key={message.id}
                   type="button"
-                  className={`message-row ${activeMessageId === message.id ? "active" : ""}`}
-                  onClick={() => openMessage(message)}
+                  className={`offline-message-row ${
+                    message.id === selectedMessageId ? "active" : ""
+                  }`}
+                  onClick={() => setSelectedMessageId(message.id)}
                 >
-                  <div className="message-row-main">
-                    <strong>{message.sender || "Без отправителя"}</strong>
-                    <span>{message.subject || "Без темы"}</span>
+                  <div className="offline-message-main">
+                    <strong>{message.sender || "Неизвестно"}</strong>
+                    <span>{message.subject || "(без темы)"}</span>
                   </div>
-                  <span className="message-row-time">{formatMessageTime(message.created_at)}</span>
+                  <time>{formatTimestamp(message.created_at)}</time>
                 </button>
               ))}
+            </div>
+          </section>
 
-              {!filteredMessages.length ? (
-                <div className="empty-state">
-                  {selectedAccount
-                    ? "В этой почте пока нет писем."
-                    : "Выберите аккаунт слева, чтобы подключиться и загрузить inbox."}
-                </div>
+          <section className="offline-card offline-viewer-card">
+            <div className="offline-panel-heading border-bottom">
+              <div>
+                <h3>{selectedMessage?.subject || "Просмотр письма"}</h3>
+                <p>{selectedMessage ? `От: ${selectedMessage.sender}` : "Выберите письмо, чтобы увидеть содержимое."}</p>
+              </div>
+              {messageDetail?.code ? (
+                <button type="button" onClick={() => handleCopyField(messageDetail.code, "Код")}>
+                  Копировать код
+                </button>
               ) : null}
+            </div>
+
+            <div className="offline-message-detail">
+              <pre>
+                {detailLoading
+                  ? "Загрузка..."
+                  : messageDetail?.text || "Выберите письмо, чтобы увидеть содержимое."}
+              </pre>
             </div>
           </section>
         </main>
-
-        <aside className="inspector-column">
-          <section className="viewer-card">
-            <div className="card-heading border-bottom">
-              <div>
-                <p className="eyebrow">Просмотр</p>
-                <h2>{messageDetail ? messageDetail.subject : "Чтение письма"}</h2>
-              </div>
-              {messageDetail?.code ? (
-                <button type="button" className="primary-inline" onClick={copyCode}>
-                  Скопировать код {messageDetail.code}
-                </button>
-              ) : null}
-            </div>
-
-            {messageDetail ? (
-              <div className="message-detail-shell">
-                <div className="message-meta">
-                  <p>
-                    <strong>От:</strong> {messageDetail.sender}
-                  </p>
-                  <p>
-                    <strong>Тема:</strong> {messageDetail.subject}
-                  </p>
-                </div>
-                <pre>{messageDetail.text}</pre>
-              </div>
-            ) : (
-              <div className="empty-state">
-                Откройте письмо из центральной колонки. Здесь будет детальный просмотр и код
-                подтверждения.
-              </div>
-            )}
-          </section>
-
-          <section className="toolkit-card">
-            <div className="card-heading">
-              <div>
-                <p className="eyebrow">Локальные особенности</p>
-                <h2>Инструменты регистрации</h2>
-              </div>
-            </div>
-
-            <div className="generator-block">
-              <div className="generator-header">
-                <h3>Random person</h3>
-                <button type="button" onClick={regenerateRandomPerson}>
-                  Обновить
-                </button>
-              </div>
-              <div className="kv-row">
-                <span>Name</span>
-                <code>{randomPerson.name || "-"}</code>
-                <button type="button" onClick={() => copyText(randomPerson.name)}>
-                  Copy
-                </button>
-              </div>
-              <div className="kv-row">
-                <span>Birthdate</span>
-                <code>{randomPerson.birthdate || "-"}</code>
-                <button type="button" onClick={() => copyText(randomPerson.birthdate)}>
-                  Copy
-                </button>
-              </div>
-            </div>
-
-            <div className="generator-block compact">
-              <div className="generator-header">
-                <h3>IN Generator</h3>
-                <button type="button" onClick={regenerateIn}>
-                  Обновить
-                </button>
-              </div>
-              {inData ? (
-                <div className="mini-grid">
-                  <button type="button" onClick={() => copyText(inData.card)}>
-                    Card
-                  </button>
-                  <button type="button" onClick={() => copyText(inData.exp)}>
-                    Exp
-                  </button>
-                  <button type="button" onClick={() => copyText(inData.cvv)}>
-                    CVV
-                  </button>
-                  <button type="button" onClick={() => copyText(inData.name)}>
-                    Name
-                  </button>
-                  <button type="button" onClick={() => copyText(inData.city)}>
-                    City
-                  </button>
-                  <button type="button" onClick={() => copyText(inData.postcode)}>
-                    Postcode
-                  </button>
-                </div>
-              ) : (
-                <div className="empty-state compact">Данные генератора пока не загружены.</div>
-              )}
-            </div>
-
-            <div className="generator-block compact">
-              <div className="generator-header">
-                <h3>SK Generator</h3>
-                <button type="button" onClick={regenerateSk}>
-                  Обновить
-                </button>
-              </div>
-              {skData ? (
-                <div className="mini-grid">
-                  <button type="button" onClick={() => copyText(skData.card)}>
-                    Card
-                  </button>
-                  <button type="button" onClick={() => copyText(skData.exp)}>
-                    Exp
-                  </button>
-                  <button type="button" onClick={() => copyText(skData.cvv)}>
-                    CVV
-                  </button>
-                  <button type="button" onClick={() => copyText(skData.name)}>
-                    Name
-                  </button>
-                  <button type="button" onClick={() => copyText(skData.city)}>
-                    City
-                  </button>
-                  <button type="button" onClick={() => copyText(skData.postcode)}>
-                    Postcode
-                  </button>
-                </div>
-              ) : (
-                <div className="empty-state compact">Данные генератора пока не загружены.</div>
-              )}
-            </div>
-
-            <div className="generator-block compact">
-              <div className="generator-header">
-                <h3>Массовые действия</h3>
-              </div>
-              <div className="button-grid compact-grid">
-                <button type="button" onClick={banCheckAll} disabled={busy}>
-                  Ban чек всех
-                </button>
-                <button type="button" onClick={createMailTm} disabled={busy}>
-                  Создать mail.tm
-                </button>
-              </div>
-            </div>
-          </section>
-        </aside>
       </div>
 
-      <footer className="status-bar">{statusMessage}</footer>
+      <footer className="status-bar offline-status-bar">{statusText}</footer>
     </div>
   );
 }

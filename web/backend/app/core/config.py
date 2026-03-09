@@ -1,7 +1,19 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+
+def _default_database_url() -> str:
+    db_path = (BACKEND_DIR / "web_app.db").resolve()
+    path_str = db_path.as_posix()
+    if db_path.drive:
+        return f"sqlite:///{path_str}"
+    return f"sqlite:////{path_str}"
 
 
 class Settings(BaseSettings):
@@ -10,7 +22,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-env"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
-    database_url: str = "sqlite:///./web_app.db"
+    database_url: str = Field(default_factory=_default_database_url)
     mail_tm_api_url: str = "https://api.mail.tm"
     cors_origins: list[str] = Field(
         default_factory=lambda: [
