@@ -44,67 +44,100 @@ export default function AuthView({ onAuthSuccess }) {
   return (
     <div className="auth-root">
       <div className="auth-card">
-        <h1>Auto-reg Web</h1>
-        <p className="auth-subtitle">Браузерная версия Mail.tm инструмента</p>
+        <section className="auth-hero">
+          <div className="auth-hero-mark">M</div>
+          <div>
+            <h1>Mail.tm Web Workspace</h1>
+            <p className="auth-subtitle">
+              Gmail-подобный интерфейс для временных почт, массовой регистрации и
+              вспомогательных генераторов.
+            </p>
+          </div>
 
-        <div className="auth-switch">
-          <button
-            type="button"
-            className={mode === "login" ? "active" : ""}
-            onClick={() => setMode("login")}
-          >
-            Вход
-          </button>
-          <button
-            type="button"
-            className={mode === "register" ? "active" : ""}
-            onClick={() => setMode("register")}
-          >
-            Регистрация
-          </button>
-        </div>
+          <div className="auth-feature-list">
+            <div className="auth-feature">
+              <strong>Inbox и чтение писем</strong>
+              <span>API mail.tm и fallback на IMAP в одном рабочем пространстве.</span>
+            </div>
+            <div className="auth-feature">
+              <strong>Локальные инструменты</strong>
+              <span>Ban-check, генераторы данных и быстрый импорт аккаунтов рядом с inbox.</span>
+            </div>
+            <div className="auth-feature">
+              <strong>Поток под регистрацию</strong>
+              <span>Интерфейс собран под массовую работу с временными почтами, а не под обычный email.</span>
+            </div>
+          </div>
+        </section>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <label>
-            Логин
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              minLength={3}
-              required
-            />
-          </label>
+        <section className="auth-panel">
+          <div className="auth-panel-head">
+            <h2>{isRegister ? "Создайте workspace" : "Войдите в workspace"}</h2>
+            <p>Один аккаунт открывает весь web-интерфейс управления временными почтами.</p>
+          </div>
 
-          <label>
-            Пароль
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              minLength={6}
-              required
-            />
-          </label>
+          <div className="auth-switch">
+            <button
+              type="button"
+              className={mode === "login" ? "active" : ""}
+              onClick={() => setMode("login")}
+            >
+              Вход
+            </button>
+            <button
+              type="button"
+              className={mode === "register" ? "active" : ""}
+              onClick={() => setMode("register")}
+            >
+              Регистрация
+            </button>
+          </div>
 
-          {isRegister ? (
+          <form onSubmit={handleSubmit} className="auth-form">
             <label>
-              Повтор пароля
+              Логин
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoComplete="username"
+                minLength={3}
+                required
+              />
+            </label>
+
+            <label>
+              Пароль
               <input
                 type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete={isRegister ? "new-password" : "current-password"}
                 minLength={6}
                 required
               />
             </label>
-          ) : null}
 
-          {error ? <div className="form-error">{error}</div> : null}
+            {isRegister ? (
+              <label>
+                Повтор пароля
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+              </label>
+            ) : null}
 
-          <button type="submit" disabled={busy}>
-            {busy ? "Подождите..." : isRegister ? "Создать аккаунт" : "Войти"}
-          </button>
-        </form>
+            {error ? <div className="form-error">{error}</div> : null}
+
+            <button type="submit" className="auth-submit" disabled={busy}>
+              {busy ? "Подождите..." : isRegister ? "Создать аккаунт" : "Войти"}
+            </button>
+          </form>
+        </section>
       </div>
     </div>
   );

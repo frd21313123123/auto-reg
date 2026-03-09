@@ -1,0 +1,11 @@
+{
+  "name": "auto-reg",
+  "private": true,
+  "scripts": {
+    "start": "npm --prefix web/frontend run dev",
+    "dev": "npm --prefix web/frontend run dev",
+    "build": "npm --prefix web/frontend run build",
+    "preview": "npm --prefix web/frontend run preview",
+    "install:frontend": "npm --prefix web/frontend install"
+  }
+}

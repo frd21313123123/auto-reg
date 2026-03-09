@@ -22,6 +22,11 @@ python main.py
 - Frontend: `web/frontend` (browser UI)
 - GitHub Pages workflow: `.github/workflows/deploy-pages.yml`
 
+Quick Windows start for local web mode:
+```bash
+start-web.bat
+```
+
 Important:
 - GitHub Pages hosts only the frontend.
 - Backend must be deployed separately for login/register/inbox to work on Pages.

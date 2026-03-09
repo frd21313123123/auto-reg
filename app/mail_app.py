@@ -745,6 +745,73 @@ class MailApp:
     #  CLIPBOARD OPERATIONS
     # ================================================================
 
+    def _parse_account_line(self, raw_line):
+        """Разобрать строку аккаунта из буфера или файла."""
+        line = raw_line.strip()
+        if not line:
+            return None
+
+        email = ""
+        password_openai = ""
+        password_mail = ""
+        status = "not_registered"
+
+        if " / " in line:
+            parts = [part.strip() for part in line.split(" / ", 2)]
+            if len(parts) >= 2:
+                email = parts[0]
+                passwords = parts[1]
+                if ";" in passwords:
+                    pwd_parts = passwords.split(";", 1)
+                    password_openai = pwd_parts[0].strip()
+                    password_mail = pwd_parts[1].strip()
+                else:
+                    password_openai = passwords.strip()
+                    password_mail = passwords.strip()
+                if len(parts) >= 3 and parts[2]:
+                    status = parts[2]
+        elif ":" in line:
+            parts = line.split(":", 1)
+            if len(parts) == 2:
+                email = parts[0].strip()
+                passwords = parts[1].strip()
+                if ";" in passwords:
+                    pwd_parts = passwords.split(";", 1)
+                    password_openai = pwd_parts[0].strip()
+                    password_mail = pwd_parts[1].strip()
+                else:
+                    password_openai = passwords
+                    password_mail = passwords
+        elif "\t" in line:
+            parts = line.split("\t", 1)
+            if len(parts) == 2:
+                email = parts[0].strip()
+                passwords = parts[1].strip()
+                if ";" in passwords:
+                    pwd_parts = passwords.split(";", 1)
+                    password_openai = pwd_parts[0].strip()
+                    password_mail = pwd_parts[1].strip()
+                else:
+                    password_openai = passwords
+                    password_mail = passwords
+
+        if "@" not in email:
+            return None
+        if not password_openai and not password_mail:
+            return None
+        if not password_openai:
+            password_openai = password_mail
+        if not password_mail:
+            password_mail = password_openai
+
+        return {
+            "email": email,
+            "password_openai": password_openai,
+            "password_mail": password_mail,
+            "password": password_mail,
+            "status": status,
+        }
+
     def paste_accounts_from_clipboard(self):
         """Вставить аккаунты из буфера обмена."""
         try:
@@ -761,56 +828,12 @@ class MailApp:
                 if not line:
                     continue
 
-                email = ""
-                password_openai = ""
-                password_mail = ""
-
-                if " / " in line:
-                    parts = line.split(" / ", 1)
-                    email = parts[0].strip()
-                    passwords = parts[1].strip() if len(parts) > 1 else ""
-                    if ";" in passwords:
-                        pwd_parts = passwords.split(";", 1)
-                        password_openai = pwd_parts[0].strip()
-                        password_mail = pwd_parts[1].strip()
-                    else:
-                        password_openai = passwords
-                        password_mail = passwords
-                elif ":" in line:
-                    parts = line.split(":", 1)
-                    email = parts[0].strip()
-                    passwords = parts[1].strip() if len(parts) > 1 else ""
-                    if ";" in passwords:
-                        pwd_parts = passwords.split(";", 1)
-                        password_openai = pwd_parts[0].strip()
-                        password_mail = pwd_parts[1].strip()
-                    else:
-                        password_openai = passwords
-                        password_mail = passwords
-                elif "\t" in line:
-                    parts = line.split("\t", 1)
-                    email = parts[0].strip()
-                    passwords = parts[1].strip() if len(parts) > 1 else ""
-                    if ";" in passwords:
-                        pwd_parts = passwords.split(";", 1)
-                        password_openai = pwd_parts[0].strip()
-                        password_mail = pwd_parts[1].strip()
-                    else:
-                        password_openai = passwords
-                        password_mail = passwords
-
-                if email and (password_openai or password_mail) and "@" in email:
+                account = self._parse_account_line(line)
+                if account:
+                    email = account["email"]
                     exists = any(acc["email"] == email for acc in self.accounts_data)
                     if not exists:
-                        self.accounts_data.append(
-                            {
-                                "email": email,
-                                "password_openai": password_openai,
-                                "password_mail": password_mail,
-                                "password": password_mail,
-                                "status": "not_registered",
-                            }
-                        )
+                        self.accounts_data.append(account)
                         self.acc_listbox.insert(tk.END, email)
                         added_count += 1
 
@@ -1515,58 +1538,15 @@ class MailApp:
                     lines = f.readlines()
 
                 for line in lines:
-                    line = line.strip()
-                    if not line:
+                    account = self._parse_account_line(line)
+                    if not account:
                         continue
 
-                    email = ""
-                    password_openai = ""
-                    password_mail = ""
-                    status = "not_registered"
+                    if ":" in line or "\t" in line:
+                        needs_save = True
 
-                    if " / " in line:
-                        parts = line.split(" / ")
-                        if len(parts) >= 2:
-                            email = parts[0].strip()
-                            passwords = parts[1].strip()
-
-                            if ";" in passwords:
-                                pwd_parts = passwords.split(";", 1)
-                                password_openai = pwd_parts[0].strip()
-                                password_mail = pwd_parts[1].strip()
-                            else:
-                                password_openai = passwords
-                                password_mail = passwords
-
-                            if len(parts) >= 3:
-                                status = parts[2].strip()
-                    elif ":" in line:
-                        parts = line.split(":", 1)
-                        if len(parts) == 2:
-                            email = parts[0].strip()
-                            passwords = parts[1].strip()
-
-                            if ";" in passwords:
-                                pwd_parts = passwords.split(";", 1)
-                                password_openai = pwd_parts[0].strip()
-                                password_mail = pwd_parts[1].strip()
-                            else:
-                                password_openai = passwords
-                                password_mail = passwords
-
-                            needs_save = True
-
-                    if email and (password_openai or password_mail):
-                        self.accounts_data.append(
-                            {
-                                "email": email,
-                                "password_openai": password_openai,
-                                "password_mail": password_mail,
-                                "password": password_mail,
-                                "status": status,
-                            }
-                        )
-                        self.acc_listbox.insert(tk.END, email)
+                    self.accounts_data.append(account)
+                    self.acc_listbox.insert(tk.END, account["email"])
 
                 if needs_save:
                     self.save_accounts_to_file()

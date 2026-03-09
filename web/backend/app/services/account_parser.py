@@ -22,7 +22,7 @@ def parse_account_line(raw_line: str) -> ParsedAccount | None:
     status = "not_registered"
 
     if " / " in line:
-        parts = [p.strip() for p in line.split(" / ")]
+        parts = [p.strip() for p in line.split(" / ", 2)]
         if len(parts) >= 2:
             email = parts[0].lower()
             passwords = parts[1]
