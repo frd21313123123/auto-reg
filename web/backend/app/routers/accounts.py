@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.deps import get_current_user, get_db
 from app.models import AccountFolder, ManagedAccount, User
 from app.schemas import (
+    AccountBulkUpdateFolder,
     AccountCreate,
     AccountFolderCreate,
     AccountFolderDeleteRequest,
@@ -36,7 +37,7 @@ def _get_owned_account(db: Session, user: User, account_id: int) -> ManagedAccou
     return account
 
 
-def _find_folder_case_insensitive(
+def _find_folder(
     db: Session,
     user: User,
     folder_name: str,
@@ -53,7 +54,7 @@ def _find_folder_case_insensitive(
 
 
 def _ensure_default_folder(db: Session, user: User) -> AccountFolder:
-    default_folder = _find_folder_case_insensitive(db, user, "Основная")
+    default_folder = _find_folder(db, user, "Основная")
     if default_folder:
         return default_folder
 
@@ -65,7 +66,7 @@ def _ensure_default_folder(db: Session, user: User) -> AccountFolder:
 
 def _ensure_folder_exists(db: Session, user: User, folder_name: str) -> str:
     normalized = normalize_account_folder(folder_name)
-    existing = _find_folder_case_insensitive(db, user, normalized)
+    existing = _find_folder(db, user, normalized)
     if existing:
         return existing.name
 
@@ -159,7 +160,7 @@ def create_account_folder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> AccountFolder:
-    existing = _find_folder_case_insensitive(db, current_user, payload.name)
+    existing = _find_folder(db, current_user, payload.name)
     if existing:
         raise HTTPException(status_code=400, detail="folder already exists")
 
@@ -189,7 +190,7 @@ def rename_account_folder(
     if folder.name.lower() == new_name.lower():
         return folder
 
-    conflict = _find_folder_case_insensitive(db, current_user, new_name)
+    conflict = _find_folder(db, current_user, new_name)
     if conflict and conflict.id != folder.id:
         raise HTTPException(status_code=400, detail="folder already exists")
 
@@ -337,8 +338,8 @@ def create_mail_tm_account(
 ) -> ManagedAccount:
     try:
         email, password = mail_backend_service.create_mail_tm_account(payload.password_length)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=502, detail="failed to create mail.tm account")
 
     folder_name = _ensure_folder_exists(db, current_user, payload.folder)
     account = ManagedAccount(
@@ -389,6 +390,29 @@ def update_account_folder(
     return account
 
 
+@router.patch("/bulk-folder", response_model=list[AccountOut])
+def bulk_update_folder(
+    payload: AccountBulkUpdateFolder,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[ManagedAccount]:
+    folder_name = _ensure_folder_exists(db, current_user, payload.folder)
+    accounts = (
+        db.query(ManagedAccount)
+        .filter(
+            ManagedAccount.user_id == current_user.id,
+            ManagedAccount.id.in_(payload.account_ids),
+        )
+        .all()
+    )
+    for account in accounts:
+        account.folder = folder_name
+    db.commit()
+    for account in accounts:
+        db.refresh(account)
+    return accounts
+
+
 @router.delete("/{account_id}/mailbox", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account_mailbox(
     account_id: int,
@@ -398,8 +422,8 @@ def delete_account_mailbox(
     account = _get_owned_account(db, current_user, account_id)
     try:
         mail_backend_service.delete_mail_tm_account(account.email, account.password_mail)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=502, detail="failed to delete mailbox")
 
     mail_backend_service.clear_connection(current_user.id, account.id)
     db.delete(account)

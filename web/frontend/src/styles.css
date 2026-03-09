@@ -110,6 +110,169 @@ textarea {
   font-size: 18px;
 }
 
+/* ===== LAUNCHER ===== */
+
+.launcher-root {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #0e1420;
+  overflow: hidden;
+}
+
+.launcher-root .parallax-dots-bg {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.launcher-card {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.launcher-title {
+  margin: 0 0 36px;
+  font-size: 28px;
+  color: #e6efff;
+  letter-spacing: -0.01em;
+}
+
+.launcher-cards {
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.launcher-project-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 210px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  padding: 24px 16px;
+  gap: 12px;
+}
+
+.launcher-project-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-4px);
+}
+
+.launcher-project-icon {
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.launcher-project-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e6efff;
+}
+
+/* ===== AUTH BACK BUTTON ===== */
+
+.auth-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #9bb1d4;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 12px;
+  transition: color 0.15s;
+}
+
+.auth-back-btn:hover,
+.auth-back-btn:hover:enabled {
+  color: #e6efff;
+  background: none;
+  border: none;
+}
+
+/* ===== WAVE EMBED ===== */
+
+.wave-embed-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #0e1420;
+}
+
+.wave-embed-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 16px;
+  background: #161b2a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.wave-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #9bb1d4;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.wave-back-btn:hover,
+.wave-back-btn:hover:enabled {
+  color: #e6efff;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+}
+
+.wave-embed-title {
+  color: #e6efff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wave-embed-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+
+/* ===== DASHBOARD BACK BUTTON ===== */
+
+.back-btn {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.back-btn:hover {
+  opacity: 1;
+}
+
 .auth-root {
   position: relative;
   min-height: 100vh;
@@ -422,35 +585,71 @@ textarea {
   font-size: 13px;
 }
 
-.folder-controls {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 6px;
+.folder-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px;
 }
 
-.folder-controls select {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--border);
+.folder-list button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
   border-radius: 6px;
+  border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
 }
 
-.folder-controls button {
-  min-width: 32px;
-  padding: 6px 8px;
+.folder-list button:hover {
+  background: var(--surface-soft);
+}
+
+.folder-list button.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.folder-list button.drag-over {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.folder-list .folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.folder-list .folder-count {
+  font-size: 10px;
+  opacity: 0.6;
+  min-width: 14px;
+  text-align: center;
+  background: var(--border);
+  border-radius: 8px;
+  padding: 1px 5px;
 }
 
 .folder-actions-row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: auto auto auto 1fr;
+  gap: 4px;
 }
 
 .folder-actions-row button {
-  width: 100%;
-  padding: 7px 8px;
+  padding: 5px 10px;
+  font-size: 13px;
 }
 
 .import-textarea {
@@ -515,6 +714,19 @@ textarea {
 .account-item.active {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.account-item.selected {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.account-item[draggable="true"] {
+  cursor: grab;
+}
+
+.account-item[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .account-item-main {
@@ -1246,14 +1458,18 @@ textarea {
   background: transparent;
   padding: 9px 10px;
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 10px;
 }
 
 .top-toolbar h2 {
   margin: 0;
-  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
   font-size: clamp(22px, 2.5vw, 36px);
   line-height: 1.1;
 }
@@ -1261,6 +1477,8 @@ textarea {
 .toolbar-controls {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
   gap: 8px;
 }
 
@@ -1367,12 +1585,14 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .viewer-head h3 {
   margin: 0;
-  font-size: 30px;
+  min-width: 0;
+  font-size: clamp(22px, 2.2vw, 30px);
   line-height: 1;
 }
 
@@ -1400,6 +1620,26 @@ textarea {
   font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
   line-height: 1.35;
+}
+
+.plain-email-viewer {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.plain-email-paragraph {
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.plain-email-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .html-email-iframe {

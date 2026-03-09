@@ -1,7 +1,8 @@
 import email
+import html as html_lib
 import imaplib
-import random
 import re
+import secrets
 import string
 import threading
 from dataclasses import dataclass
@@ -23,6 +24,12 @@ BAN_KEYWORDS = [
     "suspended",
     "violation",
 ]
+
+INVISIBLE_MESSAGE_TEXT_RE = re.compile(
+    r"[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]"
+)
+SPECIAL_MESSAGE_SPACE_RE = re.compile(r"[\u00a0\u2000-\u200a\u202f\u205f\u3000]")
+HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 class IMAPSimpleClient:
@@ -115,6 +122,9 @@ class IMAPSimpleClient:
     def get_message_content(self, msg_id: str) -> str:
         if not self.mail:
             return "Not connected"
+
+        if not str(msg_id).isdigit():
+            return "Error: invalid message ID"
 
         try:
             self.mail.select("inbox")
@@ -222,6 +232,25 @@ class MailBackendService:
         if not match:
             return None
         return match.group(1)
+
+    @staticmethod
+    def _html_to_text(value: str) -> str:
+        if not value:
+            return ""
+        return html_lib.unescape(HTML_TAG_RE.sub(" ", value))
+
+    @staticmethod
+    def _sanitize_message_text(text: str) -> str:
+        if not text:
+            return ""
+
+        cleaned = text.replace("\r\n", "\n").replace("\r", "\n")
+        cleaned = SPECIAL_MESSAGE_SPACE_RE.sub(" ", cleaned)
+        cleaned = INVISIBLE_MESSAGE_TEXT_RE.sub("", cleaned)
+        cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+        return cleaned.strip()
 
     @staticmethod
     def _format_date(value: str) -> str:
@@ -466,7 +495,8 @@ class MailBackendService:
             subject = data.get("subject") or "(без темы)"
             raw_text = data.get("text") or ""
             raw_html = data.get("html") or ""
-            text = raw_text or raw_html or "Нет текстового содержимого"
+            text_source = raw_text or self._html_to_text(raw_html) or "Нет текстового содержимого"
+            text = self._sanitize_message_text(text_source)
             return {
                 "id": str(message_id),
                 "sender": sender,
@@ -483,13 +513,16 @@ class MailBackendService:
         sender = sender_hint or "IMAP Sender"
         subject = subject_hint or "IMAP Message"
         has_html = bool(text and "<html" in text.lower()[:200])
+        plain_text = self._sanitize_message_text(
+            self._html_to_text(text) if has_html else text
+        )
         return {
             "id": str(message_id),
             "sender": sender,
             "subject": subject,
-            "text": text,
+            "text": plain_text,
             "html": text if has_html else None,
-            "code": self._extract_code(text),
+            "code": self._extract_code(plain_text),
         }
 
     def create_mail_tm_account(self, password_length: int = 12) -> tuple[str, str]:
@@ -497,10 +530,10 @@ class MailBackendService:
         if not domains:
             raise RuntimeError("Could not load mail.tm domains")
 
-        domain = random.choice(domains)
-        username = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
+        domain = secrets.choice(domains)
+        username = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(10))
         password_chars = string.ascii_letters + string.digits
-        password = "".join(random.choice(password_chars) for _ in range(password_length))
+        password = "".join(secrets.choice(password_chars) for _ in range(password_length))
         email_addr = f"{username}@{domain}"
 
         payload = {

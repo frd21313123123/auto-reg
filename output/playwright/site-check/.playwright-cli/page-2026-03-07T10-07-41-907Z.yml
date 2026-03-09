@@ -1,0 +1,76 @@
+- generic [ref=e32]:
+  - banner [ref=e254]:
+    - generic [ref=e255]:
+      - button "Назад" [ref=e256] [cursor=pointer]:
+        - img [ref=e257]
+      - heading "Mail.tm" [level=1] [ref=e259]
+    - generic [ref=e260]:
+      - generic [ref=e261]: qawebcheck0307b
+      - button "Выйти" [ref=e262] [cursor=pointer]:
+        - img [ref=e263]
+  - generic [ref=e266]:
+    - banner [ref=e390]:
+      - generic [ref=e391]:
+        - button "Назад к аккаунтам" [ref=e392] [cursor=pointer]:
+          - img [ref=e393]
+        - heading "donnasanchez2001@vladoulead.com" [level=2] [ref=e395]
+      - generic [ref=e396]:
+        - button "Обновить почту" [ref=e397] [cursor=pointer]:
+          - img [ref=e398]
+        - generic [ref=e403]:
+          - button "Не рег" [ref=e404] [cursor=pointer]
+          - button "Рег" [ref=e405] [cursor=pointer]
+          - button "Plus" [ref=e406] [cursor=pointer]
+          - button "Business" [ref=e407] [cursor=pointer]
+          - button "Бан" [ref=e408] [cursor=pointer]
+          - button "Пароль" [ref=e409] [cursor=pointer]
+    - generic [ref=e410]:
+      - generic [ref=e412]:
+        - button "noreply@email.openai.com Explore role-specific ChatGPT use cases 19:48:14" [ref=e413] [cursor=pointer]:
+          - generic [ref=e414]: noreply@email.openai.com
+          - generic [ref=e415]: Explore role-specific ChatGPT use cases
+          - generic [ref=e416]: 19:48:14
+        - button "noreply@email.openai.com Connect ChatGPT to your internal sources 19:47:24" [ref=e417] [cursor=pointer]:
+          - generic [ref=e418]: noreply@email.openai.com
+          - generic [ref=e419]: Connect ChatGPT to your internal sources
+          - generic [ref=e420]: 19:47:24
+        - button "noreply@email.openai.com Training to help your team get started 19:47:22" [ref=e421] [cursor=pointer]:
+          - generic [ref=e422]: noreply@email.openai.com
+          - generic [ref=e423]: Training to help your team get started
+          - generic [ref=e424]: 19:47:22
+        - button "noreply@tm.openai.com ChatGPT — ваш новый план 11:42:00" [ref=e425] [cursor=pointer]:
+          - generic [ref=e426]: noreply@tm.openai.com
+          - generic [ref=e427]: ChatGPT — ваш новый план
+          - generic [ref=e428]: 11:42:00
+        - button "noreply@tm.openai.com Your ChatGPT code is 014553 11:40:35" [ref=e429] [cursor=pointer]:
+          - generic [ref=e430]: noreply@tm.openai.com
+          - generic [ref=e431]: Your ChatGPT code is 014553
+          - generic [ref=e432]: 11:40:35
+        - button "otp@tm1.openai.com Your ChatGPT code is 092765 09:11:01" [ref=e433] [cursor=pointer]:
+          - generic [ref=e434]: otp@tm1.openai.com
+          - generic [ref=e435]: Your ChatGPT code is 092765
+          - generic [ref=e436]: 09:11:01
+      - generic [ref=e437]:
+        - generic [ref=e438]:
+          - heading "Содержание письма" [level=3] [ref=e439]
+          - button "Закрыть содержимое письма" [ref=e441] [cursor=pointer]:
+            - img [ref=e442]
+        - generic [ref=e445]:
+          - paragraph [ref=e446]:
+            - strong [ref=e447]: "От:"
+            - text: noreply@email.openai.com
+          - paragraph [ref=e448]:
+            - strong [ref=e449]: "Тема:"
+            - text: Explore role-specific ChatGPT use cases
+          - generic [ref=e450]: Discover powerful ways ChatGPT can support every role ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ‍͏ ͏ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ ͏‌ Logo ( http://url3243.email.openai.com/ls/click?upn=u001.GyApCCuCEL-2BZgyWl1glfWAtSbaNBdL-2BYAuI-2BAqS-2FGC2HRgyeZggfKxpVq7OnKL0Tgvjj1ZeMgo2ezT9TUH5AYxTN7Ru1nylvVu3UetSOA8kF6MGKNTjf20jdNKYan-2BLqYyaZQN97EKKhRLGd5eG-2FlQnWZOkq3dChiUxnDKKYk4E-3DGx9O_7fWE02byJPB-2F54S1Uh5WkXPEduwhgbVLstk7YcXq2S3vMUvFQn4ceHhLZ9dI832zjGT4fJisCbIobuNuR58-2BBys6hgWnLkwHxX6fNsVRWP9Usd09OzX0ZvPQUlr6RGSwe-2BLLYf-2ByQDCU-2BG5KFS-2B9ZJjukQ-2FDIDd6MSmMEO5xzeJkPPYvaw-2Bscv99jnF-2BLsDr-2Ftel7MXPjNHEQQcwnQulGyobjCTkEvt-2BihMlZm-2BXaLr2TTgdzZDtAAS25HtHVRbT5Sg5VJsBo4ljyQ0MpHmToedJ5oDc29R3opeUufiLN8NHtG0hcbq-2FqqsGr97N0AyY5ddlrz6gz46PjJCG-2Fz3oIQkANayd6PPH4-2Bes14YuhDWhZbBaeUI80ldXIWTWUbwTbGk1NIRe7fk1eBX7wgmrkwkvcskTDtG6Dv3L9b-2FLjwZr-2FypXEQaK1bFax7C6EhjmivLCdmailh2fP-2B1RJYUyggQO4WtlZQrTOQ2ZJ8eQ-2Bz0-3D ) *Unlock value with use cases for every role* One of the fastest ways to unlock value from ChatGPT is helping your team discover and share practical use cases—tied to their real goals, workflows, and roles. Our “Use Cases for Work" GPT makes that easier. It’s a custom GPT built by OpenAI to help each person find high-impact ways to use ChatGPT, personalized to their job. Try it and share it with your team. Try the "Use Cases for Work" GPT now ( http://url3243.email.openai.com/ls/click?upn=u001.GyApCCuCEL-2BZgyWl1glfWAtSbaNBdL-2BYAuI-2BAqS-2FGC2HRgyeZggfKxpVq7OnKL0TVu-2BpstJARm-2FgPlv-2BhkFiu5dPpi2QHeXVY2lO4SRIL-2BLeZ7Fa5SZdUOAxCOdY6-2FaSea-2B6vqNKR1z879RuEGNTum24PU16CoQWXQ96cLsLWCw-3DY48b_7fWE02byJPB-2F54S1Uh5WkXPEduwhgbVLstk7YcXq2S3vMUvFQn4ceHhLZ9dI832zjGT4fJisCbIobuNuR58-2BBys6hgWnLkwHxX6fNsVRWP9Usd09OzX0ZvPQUlr6RGSwe-2BLLYf-2ByQDCU-2BG5KFS-2B9ZJjukQ-2FDIDd6MSmMEO5xzeJkPPYvaw-2Bscv99jnF-2BLsDr-2Ftel7MXPjNHEQQcwnQulGyobjCTkEvt-2BihMlZm-2BXaLr2TTgdzZDtAAS25HtHVRbT5Sg5VJsBo4ljyQ0MpHmToedJ5oDc29R3opeUufiLN8NHtG0hcbq-2FqqsGr97N0AyY0-2BS1EjziN-2BwoIKUUwzUnwsanPZpkotME9lfnHvvzPxc3nKfkcNiKlIds75SawBEM5L49yxvv3iWQkXJ8oEEJi3k8RRLcFTfXJazRhL-2FcM1Oe0-2FWJKJvuZL8KMpZruAtgqB8g8AHEX5Dy4pFD5zC7Om8BhcUpIKKg0tAASajh0Dg-3D ) Looking for more inspiration? Check out real-world stories ( http://url3243.email.openai.com/ls/click?upn=u001.GyApCCuCEL-2BZgyWl1glfWP8O5QJlA1eE0vEiMzJxvdlGwaYwlJjnPuykgtW9wA85Iu1M_7fWE02byJPB-2F54S1Uh5WkXPEduwhgbVLstk7YcXq2S3vMUvFQn4ceHhLZ9dI832zjGT4fJisCbIobuNuR58-2BBys6hgWnLkwHxX6fNsVRWP9Usd09OzX0ZvPQUlr6RGSwe-2BLLYf-2ByQDCU-2BG5KFS-2B9ZJjukQ-2FDIDd6MSmMEO5xzeJkPPYvaw-2Bscv99jnF-2BLsDr-2Ftel7MXPjNHEQQcwnQulGyobjCTkEvt-2BihMlZm-2BXaLr2TTgdzZDtAAS25HtHVRbT5Sg5VJsBo4ljyQ0MpHmToedJ5oDc29R3opeUufiLN8NHtG0hcbq-2FqqsGr97N0AyYGrJJFTLaKksJq1s-2F4-2F7uwCu-2BBu8gQW7s-2BtoBTlS-2F4Sp8l05gfdyexl5U2pKIMijNp7q-2FoFWcLjigX2xNlJ4nzQ55xDF5aoM7-2B7uVcxlJ6T2IAUwcGhvx7bgmn-2Bsqwvrcn6zfm8TC9x-2FLCEmY0iZ5-2BDdFXbTbgaooIRQ3oxOzevQ-3D ) from teams that are achieving impact with ChatGPT, or visit the OpenAI Academy for role-specific use cases ( http://url3243.email.openai.com/ls/click?upn=u001.GyApCCuCEL-2BZgyWl1glfWFQqqWo6o3fQ2wmCCvmGobBIhapY21GHFGsnYO6oVvuM8FlAxA6jcgu3xgiO7IRYhOeMlFCatdoxIhI-2F-2BAgVU-2FGZeKgujTbg-2BSJ67omoN0RMmZEWWkIRxA6z9m3yH4OR5A-3D-3DwxmV_7fWE02byJPB-2F54S1Uh5WkXPEduwhgbVLstk7YcXq2S3vMUvFQn4ceHhLZ9dI832zjGT4fJisCbIobuNuR58-2BBys6hgWnLkwHxX6fNsVRWP9Usd09OzX0ZvPQUlr6RGSwe-2BLLYf-2ByQDCU-2BG5KFS-2B9ZJjukQ-2FDIDd6MSmMEO5xzeJkPPYvaw-2Bscv99jnF-2BLsDr-2Ftel7MXPjNHEQQcwnQulGyobjCTkEvt-2BihMlZm-2BXaLr2TTgdzZDtAAS25HtHVRbT5Sg5VJsBo4ljyQ0MpHmToedJ5oDc29R3opeUufiLN8NHtG0hcbq-2FqqsGr97N0AyYJYaUkSqnHJM4B1ryXoFf6hoNBmNxAyyL4ss5P2Zc9-2FXAlAIQyY0YHkx01UTo0fHPuYOWxBf8qYiQ6TWhVZ4WPZl5BssOJAu-2F6dHnMn1jG2GuaMwlwl-2BMl0quqT3fUviWXEXJPA2Js42owoTxe11LDNuXwJOtkAV0f-2B-2Bjkf57U7c-3D ). Remember - you don’t need to do everything at once. A few high-impact use cases, clearly tied to real work, can unlock momentum across your business. — The OpenAI Team Check out resources on the OpenAI Academy for Work ( http://url3243.email.openai.com/ls/click?upn=u001.GyApCCuCEL-2BZgyWl1glfWFQqqWo6o3fQ2wmCCvmGobBIhapY21GHFGsnYO6oVvuM8FlAxA6jcgu3xgiO7IRYhCKuGf-2FrspFUUstjZ5pfTrsCNs76WCCqwnvvMkt01PNZ3dAm_7fWE02byJPB-2F54S1Uh5WkXPEduwhgbVLstk7YcXq2S3vMUvFQn4ceHhLZ9dI832zjGT4fJisCbIobuNuR58-2BBys6hgWnLkwHxX6fNsVRWP9Usd09OzX0ZvPQUlr6RGSwe-2BLLYf-2ByQDCU-2BG5KFS-2B9ZJjukQ-2FDIDd6MSmMEO5xzeJkPPYvaw-2Bscv99jnF-2BLsDr-2Ftel7MXPjNHEQQcwnQulGyobjCTkEvt-2BihMlZm-2BXaLr2TTgdzZDtAAS25HtHVRbT5Sg5VJsBo4ljyQ0MpHmToedJ5oDc29R3opeUufiLN8NHtG0hcbq-2FqqsGr97N0AyY9RQeVnLi9B8uJELI3PO9Q-2F4ACvbH60K0FTwOb9ColIhDx1ntA5GIY1H3bO1YKVGDN2ImfGbqe0QBFO9K3CrIxW6W2cZMJlNLs6TeSM59uGmS8ZQkSi1X0mDPvSloBwSFApBiJvaZceTsS62jIKri8iwTnfCMDJehIWkVIhzwqPc-3D ). Logo ( http://url3243.email.openai.com/ls/click?upn=u001.GyApCCuCEL-2BZgyWl1glfWAtSbaNBdL-2BYAuI-2BAqS-2FGC2HRgyeZggfKxpVq7OnKL0TjBQ8Hei-2BC6uiGXJlsth-2BXswrHZ3at5y3fkEjq-2FJBqdaUsC-2Fs4pidlaUnPtOkK-2BZ-2BR2yVzcWKqNoXKfvhYUGDVqnPQkjVxdrzK9hjHOGm0-2Bw-3DtiSc_7fWE02byJPB-2F54S1Uh5WkXPEduwhgbVLstk7YcXq2S3vMUvFQn4ceHhLZ9dI832zjGT4fJisCbIobuNuR58-2BBys6hgWnLkwHxX6fNsVRWP9Usd09OzX0ZvPQUlr6RGSwe-2BLLYf-2ByQDCU-2BG5KFS-2B9ZJjukQ-2FDIDd6MSmMEO5xzeJkPPYvaw-2Bscv99jnF-2BLsDr-2Ftel7MXPjNHEQQcwnQulGyobjCTkEvt-2BihMlZm-2BXaLr2TTgdzZDtAAS25HtHVRbT5Sg5VJsBo4ljyQ0MpHmToedJ5oDc29R3opeUufiLN8NHtG0hcbq-2FqqsGr97N0AyY-2FYTJCgrQ83Vqdy6WsZe-2BLCYMX1rNOEzaQxJGRRjJtvAePkjSRBGfDV1lEP9h6PORNlqx7xX0a3yMkwuByaariUONC6aK-2BiyZARWE-2BokOhu-2FGvZMRGKDQXVOvSQss40JJC6pvkakFTL3wzrTm8PP-2BC539V6jiucLymxMRMEIDffg-3D ) © 2026 OpenAI. All Rights Reserved. 1455 3rd St, San Francisco, CA 94158 Unsubscribe ( ) Unsubscribe From This List http://url3243.email.openai.com/asm/unsubscribe/?user_id=54382401&data=D6hPhfp_2eJM1FqOAT5ynKFHK4Kw91ce9DJr5eAnPv5oMDAwdTAwMAhuZJ1-BGOD1soVWvKCug-iLc_PRWY-vWCjxMlytkv0tjpAzTEw3YE4J7efeUuSfJTRBCEnVHyRoWsPOYxxNUEI8PWbBtQr-O-HM3ZyuIV9VRyKaNErUvlPwrmPs19985rmjXNAUFEkzpqbZbrBkeoTTUxoJtWVv3tdjIJ3vzA8310rVhDKYWk24TrxgoadVofeYOMfCiRH-XGcf_X66s11uTuTa8Vnx46A-TlGxZRfqcY9FvIse5KNxetahi8NXGXE9sBuR5VvW_bqCfiFSo00TxHPT6jxkCTAPtdY4TZhsW7bQUw9BbVo-5cOO8YeW0R6I27nkINM-2BhGct1_ijnxPStqhXnuE9oOYPhIRyOUybSANKLwGbpEIRHRRGnjlKawPlrOsfLIVpcR8grsyoiuH7hPvt2ckisE_ozt1k_GFo9kJhAMxV_iU-GfL_zc7qYOg9uzuUV0_Y0NCW-R79R-33Rk-r6mvGBI5rK71nR0QXv_ZdNClQfrqUo38IVXe3o6DvQMCDnS527wb3kpVlv10wObtDb6Ah-6-gum056Mp8vGD1ToTnof9a4ENCjLeXHQeuv9OUXpIJrS3-PSS4= | Manage Email Preferences http://url3243.email.openai.com/asm/?user_id=54382401&data=iJlVsjun8NOmTo8D9g7lXbiaLQvkbvVwwm7ATXpJty9oMDAwdTAwMPl9uBxiv3WA989HChjCXla1POzfPjC5OwjJjl9m0V1fvLxDcu4si1iQSGTWEqYdrsECZy4hwzsg_cIs8-8rVXjHVoULkbmBE7cOhCo8dcm7Hlcmd2SYcfkqSFk1B6UHStJA2zKlp2SmCeDGc-4VJOlUd856wqk0JPvPmTwobwuqVfkVVGwoVKhnxAeLJxN-jJpJRrMIvGAjaOQoze0wIEwM3r9s61l1TFAOc_11lu-Qh8-vrvU1Cu153thvfxkk_LQulNBhobaaQXu0GM8AHcWGeOg8f8Gby5aD3K8GOZ3WgWbUSUVun6PMRP1rPxrreqgVvkumdMUAdXekj58S-1jR5RyBcXZlVvla3_qytljjeLLgJindHS3dzqkh_DgRJAKzBBnaGp_ZZlSv2I7uMGgkApTJSUouy0Sp732J1GUVui0NUTiec1CN2hUP5nDl-FjxFKNAS9wQZsSsO5-dyp97WeBbN5CaNtKqMTsNuYRIBqq8lajYUomhV-cB_kZ5--QwLzpkSaVQFlfg1wcD1cOQ5PBDt52lEULgLuljlXQyRnG3ftUQejAHtq9Ejbrdtw==
+  - contentinfo [ref=e374]: "Статус изменен: Зарегистрирован"
+  - navigation [ref=e375]:
+    - button "Аккаунты" [ref=e376] [cursor=pointer]:
+      - img [ref=e377]
+      - generic [ref=e380]: Аккаунты
+    - button "Почта" [active] [ref=e381] [cursor=pointer]:
+      - img [ref=e382]
+      - generic [ref=e385]: Почта
+    - button "Инструм." [ref=e386] [cursor=pointer]:
+      - img [ref=e387]
+      - generic [ref=e389]: Инструм.

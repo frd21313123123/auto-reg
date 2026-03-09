@@ -1,0 +1,110 @@
+- generic [ref=e32]:
+  - banner [ref=e254]:
+    - generic [ref=e255]:
+      - button "Назад" [ref=e256] [cursor=pointer]:
+        - img [ref=e257]
+      - heading "Mail.tm" [level=1] [ref=e259]
+    - generic [ref=e260]:
+      - generic [ref=e261]: qawebcheck0307b
+      - button "Выйти" [ref=e262] [cursor=pointer]:
+        - img [ref=e263]
+  - generic [ref=e266]:
+    - button "+ Создать аккаунт" [ref=e267] [cursor=pointer]
+    - generic [ref=e268]:
+      - generic [ref=e269]: АККАУНТЫ
+      - generic [ref=e270]:
+        - button "Обновить список" [ref=e271] [cursor=pointer]:
+          - img [ref=e272]
+        - button "Импорт из файла" [ref=e277] [cursor=pointer]:
+          - img [ref=e278]
+        - button "Экспорт в Excel" [ref=e282] [cursor=pointer]:
+          - img [ref=e283]
+        - button "Окно данных" [ref=e285] [cursor=pointer]:
+          - img [ref=e286]
+        - button "Проверить баны" [ref=e288] [cursor=pointer]:
+          - img [ref=e289]
+      - generic [ref=e293]:
+        - button "Все папки 10" [ref=e294] [cursor=pointer]:
+          - generic [ref=e295]: Все папки
+          - generic [ref=e296]: "10"
+        - button "Основная 10" [ref=e297] [cursor=pointer]:
+          - generic [ref=e298]: Основная
+          - generic [ref=e299]: "10"
+      - generic [ref=e300]:
+        - button "+" [ref=e301] [cursor=pointer]
+        - button "R" [ref=e302] [cursor=pointer]
+        - button "-" [ref=e303] [cursor=pointer]
+        - button "→" [ref=e304] [cursor=pointer]
+      - generic [ref=e305]:
+        - button "donnasanchez2001@vladoulead.com Зарегистрирован • Основная ×" [ref=e306]:
+          - generic [ref=e307]:
+            - generic [ref=e308]: donnasanchez2001@vladoulead.com
+            - generic [ref=e309]: Зарегистрирован • Основная
+          - generic "Удалить почту donnasanchez2001@vladoulead.com" [ref=e310]: ×
+        - button "dorothyjones1956@xhpwahr.com Не зарегистрирован • Основная ×" [ref=e311]:
+          - generic [ref=e312]:
+            - generic [ref=e313]: dorothyjones1956@xhpwahr.com
+            - generic [ref=e314]: Не зарегистрирован • Основная
+          - generic "Удалить почту dorothyjones1956@xhpwahr.com" [ref=e315]: ×
+        - button "emilycorral2022@wiwsjambok.com Не зарегистрирован • Основная ×" [ref=e316]:
+          - generic [ref=e317]:
+            - generic [ref=e318]: emilycorral2022@wiwsjambok.com
+            - generic [ref=e319]: Не зарегистрирован • Основная
+          - generic "Удалить почту emilycorral2022@wiwsjambok.com" [ref=e320]: ×
+        - button "johnbelk1980@thatonsko.com Не зарегистрирован • Основная ×" [ref=e321]:
+          - generic [ref=e322]:
+            - generic [ref=e323]: johnbelk1980@thatonsko.com
+            - generic [ref=e324]: Не зарегистрирован • Основная
+          - generic "Удалить почту johnbelk1980@thatonsko.com" [ref=e325]: ×
+        - button "karentrace1990@tekkaaccep.com Не зарегистрирован • Основная ×" [ref=e326]:
+          - generic [ref=e327]:
+            - generic [ref=e328]: karentrace1990@tekkaaccep.com
+            - generic [ref=e329]: Не зарегистрирован • Основная
+          - generic "Удалить почту karentrace1990@tekkaaccep.com" [ref=e330]: ×
+        - button "loisrangel1942@tukiunge.com Не зарегистрирован • Основная ×" [ref=e331]:
+          - generic [ref=e332]:
+            - generic [ref=e333]: loisrangel1942@tukiunge.com
+            - generic [ref=e334]: Не зарегистрирован • Основная
+          - generic "Удалить почту loisrangel1942@tukiunge.com" [ref=e335]: ×
+        - button "mariesusanin1905@zoasapulpa.com Не зарегистрирован • Основная ×" [ref=e336]:
+          - generic [ref=e337]:
+            - generic [ref=e338]: mariesusanin1905@zoasapulpa.com
+            - generic [ref=e339]: Не зарегистрирован • Основная
+          - generic "Удалить почту mariesusanin1905@zoasapulpa.com" [ref=e340]: ×
+        - button "nicktada1908@xliiilas.com Не зарегистрирован • Основная ×" [ref=e341]:
+          - generic [ref=e342]:
+            - generic [ref=e343]: nicktada1908@xliiilas.com
+            - generic [ref=e344]: Не зарегистрирован • Основная
+          - generic "Удалить почту nicktada1908@xliiilas.com" [ref=e345]: ×
+        - button "robbiemedina1987@ttattdo.com Не зарегистрирован • Основная ×" [ref=e346]:
+          - generic [ref=e347]:
+            - generic [ref=e348]: robbiemedina1987@ttattdo.com
+            - generic [ref=e349]: Не зарегистрирован • Основная
+          - generic "Удалить почту robbiemedina1987@ttattdo.com" [ref=e350]: ×
+        - button "veronicawalsh1938@zunestou.com Не зарегистрирован • Основная ×" [ref=e351]:
+          - generic [ref=e352]:
+            - generic [ref=e353]: veronicawalsh1938@zunestou.com
+            - generic [ref=e354]: Не зарегистрирован • Основная
+          - generic "Удалить почту veronicawalsh1938@zunestou.com" [ref=e355]: ×
+    - generic [ref=e356]:
+      - generic [ref=e357]: ДЕЙСТВИЯ
+      - generic [ref=e358]:
+        - button "Копировать Email" [ref=e359] [cursor=pointer]:
+          - img [ref=e360]
+        - button "Копировать OpenAI пароль" [ref=e363] [cursor=pointer]:
+          - img [ref=e364]
+        - button "Копировать пароль почты" [ref=e366] [cursor=pointer]:
+          - img [ref=e367]
+        - button "Копировать всё" [ref=e370] [cursor=pointer]:
+          - img [ref=e371]
+  - contentinfo [ref=e374]: "Статус изменен: Зарегистрирован"
+  - navigation [ref=e375]:
+    - button "Аккаунты" [ref=e376] [cursor=pointer]:
+      - img [ref=e377]
+      - generic [ref=e380]: Аккаунты
+    - button "Почта" [ref=e381] [cursor=pointer]:
+      - img [ref=e382]
+      - generic [ref=e385]: Почта
+    - button "Инструм." [ref=e386] [cursor=pointer]:
+      - img [ref=e387]
+      - generic [ref=e389]: Инструм.

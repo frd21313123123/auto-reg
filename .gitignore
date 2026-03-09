@@ -33,5 +33,6 @@ web/backend/*.db
 # Local app data
 accounts.txt
 accounts.xlsx
+nul
 *.log
 funpay_monitor/

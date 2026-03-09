@@ -11,12 +11,15 @@ import subprocess
 import sys
 import tkinter as tk
 import ctypes
+import webbrowser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REQUIREMENTS_FILE = os.path.join(BASE_DIR, "requirements.txt")
 PACKAGE_IMPORT_ALIASES = {
     "beautifulsoup4": "bs4",
 }
+
+WAVE_URL = "http://localhost:3000"
 
 
 def set_app_id():
@@ -83,10 +86,61 @@ def ensure_dependencies():
 def main():
     """App entry point."""
     ensure_dependencies()
-    from app.mail_app import MailApp
 
     root = tk.Tk()
-    app = MailApp(root)
+    app_instance = [None]  # mutable ref for MailApp
+
+    def show_launcher():
+        """Show the project selection screen."""
+        from app.launcher import Launcher
+
+        root.resizable(False, False)
+        root.geometry("520x360")
+        root.minsize(520, 360)
+
+        # Centre on screen
+        root.update_idletasks()
+        sw = root.winfo_screenwidth()
+        sh = root.winfo_screenheight()
+        x = (sw - 520) // 2
+        y = (sh - 360) // 2
+        root.geometry(f"520x360+{x}+{y}")
+
+        launcher = Launcher(root, on_select=handle_select)
+        app_instance[0] = launcher
+
+    def handle_select(key):
+        """Handle project card click."""
+        if key == "autoreg":
+            open_autoreg()
+        elif key == "wave":
+            webbrowser.open(WAVE_URL)
+
+    def open_autoreg():
+        """Switch from launcher to Auto-Reg app."""
+        from app.mail_app import MailApp
+
+        # Destroy launcher widgets
+        if app_instance[0] is not None:
+            app_instance[0].destroy()
+            app_instance[0] = None
+
+        root.resizable(True, True)
+        root.geometry("1050x680")
+        root.minsize(800, 500)
+
+        # Centre on screen
+        root.update_idletasks()
+        sw = root.winfo_screenwidth()
+        sh = root.winfo_screenheight()
+        x = (sw - 1050) // 2
+        y = (sh - 680) // 2
+        root.geometry(f"1050x680+{x}+{y}")
+
+        mail_app = MailApp(root, on_back=show_launcher)
+        app_instance[0] = mail_app
+
+    show_launcher()
     root.mainloop()
 
 

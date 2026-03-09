@@ -1,0 +1,9 @@
+- generic [ref=e4]:
+  - heading "Выберите проект" [level=1] [ref=e5]
+  - generic [ref=e6]:
+    - button "Auto-Reg Auto-Reg" [ref=e7] [cursor=pointer]:
+      - img "Auto-Reg" [ref=e8]
+      - generic [ref=e9]: Auto-Reg
+    - button "Wave Wave" [ref=e10] [cursor=pointer]:
+      - img "Wave" [ref=e11]
+      - generic [ref=e12]: Wave

@@ -44,7 +44,7 @@ class IMAPClient:
         try:
             if self.mail:
                 self.mail.logout()
-        except:
+        except Exception:
             pass
 
     @staticmethod
@@ -134,7 +134,7 @@ class IMAPClient:
                     if encoding:
                         try:
                             parts.append(content.decode(encoding))
-                        except:
+                        except Exception:
                             parts.append(content.decode('utf-8', errors='ignore'))
                     else:
                         parts.append(content.decode('utf-8', errors='ignore'))
@@ -191,25 +191,29 @@ class IMAPClient:
         """Получение содержимого письма"""
         if not self.mail:
             return "Not connected"
+
+        if not str(msg_id).isdigit():
+            return "Error: invalid message ID"
+
         try:
             status, _ = self._select_folder(folder)
             if status != "OK":
                 return f"Error: cannot open folder {folder}"
 
             typ, data = self.mail.fetch(str(msg_id), "(RFC822)")
-            
+
             raw_email = b""
             for part in data:
                 if isinstance(part, tuple):
                     raw_email = part[1]
                     break
-            
+
             if not raw_email:
                 return "Error: Empty response from server."
-            
+
             msg = email.message_from_bytes(raw_email)
             body = ""
-            
+
             def decode_payload(payload):
                 if isinstance(payload, str):
                     return payload
@@ -218,15 +222,15 @@ class IMAPClient:
                 for enc in ['utf-8', 'latin-1', 'cp1252']:
                     try:
                         return payload.decode(enc)
-                    except:
+                    except Exception:
                         pass
                 return payload.decode('utf-8', errors='ignore')
-            
+
             if msg.is_multipart():
                 for part in msg.walk():
                     content_type = part.get_content_type()
                     content_disposition = str(part.get("Content-Disposition"))
-                    
+
                     if "attachment" not in content_disposition:
                         if content_type == "text/plain":
                             try:
@@ -234,23 +238,23 @@ class IMAPClient:
                                 if payload:
                                     body = decode_payload(payload)
                                     break
-                            except:
+                            except Exception:
                                 pass
                         elif content_type == "text/html" and not body:
                             try:
                                 payload = part.get_payload(decode=True)
                                 if payload:
                                     body = decode_payload(payload)
-                            except:
+                            except Exception:
                                 pass
             else:
                 try:
                     payload = msg.get_payload(decode=True)
                     if payload:
                         body = decode_payload(payload)
-                except:
+                except Exception:
                     pass
-            
+
             return body if body else "No text content found."
         except Exception as e:
             return f"Error reading body: {e}"

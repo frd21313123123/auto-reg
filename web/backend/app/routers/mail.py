@@ -1,3 +1,4 @@
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,6 +15,8 @@ from app.schemas import (
     MessageSummary,
 )
 from app.services.mail_backend import mail_backend_service
+
+_SAFE_MESSAGE_ID_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
 router = APIRouter()
 
@@ -44,8 +47,8 @@ def connect_account(
             account.email,
             account.password_mail,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=502, detail="failed to connect to mailbox")
 
     return ConnectResponse(**result)
 
@@ -65,8 +68,8 @@ def get_messages(
             account.email,
             account.password_mail,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=502, detail="failed to fetch messages")
 
     return [MessageSummary(**message) for message in messages]
 
@@ -80,6 +83,9 @@ def get_message_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MessageDetail:
+    if not _SAFE_MESSAGE_ID_RE.match(message_id):
+        raise HTTPException(status_code=400, detail="invalid message id")
+
     account = _get_owned_account(db, current_user, account_id)
 
     try:
@@ -92,8 +98,8 @@ def get_message_detail(
             sender_hint=sender,
             subject_hint=subject,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=502, detail="failed to fetch message")
 
     return MessageDetail(**message)
 
@@ -126,20 +132,37 @@ def ban_check_bulk(
     results: list[BanCheckResult] = []
 
     account_by_id = {account.id: account for account in accounts}
+    account_jobs = [(account.id, account.email, account.password_mail) for account in accounts]
 
-    def worker(account: ManagedAccount) -> tuple[int, str, str, str]:
+    def worker(account_id: int, email: str, password_mail: str) -> tuple[int, str, str, str]:
         result, reason = mail_backend_service.check_account_for_ban(
-            account.email,
-            account.password_mail,
+            email,
+            password_mail,
         )
-        return account.id, account.email, result, reason
+        return account_id, email, result, reason
 
     with ThreadPoolExecutor(max_workers=payload.max_workers) as executor:
-        future_map = {executor.submit(worker, account): account.id for account in accounts}
+        future_map = {
+            executor.submit(worker, account_id, email, password_mail): (account_id, email)
+            for account_id, email, password_mail in account_jobs
+        }
 
         for future in as_completed(future_map):
             checked += 1
-            account_id, email, result, reason = future.result()
+            fallback_account_id, fallback_email = future_map[future]
+            try:
+                account_id, email, result, reason = future.result()
+            except Exception as exc:
+                errors += 1
+                results.append(
+                    BanCheckResult(
+                        account_id=fallback_account_id,
+                        email=fallback_email,
+                        result="error",
+                        reason=f"worker_exception:{exc.__class__.__name__}",
+                    )
+                )
+                continue
             account = account_by_id[account_id]
 
             if result == "banned":

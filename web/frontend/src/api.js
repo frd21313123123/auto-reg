@@ -119,6 +119,12 @@ export const accountsApi = {
       token,
       body: { folder }
     }),
+  bulkUpdateFolder: (token, accountIds, folder) =>
+    request("/accounts/bulk-folder", {
+      method: "PATCH",
+      token,
+      body: { account_ids: accountIds, folder }
+    }),
   listFolders: (token) => request("/accounts/folders", { token }),
   createFolder: (token, name) =>
     request("/accounts/folders", {

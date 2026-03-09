@@ -1,0 +1,105 @@
+- generic [ref=e32]:
+  - generic [ref=e33]:
+    - complementary [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - button "Назад" [ref=e37] [cursor=pointer]:
+            - img [ref=e38]
+          - heading "Mail.tm" [level=1] [ref=e40]
+        - button "Выйти" [ref=e42] [cursor=pointer]:
+          - img [ref=e43]
+      - generic [ref=e46]: qawebfix1029
+      - button "+ Создать аккаунт" [ref=e47] [cursor=pointer]
+      - generic [ref=e48]:
+        - generic [ref=e49]: АККАУНТЫ
+        - generic [ref=e50]:
+          - button "Обновить список" [ref=e51] [cursor=pointer]:
+            - img [ref=e52]
+          - button "Импорт из файла" [active] [ref=e57] [cursor=pointer]:
+            - img [ref=e58]
+          - button "Экспорт в Excel" [ref=e62] [cursor=pointer]:
+            - img [ref=e63]
+          - button "Окно данных" [ref=e65] [cursor=pointer]:
+            - img [ref=e66]
+          - button "Проверить баны" [ref=e68] [cursor=pointer]:
+            - img [ref=e69]
+        - generic [ref=e73]:
+          - button "Все папки 0" [ref=e74] [cursor=pointer]:
+            - generic [ref=e75]: Все папки
+            - generic [ref=e76]: "0"
+          - button "Основная 0" [ref=e77] [cursor=pointer]:
+            - generic [ref=e78]: Основная
+            - generic [ref=e79]: "0"
+        - generic [ref=e80]:
+          - button "+" [ref=e81] [cursor=pointer]
+          - button "R" [ref=e82] [cursor=pointer]
+          - button "-" [ref=e83] [cursor=pointer]
+          - button "→" [disabled] [ref=e84]
+        - generic [ref=e86]: Аккаунтов пока нет
+      - generic [ref=e87]:
+        - generic [ref=e88]: ДЕЙСТВИЯ
+        - generic [ref=e89]:
+          - button "Копировать Email" [disabled] [ref=e90]:
+            - img [ref=e91]
+          - button "Копировать OpenAI пароль" [disabled] [ref=e94]:
+            - img [ref=e95]
+          - button "Копировать пароль почты" [disabled] [ref=e97]:
+            - img [ref=e98]
+          - button "Копировать всё" [disabled] [ref=e101]:
+            - img [ref=e102]
+      - generic [ref=e105]:
+        - generic [ref=e106]: ДЕЙСТВИЯ
+        - generic [ref=e107]:
+          - button "SK" [ref=e108] [cursor=pointer]
+          - button "IN" [ref=e109] [cursor=pointer]
+          - button "Сапёр" [ref=e110] [cursor=pointer]:
+            - img [ref=e111]
+          - button "Настройки" [ref=e116] [cursor=pointer]:
+            - img [ref=e117]
+    - main [ref=e121]:
+      - generic [ref=e122]:
+        - heading "Выберите аккаунт" [level=2] [ref=e124]
+        - generic [ref=e125]:
+          - button "Обновить почту" [disabled] [ref=e126]:
+            - img [ref=e127]
+          - generic [ref=e132]:
+            - button "Не рег" [disabled] [ref=e133]
+            - button "Рег" [disabled] [ref=e134]
+            - button "Plus" [disabled] [ref=e135]
+            - button "Business" [disabled] [ref=e136]
+            - button "Бан" [disabled] [ref=e137]
+            - button "Пароль" [disabled] [ref=e138]
+      - generic [ref=e139]:
+        - generic [ref=e140]:
+          - table [ref=e141]:
+            - rowgroup [ref=e142]:
+              - row "От кого Тема Время" [ref=e143]:
+                - columnheader "От кого" [ref=e144]
+                - columnheader "Тема" [ref=e145]
+                - columnheader "Время" [ref=e146]
+            - rowgroup
+          - generic [ref=e147]: Писем пока нет
+        - generic [ref=e148]:
+          - generic [ref=e149]:
+            - heading "Содержание письма" [level=3] [ref=e150]
+            - button "Закрыть содержимое письма" [disabled] [ref=e152]:
+              - img [ref=e153]
+          - paragraph [ref=e157]: Выберите письмо, чтобы увидеть содержимое.
+  - generic [ref=e159]:
+    - generic [ref=e160]:
+      - generic [ref=e161]:
+        - strong [ref=e162]: Импорт аккаунтов
+        - generic [ref=e163]: "Вставьте аккаунты: email / pass;pass / status [ / folder ]"
+      - generic [ref=e164]:
+        - button "↥" [disabled] [ref=e165]
+        - button "—" [ref=e166] [cursor=pointer]
+        - button "□" [ref=e167] [cursor=pointer]
+        - button "×" [ref=e168] [cursor=pointer]
+    - generic [ref=e169]:
+      - 'textbox "Вставьте аккаунты: email / pass;pass / status [ / folder ]" [ref=e170]'
+      - generic [ref=e171]:
+        - button "Импортировать" [disabled] [ref=e172]:
+          - img [ref=e173]
+        - button "Закрыть" [ref=e176] [cursor=pointer]:
+          - img [ref=e177]
+  - contentinfo [ref=e158]: Готово

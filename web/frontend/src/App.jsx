@@ -3,8 +3,11 @@ import { useEffect, useState } from "react";
 import { authApi } from "./api";
 import AuthView from "./components/AuthView";
 import Dashboard from "./components/Dashboard";
+import LauncherView from "./components/LauncherView";
+import WaveView from "./components/WaveView";
 
 const TOKEN_KEY = "auto_reg_web_token";
+const PROJECT_KEY = "auto_reg_web_project";
 
 function LiquidGlassSvgDefs() {
   return (
@@ -49,6 +52,7 @@ function LiquidGlassSvgDefs() {
 }
 
 export default function App() {
+  const [project, setProject] = useState(() => sessionStorage.getItem(PROJECT_KEY));
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
@@ -108,6 +112,21 @@ export default function App() {
     };
   }, []);
 
+  const handleSelectAutoReg = () => {
+    sessionStorage.setItem(PROJECT_KEY, "autoreg");
+    setProject("autoreg");
+  };
+
+  const handleSelectWave = () => {
+    sessionStorage.setItem(PROJECT_KEY, "wave");
+    setProject("wave");
+  };
+
+  const handleBackToLauncher = () => {
+    sessionStorage.removeItem(PROJECT_KEY);
+    setProject(null);
+  };
+
   const handleAuthSuccess = (nextToken, nextUser) => {
     localStorage.setItem(TOKEN_KEY, nextToken);
     setToken(nextToken);
@@ -120,13 +139,26 @@ export default function App() {
     setUser(null);
   };
 
-  const content = checking ? (
-    <div className="boot-loader">Проверка сессии...</div>
-  ) : !token || !user ? (
-    <AuthView onAuthSuccess={handleAuthSuccess} />
-  ) : (
-    <Dashboard token={token} user={user} onLogout={handleLogout} />
-  );
+  let content;
+
+  if (!project) {
+    content = <LauncherView onSelectAutoReg={handleSelectAutoReg} onSelectWave={handleSelectWave} />;
+  } else if (project === "wave") {
+    content = <WaveView onBack={handleBackToLauncher} />;
+  } else if (checking) {
+    content = <div className="boot-loader">Проверка сессии...</div>;
+  } else if (!token || !user) {
+    content = <AuthView onAuthSuccess={handleAuthSuccess} onBack={handleBackToLauncher} />;
+  } else {
+    content = (
+      <Dashboard
+        token={token}
+        user={user}
+        onLogout={handleLogout}
+        onBack={handleBackToLauncher}
+      />
+    );
+  }
 
   return (
     <>

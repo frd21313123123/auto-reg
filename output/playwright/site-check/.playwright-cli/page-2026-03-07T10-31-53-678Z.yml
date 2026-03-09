@@ -1,0 +1,160 @@
+- generic [ref=e32]:
+  - generic [ref=e33]:
+    - complementary [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - button "Назад" [ref=e37] [cursor=pointer]:
+            - img [ref=e38]
+          - heading "Mail.tm" [level=1] [ref=e40]
+        - button "Выйти" [ref=e42] [cursor=pointer]:
+          - img [ref=e43]
+      - generic [ref=e46]: qawebfix1029
+      - button "+ Создать аккаунт" [ref=e47] [cursor=pointer]
+      - generic [ref=e48]:
+        - generic [ref=e49]: АККАУНТЫ
+        - generic [ref=e50]:
+          - button "Обновить список" [ref=e51] [cursor=pointer]:
+            - img [ref=e52]
+          - button "Импорт из файла" [ref=e57] [cursor=pointer]:
+            - img [ref=e58]
+          - button "Экспорт в Excel" [ref=e62] [cursor=pointer]:
+            - img [ref=e63]
+          - button "Окно данных" [ref=e65] [cursor=pointer]:
+            - img [ref=e66]
+          - button "Проверить баны" [ref=e68] [cursor=pointer]:
+            - img [ref=e69]
+        - generic [ref=e73]:
+          - button "Все папки 10" [ref=e180] [cursor=pointer]:
+            - generic [ref=e75]: Все папки
+            - generic [ref=e76]: "10"
+          - button "Основная 10" [ref=e181] [cursor=pointer]:
+            - generic [ref=e78]: Основная
+            - generic [ref=e79]: "10"
+        - generic [ref=e80]:
+          - button "+" [ref=e81] [cursor=pointer]
+          - button "R" [ref=e82] [cursor=pointer]
+          - button "-" [ref=e83] [cursor=pointer]
+          - button "→" [ref=e84] [cursor=pointer]
+        - generic [ref=e85]:
+          - button "donnasanchez2001@vladoulead.com Не зарегистрирован • Основная ×" [ref=e182]:
+            - generic [ref=e183]:
+              - generic [ref=e184]: donnasanchez2001@vladoulead.com
+              - generic [ref=e185]: Не зарегистрирован • Основная
+            - generic "Удалить почту donnasanchez2001@vladoulead.com" [ref=e186]: ×
+          - button "dorothyjones1956@xhpwahr.com Не зарегистрирован • Основная ×" [ref=e187]:
+            - generic [ref=e188]:
+              - generic [ref=e189]: dorothyjones1956@xhpwahr.com
+              - generic [ref=e190]: Не зарегистрирован • Основная
+            - generic "Удалить почту dorothyjones1956@xhpwahr.com": ×
+          - button "emilycorral2022@wiwsjambok.com Не зарегистрирован • Основная ×" [ref=e191]:
+            - generic [ref=e192]:
+              - generic [ref=e193]: emilycorral2022@wiwsjambok.com
+              - generic [ref=e194]: Не зарегистрирован • Основная
+            - generic "Удалить почту emilycorral2022@wiwsjambok.com": ×
+          - button "johnbelk1980@thatonsko.com Не зарегистрирован • Основная ×" [ref=e195]:
+            - generic [ref=e196]:
+              - generic [ref=e197]: johnbelk1980@thatonsko.com
+              - generic [ref=e198]: Не зарегистрирован • Основная
+            - generic "Удалить почту johnbelk1980@thatonsko.com": ×
+          - button "karentrace1990@tekkaaccep.com Не зарегистрирован • Основная ×" [ref=e199]:
+            - generic [ref=e200]:
+              - generic [ref=e201]: karentrace1990@tekkaaccep.com
+              - generic [ref=e202]: Не зарегистрирован • Основная
+            - generic "Удалить почту karentrace1990@tekkaaccep.com": ×
+          - button "loisrangel1942@tukiunge.com Не зарегистрирован • Основная ×" [ref=e203]:
+            - generic [ref=e204]:
+              - generic [ref=e205]: loisrangel1942@tukiunge.com
+              - generic [ref=e206]: Не зарегистрирован • Основная
+            - generic "Удалить почту loisrangel1942@tukiunge.com": ×
+          - button "mariesusanin1905@zoasapulpa.com Не зарегистрирован • Основная ×" [ref=e207]:
+            - generic [ref=e208]:
+              - generic [ref=e209]: mariesusanin1905@zoasapulpa.com
+              - generic [ref=e210]: Не зарегистрирован • Основная
+            - generic "Удалить почту mariesusanin1905@zoasapulpa.com": ×
+          - button "nicktada1908@xliiilas.com Не зарегистрирован • Основная ×" [ref=e211]:
+            - generic [ref=e212]:
+              - generic [ref=e213]: nicktada1908@xliiilas.com
+              - generic [ref=e214]: Не зарегистрирован • Основная
+            - generic "Удалить почту nicktada1908@xliiilas.com": ×
+          - button "robbiemedina1987@ttattdo.com Не зарегистрирован • Основная ×" [ref=e215]:
+            - generic [ref=e216]:
+              - generic [ref=e217]: robbiemedina1987@ttattdo.com
+              - generic [ref=e218]: Не зарегистрирован • Основная
+            - generic "Удалить почту robbiemedina1987@ttattdo.com": ×
+          - button "veronicawalsh1938@zunestou.com Не зарегистрирован • Основная ×" [ref=e219]:
+            - generic [ref=e220]:
+              - generic [ref=e221]: veronicawalsh1938@zunestou.com
+              - generic [ref=e222]: Не зарегистрирован • Основная
+            - generic "Удалить почту veronicawalsh1938@zunestou.com": ×
+      - generic [ref=e87]:
+        - generic [ref=e88]: ДЕЙСТВИЯ
+        - generic [ref=e89]:
+          - button "Копировать Email" [ref=e90] [cursor=pointer]:
+            - img [ref=e91]
+          - button "Копировать OpenAI пароль" [ref=e94] [cursor=pointer]:
+            - img [ref=e95]
+          - button "Копировать пароль почты" [ref=e97] [cursor=pointer]:
+            - img [ref=e98]
+          - button "Копировать всё" [ref=e101] [cursor=pointer]:
+            - img [ref=e102]
+      - generic [ref=e105]:
+        - generic [ref=e106]: ДЕЙСТВИЯ
+        - generic [ref=e107]:
+          - button "SK" [ref=e108] [cursor=pointer]
+          - button "IN" [ref=e109] [cursor=pointer]
+          - button "Сапёр" [ref=e110] [cursor=pointer]:
+            - img [ref=e111]
+          - button "Настройки" [ref=e116] [cursor=pointer]:
+            - img [ref=e117]
+    - main [ref=e121]:
+      - generic [ref=e122]:
+        - heading "donnasanchez2001@vladoulead.com" [level=2] [ref=e223]
+        - generic [ref=e125]:
+          - button "Обновить почту" [ref=e126] [cursor=pointer]:
+            - img [ref=e127]
+          - generic [ref=e132]:
+            - button "Не рег" [ref=e133] [cursor=pointer]
+            - button "Рег" [ref=e134] [cursor=pointer]
+            - button "Plus" [ref=e135] [cursor=pointer]
+            - button "Business" [ref=e136] [cursor=pointer]
+            - button "Бан" [ref=e137] [cursor=pointer]
+            - button "Пароль" [ref=e138] [cursor=pointer]
+      - generic [ref=e139]:
+        - table [ref=e141]:
+          - rowgroup [ref=e142]:
+            - row "От кого Тема Время" [ref=e143]:
+              - columnheader "От кого" [ref=e144]
+              - columnheader "Тема" [ref=e145]
+              - columnheader "Время" [ref=e146]
+          - rowgroup [ref=e224]:
+            - row "noreply@email.openai.com Explore role-specific ChatGPT use cases 19:48:14" [ref=e225] [cursor=pointer]:
+              - cell "noreply@email.openai.com" [ref=e226]
+              - cell "Explore role-specific ChatGPT use cases" [ref=e227]
+              - cell "19:48:14" [ref=e228]
+            - row "noreply@email.openai.com Connect ChatGPT to your internal sources 19:47:24" [ref=e229] [cursor=pointer]:
+              - cell "noreply@email.openai.com" [ref=e230]
+              - cell "Connect ChatGPT to your internal sources" [ref=e231]
+              - cell "19:47:24" [ref=e232]
+            - row "noreply@email.openai.com Training to help your team get started 19:47:22" [ref=e233] [cursor=pointer]:
+              - cell "noreply@email.openai.com" [ref=e234]
+              - cell "Training to help your team get started" [ref=e235]
+              - cell "19:47:22" [ref=e236]
+            - row "noreply@tm.openai.com ChatGPT — ваш новый план 11:42:00" [ref=e237] [cursor=pointer]:
+              - cell "noreply@tm.openai.com" [ref=e238]
+              - cell "ChatGPT — ваш новый план" [ref=e239]
+              - cell "11:42:00" [ref=e240]
+            - row "noreply@tm.openai.com Your ChatGPT code is 014553 11:40:35" [ref=e241] [cursor=pointer]:
+              - cell "noreply@tm.openai.com" [ref=e242]
+              - cell "Your ChatGPT code is 014553" [ref=e243]
+              - cell "11:40:35" [ref=e244]
+            - row "otp@tm1.openai.com Your ChatGPT code is 092765 09:11:01" [ref=e245] [cursor=pointer]:
+              - cell "otp@tm1.openai.com" [ref=e246]
+              - cell "Your ChatGPT code is 092765" [ref=e247]
+              - cell "09:11:01" [ref=e248]
+        - generic [ref=e148]:
+          - generic [ref=e149]:
+            - heading "Содержание письма" [level=3] [ref=e150]
+            - button "Закрыть содержимое письма" [disabled] [ref=e152]:
+              - img [ref=e153]
+          - paragraph [ref=e157]: Выберите письмо, чтобы увидеть содержимое.
+  - contentinfo [ref=e158]: "Писем: 6"

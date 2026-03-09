@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { accountsApi, mailApi, toolsApi } from "../api";
 import ParallaxDotsBackground from "./ParallaxDotsBackground";
@@ -28,6 +28,7 @@ const I = {
   upload: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
   dice: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="3"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="16" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>,
   close: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  arrowLeft: (s = 16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
 };
 
 const STATUS_OPTIONS = [
@@ -547,6 +548,73 @@ async function copyText(value) {
   await navigator.clipboard.writeText(value);
 }
 
+const INVISIBLE_EMAIL_TEXT_RE =
+  /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/gu;
+const SPECIAL_EMAIL_SPACE_RE = /[\u00a0\u2000-\u200a\u202f\u205f\u3000]/gu;
+const URL_RE = /(https?:\/\/[^\s<>"'`)\]]+)/giu;
+
+function normalizeMessageText(text) {
+  return String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(SPECIAL_EMAIL_SPACE_RE, " ")
+    .replace(INVISIBLE_EMAIL_TEXT_RE, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function formatUrlLabel(value) {
+  try {
+    const url = new URL(value);
+    const path = url.pathname && url.pathname !== "/" ? url.pathname.replace(/\/+$/, "") : "";
+    const compactPath = path.length > 18 ? `${path.slice(0, 18)}...` : path;
+    return `${url.hostname}${compactPath}`;
+  } catch {
+    return value.length > 52 ? `${value.slice(0, 49)}...` : value;
+  }
+}
+
+function renderTextWithLinks(text, keyPrefix) {
+  const nodes = [];
+  let match;
+  let lastIndex = 0;
+  URL_RE.lastIndex = 0;
+
+  while ((match = URL_RE.exec(text)) !== null) {
+    const [url] = match;
+    const start = match.index;
+
+    if (start > lastIndex) {
+      nodes.push(
+        <span key={`${keyPrefix}-text-${lastIndex}`}>{text.slice(lastIndex, start)}</span>
+      );
+    }
+
+    nodes.push(
+      <a
+        key={`${keyPrefix}-link-${start}`}
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="plain-email-link"
+        title={url}
+      >
+        {formatUrlLabel(url)}
+      </a>
+    );
+
+    lastIndex = start + url.length;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(
+      <span key={`${keyPrefix}-text-tail`}>{text.slice(lastIndex)}</span>
+    );
+  }
+
+  return nodes.length ? nodes : [<span key={`${keyPrefix}-empty`}>{text}</span>];
+}
+
 function HtmlEmailViewer({ html }) {
   const iframeRef = useRef(null);
 
@@ -592,6 +660,37 @@ function HtmlEmailViewer({ html }) {
 }
 
 // DarkParallaxDotsBackground is now shared — see ParallaxDotsBackground.jsx
+
+function PlainEmailViewer({ text }) {
+  const normalizedText = useMemo(() => normalizeMessageText(text), [text]);
+  const paragraphs = useMemo(
+    () => normalizedText.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean),
+    [normalizedText]
+  );
+
+  if (!paragraphs.length) {
+    return <p className="placeholder-text">Нет текстового содержимого.</p>;
+  }
+
+  return (
+    <div className="plain-email-viewer">
+      {paragraphs.map((paragraph, paragraphIndex) => {
+        const lines = paragraph.split("\n");
+
+        return (
+          <p className="plain-email-paragraph" key={`paragraph-${paragraphIndex}`}>
+            {lines.map((line, lineIndex) => (
+              <Fragment key={`line-${paragraphIndex}-${lineIndex}`}>
+                {renderTextWithLinks(line, `paragraph-${paragraphIndex}-line-${lineIndex}`)}
+                {lineIndex < lines.length - 1 ? <br /> : null}
+              </Fragment>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 function GeneratorPanel({
   title,
@@ -853,7 +952,7 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-export default function Dashboard({ token, user, onLogout }) {
+export default function Dashboard({ token, user, onLogout, onBack }) {
   const [statusMessage, setStatusMessage] = useState("Готово");
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState("accounts");
@@ -862,6 +961,8 @@ export default function Dashboard({ token, user, onLogout }) {
   const [accountFolders, setAccountFolders] = useState([]);
   const [accountsFolderFilter, setAccountsFolderFilter] = useState(ALL_ACCOUNT_FOLDERS);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const [selectedAccountIds, setSelectedAccountIds] = useState(new Set());
+  const [dragOverFolder, setDragOverFolder] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageDetail, setMessageDetail] = useState(null);
   const [mailInboxHeight, setMailInboxHeight] = useState(() =>
@@ -1753,6 +1854,28 @@ export default function Dashboard({ token, user, onLogout }) {
   }, [accounts]);
 
   useEffect(() => {
+    setSelectedAccountIds((prev) => {
+      if (!prev.size) {
+        return prev;
+      }
+      const existingIds = new Set(accounts.map((item) => item.id));
+      const next = new Set(Array.from(prev).filter((id) => existingIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [accounts]);
+
+  useEffect(() => {
+    setSelectedAccountIds((prev) => {
+      if (!prev.size) {
+        return prev;
+      }
+      const visibleIds = new Set(filteredAccounts.map((item) => item.id));
+      const next = new Set(Array.from(prev).filter((id) => visibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filteredAccounts]);
+
+  useEffect(() => {
     if (!isResizingMailPanels) {
       return;
     }
@@ -2491,17 +2614,37 @@ export default function Dashboard({ token, user, onLogout }) {
     }, "Удаление папки...");
   };
 
+  const getEffectiveSelectedIds = () => {
+    if (selectedAccountIds.size > 0) {
+      return Array.from(selectedAccountIds);
+    }
+    return selectedAccountId ? [selectedAccountId] : [];
+  };
+
+  const moveAccountsToFolder = (accountIds, targetFolder) => {
+    if (!accountIds.length) return;
+    withBusy(async () => {
+      await accountsApi.bulkUpdateFolder(token, accountIds, targetFolder);
+      await refreshAccountsAndFolders(selectedAccountId);
+      setSelectedAccountIds(new Set());
+      applyStatus(`${accountIds.length > 1 ? `${accountIds.length} почт перемещено` : "Почта перемещена"} в папку: ${targetFolder}`);
+    }, "Перемещение почты...");
+  };
+
   const moveSelectedAccountToFolder = () => {
-    if (!selectedAccount) {
+    const ids = getEffectiveSelectedIds();
+    if (!ids.length) {
       applyStatus("Выберите почту для перемещения");
       return;
     }
 
-    const currentFolder = normalizeAccountFolder(selectedAccount.folder);
-    const input = window.prompt(
-      `Введите папку для ${selectedAccount.email}:`,
-      currentFolder
-    );
+    const label = ids.length > 1
+      ? `Введите папку для ${ids.length} аккаунтов:`
+      : `Введите папку для ${selectedAccount?.email || "аккаунта"}:`;
+    const currentFolder = selectedAccount
+      ? normalizeAccountFolder(selectedAccount.folder)
+      : DEFAULT_ACCOUNT_FOLDER;
+    const input = window.prompt(label, currentFolder);
     if (input === null) {
       return;
     }
@@ -2517,15 +2660,77 @@ export default function Dashboard({ token, user, onLogout }) {
       applyStatus("Имя папки не может быть пустым");
       return;
     }
-    if (targetFolder.toLowerCase() === currentFolder.toLowerCase()) {
+
+    moveAccountsToFolder(ids, targetFolder);
+  };
+
+  const handleAccountClick = (account, event) => {
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedAccountIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(account.id)) {
+          next.delete(account.id);
+        } else {
+          next.add(account.id);
+        }
+        return next;
+      });
+      setSelectedAccountId(account.id);
+    } else if (event.shiftKey && selectedAccountId) {
+      const currentIndex = filteredAccounts.findIndex((a) => a.id === selectedAccountId);
+      const targetIndex = filteredAccounts.findIndex((a) => a.id === account.id);
+      if (currentIndex !== -1 && targetIndex !== -1) {
+        const start = Math.min(currentIndex, targetIndex);
+        const end = Math.max(currentIndex, targetIndex);
+        const rangeIds = new Set();
+        for (let i = start; i <= end; i++) {
+          rangeIds.add(filteredAccounts[i].id);
+        }
+        setSelectedAccountIds(rangeIds);
+        setSelectedAccountId(account.id);
+      }
+    } else {
+      setSelectedAccountIds(new Set());
+      setSelectedAccountId(account.id);
+      if (isMobile) {
+        setMobileTab("mail");
+      }
+    }
+  };
+
+  const handleAccountDragStart = (account, event) => {
+    const ids = selectedAccountIds.has(account.id)
+      ? Array.from(selectedAccountIds)
+      : [account.id];
+    event.dataTransfer.setData("application/x-account-ids", JSON.stringify(ids));
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleFolderDrop = (folderName, event) => {
+    event.preventDefault();
+    setDragOverFolder(null);
+    const raw = event.dataTransfer.getData("application/x-account-ids");
+    if (!raw) return;
+    let ids;
+    try {
+      ids = JSON.parse(raw);
+    } catch {
       return;
     }
+    if (!Array.isArray(ids) || !ids.length) return;
+    moveAccountsToFolder(ids, folderName);
+  };
 
-    withBusy(async () => {
-      await accountsApi.updateFolder(token, selectedAccount.id, targetFolder);
-      await refreshAccountsAndFolders(selectedAccount.id);
-      applyStatus(`Почта перемещена в папку: ${targetFolder}`);
-    }, "Перемещение почты...");
+  const handleFolderDragOver = (folderName, event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dragOverFolder !== folderName) {
+      setDragOverFolder(folderName);
+    }
+  };
+
+  const handleFolderDragLeave = () => {
+    setDragOverFolder(null);
   };
 
   const manualRefresh = () =>
@@ -2739,7 +2944,7 @@ export default function Dashboard({ token, user, onLogout }) {
   const accountsPanel = (
     <>
       <button type="button" className="primary-btn create-btn" onClick={createMailTm} disabled={busy}>
-        + Создать аккаунт
+        + Создать аккаунт{accountsFolderFilter !== ALL_ACCOUNT_FOLDERS ? ` → ${accountsFolderFilter}` : ""}
       </button>
 
       <section className="side-section accounts-section">
@@ -2775,20 +2980,38 @@ export default function Dashboard({ token, user, onLogout }) {
           </button>
         </div>
 
-        <div className="folder-controls">
-          <select
-            value={accountsFolderFilter}
-            onChange={(event) => setAccountsFolderFilter(event.target.value)}
+        <div className="folder-list">
+          <button
+            type="button"
+            className={accountsFolderFilter === ALL_ACCOUNT_FOLDERS ? "active" : ""}
+            onClick={() => setAccountsFolderFilter(ALL_ACCOUNT_FOLDERS)}
             disabled={busy}
-            title="Фильтр по папке"
           >
-            <option value={ALL_ACCOUNT_FOLDERS}>{ALL_ACCOUNT_FOLDERS}</option>
-            {availableFolderNames.map((folderName) => (
-              <option key={folderName} value={folderName}>
-                {folderName}
-              </option>
-            ))}
-          </select>
+            <span className="folder-name">{ALL_ACCOUNT_FOLDERS}</span>
+            <span className="folder-count">{accounts.length}</span>
+          </button>
+          {availableFolderNames.map((folderName) => {
+            const count = accounts.filter(
+              (a) => normalizeAccountFolder(a.folder) === folderName
+            ).length;
+            return (
+              <button
+                key={folderName}
+                type="button"
+                className={`${accountsFolderFilter === folderName ? "active" : ""} ${dragOverFolder === folderName ? "drag-over" : ""}`}
+                onClick={() => setAccountsFolderFilter(folderName)}
+                onDragOver={(e) => handleFolderDragOver(folderName, e)}
+                onDragLeave={handleFolderDragLeave}
+                onDrop={(e) => handleFolderDrop(folderName, e)}
+                disabled={busy}
+              >
+                <span className="folder-name">{folderName}</span>
+                <span className="folder-count">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="folder-actions-row">
           <button type="button" onClick={createFolder} disabled={busy} title="Создать папку">
             +
           </button>
@@ -2798,16 +3021,13 @@ export default function Dashboard({ token, user, onLogout }) {
           <button type="button" onClick={deleteCurrentFolder} disabled={busy} title="Удалить папку">
             -
           </button>
-        </div>
-
-        <div className="folder-actions-row">
           <button
             type="button"
             onClick={moveSelectedAccountToFolder}
-            disabled={!selectedAccount || busy}
-            title="Переместить выбранную почту в папку"
+            disabled={(!selectedAccount && !selectedAccountIds.size) || busy}
+            title="Переместить почту в папку"
           >
-            Переместить почту
+            →
           </button>
         </div>
 
@@ -2816,15 +3036,12 @@ export default function Dashboard({ token, user, onLogout }) {
             <button
               key={account.id}
               type="button"
+              draggable
               className={`account-item ${statusClass(account.status)} ${
                 account.id === selectedAccountId ? "active" : ""
-              }`}
-              onClick={() => {
-                setSelectedAccountId(account.id);
-                if (isMobile) {
-                  setMobileTab("mail");
-                }
-              }}
+              } ${selectedAccountIds.has(account.id) ? "selected" : ""}`}
+              onClick={(event) => handleAccountClick(account, event)}
+              onDragStart={(event) => handleAccountDragStart(account, event)}
             >
               <span className="account-item-main">
                 <span className="account-email">{account.email}</span>
@@ -2899,7 +3116,9 @@ export default function Dashboard({ token, user, onLogout }) {
               </svg>
             </button>
           ) : null}
-          <h2>{selectedAccount ? selectedAccount.email : "Выберите аккаунт"}</h2>
+          <h2 title={selectedAccount ? selectedAccount.email : "Выберите аккаунт"}>
+            {selectedAccount ? selectedAccount.email : "Выберите аккаунт"}
+          </h2>
         </div>
 
         <div className="toolbar-controls">
@@ -3014,7 +3233,7 @@ export default function Dashboard({ token, user, onLogout }) {
                 {messageDetail.html ? (
                   <HtmlEmailViewer html={messageDetail.html} />
                 ) : (
-                  <pre>{messageDetail.text}</pre>
+                  <PlainEmailViewer text={messageDetail.text} />
                 )}
               </>
             ) : (
@@ -3333,9 +3552,16 @@ export default function Dashboard({ token, user, onLogout }) {
         <ParallaxDotsBackground />
 
         <header className="mobile-header">
-          <h1 className="brand-title">
-            <span>Mail.</span>tm
-          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {onBack && (
+              <button type="button" className="icon-btn back-btn" title="Назад" onClick={onBack}>
+                {I.arrowLeft()}
+              </button>
+            )}
+            <h1 className="brand-title">
+              <span>Mail.</span>tm
+            </h1>
+          </div>
           <div className="mobile-header-actions">
             <span className="mobile-user-badge">{user.username}</span>
             <button type="button" className="icon-btn" title="Выйти" onClick={onLogout}>
@@ -3485,9 +3711,16 @@ export default function Dashboard({ token, user, onLogout }) {
             className={`brand-strip ${!isMobile ? "drag-handle" : ""} ${isDraggingSidebar ? "dragging" : ""}`}
             onMouseDown={!isMobile ? startSidebarDrag : undefined}
           >
-            <h1 className="brand-title">
-              <span>Mail.</span>tm
-            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {onBack && (
+                <button type="button" className="icon-btn back-btn" title="Назад" onClick={onBack}>
+                  {I.arrowLeft()}
+                </button>
+              )}
+              <h1 className="brand-title">
+                <span>Mail.</span>tm
+              </h1>
+            </div>
             <div className="brand-actions">
               <button type="button" className="icon-btn" title="Выйти" onClick={onLogout}>
                 {I.logout()}

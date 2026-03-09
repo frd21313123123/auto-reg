@@ -3,7 +3,7 @@ import { useState } from "react";
 import { authApi } from "../api";
 import ParallaxDotsBackground from "./ParallaxDotsBackground";
 
-export default function AuthView({ onAuthSuccess }) {
+export default function AuthView({ onAuthSuccess, onBack }) {
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -46,6 +46,12 @@ export default function AuthView({ onAuthSuccess }) {
     <div className="auth-root auth-dark">
       <ParallaxDotsBackground />
       <div className="auth-card">
+        {onBack && (
+          <button type="button" className="auth-back-btn" onClick={onBack}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            Назад
+          </button>
+        )}
         <h1>Auto-reg Web</h1>
         <p className="auth-subtitle">Браузерная версия Mail.tm инструмента</p>
 

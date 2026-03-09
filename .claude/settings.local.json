@@ -20,7 +20,11 @@
       "Bash(dir:*)",
       "Bash(npx vite:*)",
       "mcp__plugin_playwright_playwright__browser_close",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(true:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "WebSearch"
     ]
   }
 }

@@ -43,8 +43,8 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=128)
 
 
 class UserOut(BaseModel):
@@ -95,21 +95,24 @@ class AccountUpdateStatus(BaseModel):
         return normalize_account_status(value)
 
 
-class AccountOut(BaseModel):
+class AccountOutPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     email: str
-    password_openai: str
-    password_mail: str
     status: str
     folder: str
     created_at: datetime
     updated_at: datetime
 
 
+class AccountOut(AccountOutPublic):
+    password_openai: str
+    password_mail: str
+
+
 class AccountImportRequest(BaseModel):
-    text: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=500_000)
     folder: str | None = None
 
     @field_validator("folder")
@@ -137,6 +140,16 @@ class MailTmCreateRequest(BaseModel):
 
 
 class AccountUpdateFolder(BaseModel):
+    folder: str
+
+    @field_validator("folder")
+    @classmethod
+    def _validate_folder(cls, value: str) -> str:
+        return normalize_account_folder(value)
+
+
+class AccountBulkUpdateFolder(BaseModel):
+    account_ids: list[int] = Field(min_length=1)
     folder: str
 
     @field_validator("folder")

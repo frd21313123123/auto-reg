@@ -59,7 +59,7 @@ struct Account {
     std::string email;
     std::string password_openai;
     std::string password_mail;
-    std::string status; // not_registered, registered, plus, banned, invalid_password
+    std::string status; // not_registered, registered, plus, business, banned, invalid_password
 };
 
 // ================================================================
@@ -774,13 +774,15 @@ std::string serializePasswords(const Account& acc) {
     std::string password_openai = trim(acc.password_openai);
     std::string password_mail = trim(acc.password_mail);
 
-    if (!password_openai.empty() && !password_mail.empty() && password_openai != password_mail) {
-        return password_openai + ";" + password_mail;
+    if (password_openai.empty() && !password_mail.empty()) {
+        password_openai = password_mail;
+    } else if (password_mail.empty() && !password_openai.empty()) {
+        password_mail = password_openai;
     }
-    if (!password_mail.empty()) {
-        return password_mail;
+    if (password_openai.empty()) {
+        return std::string();
     }
-    return password_openai;
+    return password_openai + ";" + password_mail;
 }
 
 std::vector<Account> loadAccounts(bool* needs_rewrite = nullptr) {
@@ -826,7 +828,7 @@ void appendAccount(const std::string& email, const std::string& password) {
         std::cerr << "Warning: cannot open " << kAccountsFile << " for writing.\n";
         return;
     }
-    out << email << " / " << password << " / not_registered\n";
+    out << email << " / " << password << ";" << password << " / not_registered\n";
 }
 
 // ================================================================
@@ -1566,6 +1568,8 @@ void handleListAccounts() {
             status_tag = " [REG]";
         } else if (accounts[i].status == "plus") {
             status_tag = " [PLUS]";
+        } else if (accounts[i].status == "business") {
+            status_tag = " [BUSINESS]";
         } else if (accounts[i].status == "banned") {
             status_tag = " [BANNED]";
         } else if (accounts[i].status == "invalid_password") {
@@ -1690,6 +1694,9 @@ std::string accountStatusTag(const std::string& status) {
     if (status == "plus") {
         return " [PLUS]";
     }
+    if (status == "business") {
+        return " [BUSINESS]";
+    }
     if (status == "banned") {
         return " [BANNED]";
     }
@@ -1810,6 +1817,9 @@ std::string statusLabelRu(const std::string& status) {
     if (status == "plus") {
         return "plus";
     }
+    if (status == "business") {
+        return "business";
+    }
     if (status == "banned") {
         return "banned";
     }
@@ -1926,6 +1936,7 @@ void showAnalyticsReport(GuiState* state) {
         {"not_registered", 0},
         {"registered", 0},
         {"plus", 0},
+        {"business", 0},
         {"banned", 0},
         {"invalid_password", 0},
     };
@@ -1968,6 +1979,7 @@ void showAnalyticsReport(GuiState* state) {
     report << " - not_registered: " << status_counts["not_registered"] << "\r\n";
     report << " - registered: " << status_counts["registered"] << "\r\n";
     report << " - plus: " << status_counts["plus"] << "\r\n";
+    report << " - business: " << status_counts["business"] << "\r\n";
     report << " - banned: " << status_counts["banned"] << "\r\n";
     report << " - invalid_password: " << status_counts["invalid_password"] << "\r\n\r\n";
     report << "Топ доменов:\r\n";

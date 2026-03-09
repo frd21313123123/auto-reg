@@ -49,6 +49,7 @@ STATUS_COLORS = {
     "not_registered": {"dark": "#17243f"},
     "registered": {"dark": "#1d3d6d"},
     "plus": {"dark": "#1a5247"},
+    "business": {"dark": "#355b24"},
     "banned": {"dark": "#5b2530"},
     "invalid_password": {"dark": "#3d355c"},
 }
