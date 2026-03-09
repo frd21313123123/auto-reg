@@ -4,7 +4,7 @@ import { authApi } from "../api";
 
 export default function AuthView({ onAuthSuccess }) {
   const rootRef = useRef(null);
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState("register");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -32,6 +32,12 @@ export default function AuthView({ onAuthSuccess }) {
       body.classList.remove("auth-screen-active");
     };
   }, []);
+
+  const handleModeChange = (nextMode) => {
+    setMode(nextMode);
+    setError("");
+    setConfirmPassword("");
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -66,98 +72,127 @@ export default function AuthView({ onAuthSuccess }) {
     <div ref={rootRef} className="auth-root">
       <div className="auth-card">
         <section className="auth-hero">
-          <div className="auth-hero-mark">M</div>
-          <div>
-            <h1>Mail.tm Web Workspace</h1>
-            <p className="auth-subtitle">
-              Gmail-подобный интерфейс для временных почт, массовой регистрации и
-              вспомогательных генераторов.
-            </p>
+          <div className="auth-brand-lockup">
+            <div className="auth-hero-mark">A</div>
+            <div>
+              <p className="auth-eyebrow">Account Access</p>
+              <h1>Экран регистрации для рабочего потока.</h1>
+            </div>
           </div>
 
-          <div className="auth-feature-list">
-            <div className="auth-feature">
-              <strong>Inbox и чтение писем</strong>
-              <span>API mail.tm и fallback на IMAP в одном рабочем пространстве.</span>
-            </div>
-            <div className="auth-feature">
-              <strong>Локальные инструменты</strong>
-              <span>Ban-check, генераторы данных и быстрый импорт аккаунтов рядом с inbox.</span>
-            </div>
-            <div className="auth-feature">
-              <strong>Поток под регистрацию</strong>
-              <span>Интерфейс собран под массовую работу с временными почтами, а не под обычный email.</span>
-            </div>
-          </div>
+          <p className="auth-subtitle">
+            Вход и создание аккаунта собраны в одной точке: без лишних шагов, с акцентом на массовую
+            работу с временными почтами и регистрациями.
+          </p>
         </section>
 
         <section className="auth-panel">
+          <div className="auth-mobile-brand">
+            <div className="auth-mobile-mark">A</div>
+            <div>
+              <p className="auth-eyebrow">Auto-reg</p>
+              <strong>Рабочий аккаунт</strong>
+            </div>
+          </div>
+
           <div className="auth-panel-head">
-            <h2>{isRegister ? "Создайте workspace" : "Войдите в workspace"}</h2>
-            <p>Один аккаунт открывает весь web-интерфейс управления временными почтами.</p>
+            <span className="auth-badge">{isRegister ? "Регистрация" : "Вход"}</span>
+            <h2>{isRegister ? "Создайте рабочий аккаунт" : "С возвращением"}</h2>
+            <p>
+              {isRegister
+                ? "Задайте логин и пароль. После регистрации вход выполнится автоматически."
+                : "Введите логин и пароль, чтобы открыть web-интерфейс и продолжить работу."}
+            </p>
           </div>
 
           <div className="auth-switch">
             <button
               type="button"
               className={mode === "login" ? "active" : ""}
-              onClick={() => setMode("login")}
+              onClick={() => handleModeChange("login")}
             >
               Вход
             </button>
             <button
               type="button"
               className={mode === "register" ? "active" : ""}
-              onClick={() => setMode("register")}
+              onClick={() => handleModeChange("register")}
             >
               Регистрация
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="auth-form">
-            <label>
-              Логин
+            <label className="auth-field">
+              <span>Логин</span>
               <input
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 autoComplete="username"
+                placeholder="Введите логин"
                 minLength={3}
                 required
               />
             </label>
 
-            <label>
-              Пароль
+            <label className="auth-field">
+              <span>Пароль</span>
               <input
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={isRegister ? "new-password" : "current-password"}
+                placeholder={isRegister ? "Не короче 6 символов" : "••••••••"}
                 minLength={6}
                 required
               />
             </label>
 
             {isRegister ? (
-              <label>
-                Повтор пароля
+              <label className="auth-field">
+                <span>Повтор пароля</span>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   autoComplete="new-password"
+                  placeholder="Повторите пароль"
                   minLength={6}
                   required
                 />
               </label>
             ) : null}
 
-            {error ? <div className="form-error">{error}</div> : null}
+            <div className="auth-meta">
+              <p className="auth-note">
+                {isRegister
+                  ? "Используйте латиницу и цифры, чтобы аккаунт было проще переиспользовать."
+                  : "Один аккаунт хранит доступ к интерфейсу, а не к отдельной почте."}
+              </p>
+              <span className="auth-note-pill">{isRegister ? "Новый аккаунт" : "Web account"}</span>
+            </div>
+
+            {error ? (
+              <div className="form-error" role="alert">
+                {error}
+              </div>
+            ) : null}
 
             <button type="submit" className="auth-submit" disabled={busy}>
-              {busy ? "Подождите..." : isRegister ? "Создать аккаунт" : "Войти"}
+              {busy ? "Подождите..." : isRegister ? "Создать аккаунт" : "Войти в аккаунт"}
             </button>
           </form>
+
+          <p className="auth-footer">
+            {isRegister ? "Уже есть аккаунт?" : "Нет аккаунта?"}{" "}
+            <button
+              type="button"
+              className="auth-footer-link"
+              onClick={() => handleModeChange(isRegister ? "login" : "register")}
+            >
+              {isRegister ? "Войти" : "Зарегистрироваться"}
+            </button>
+          </p>
         </section>
       </div>
     </div>
