@@ -13,6 +13,13 @@ const EXTRA_STATUS_OPTIONS = [
   { value: "invalid_password", label: "Пароль" }
 ];
 
+const MAIL_LIST_MIN_HEIGHT = 220;
+const MAIL_VIEWER_MIN_HEIGHT = 280;
+const MAIL_PANEL_RESIZER_HEIGHT = 14;
+const MAIL_PANEL_RATIO_STORAGE_KEY = "auto_reg_mail_list_ratio";
+const LEGACY_MAIL_PANEL_HEIGHT_STORAGE_KEY = "auto_reg_mail_list_height";
+const DEFAULT_MAIL_PANEL_RATIO = 0.48;
+
 const STATUS_LABELS = {
   not_registered: "Не зарегистрирован",
   registered: "Зарегистрирован",
@@ -20,17 +27,6 @@ const STATUS_LABELS = {
   banned: "Banned",
   invalid_password: "Неверный пароль",
   business: "Business"
-};
-
-const GENERATOR_LABELS = {
-  card: "Карта",
-  exp: "Срок",
-  cvv: "CVV",
-  name: "Имя",
-  city: "Город",
-  street: "Улица",
-  postcode: "Индекс",
-  address_en: "Адрес"
 };
 
 function formatTimestamp(value) {
@@ -136,9 +132,62 @@ async function copyText(value) {
   await navigator.clipboard.writeText(String(value));
 }
 
+function readStoredMailListRatio() {
+  try {
+    const value = Number(localStorage.getItem(MAIL_PANEL_RATIO_STORAGE_KEY));
+    return Number.isFinite(value) && value > 0 && value < 1 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredLegacyMailListHeight() {
+  try {
+    const value = Number(localStorage.getItem(LEGACY_MAIL_PANEL_HEIGHT_STORAGE_KEY));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function getMailPanelAvailableHeight(stack) {
+  if (!stack) {
+    return 0;
+  }
+
+  return Math.max(stack.getBoundingClientRect().height - MAIL_PANEL_RESIZER_HEIGHT, 1);
+}
+
+function clampMailListRatio(ratio, stack) {
+  const availableHeight = getMailPanelAvailableHeight(stack);
+  if (!availableHeight || !Number.isFinite(ratio)) {
+    return DEFAULT_MAIL_PANEL_RATIO;
+  }
+
+  const minRatio = Math.min(MAIL_LIST_MIN_HEIGHT / availableHeight, 1);
+  const maxRatio = Math.max(
+    Math.min((availableHeight - MAIL_VIEWER_MIN_HEIGHT) / availableHeight, 1),
+    minRatio
+  );
+
+  return Math.min(Math.max(ratio, minRatio), maxRatio);
+}
+
+function convertHeightToRatio(height, stack) {
+  const availableHeight = getMailPanelAvailableHeight(stack);
+  if (!availableHeight || !Number.isFinite(height)) {
+    return DEFAULT_MAIL_PANEL_RATIO;
+  }
+
+  return clampMailListRatio(height / availableHeight, stack);
+}
+
 export default function Dashboard({ token, user, onLogout }) {
   const importFileRef = useRef(null);
   const inboxRefreshRef = useRef(false);
+  const generatorWindowsRef = useRef({});
+  const mailStackRef = useRef(null);
+  const mailPanelDragRef = useRef(null);
 
   const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
@@ -147,8 +196,6 @@ export default function Dashboard({ token, user, onLogout }) {
   const [messageDetail, setMessageDetail] = useState(null);
   const [importText, setImportText] = useState("");
   const [randomPerson, setRandomPerson] = useState({ name: "", birthdate: "" });
-  const [inGenerator, setInGenerator] = useState({});
-  const [skGenerator, setSkGenerator] = useState({});
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -156,13 +203,20 @@ export default function Dashboard({ token, user, onLogout }) {
   const [importBusy, setImportBusy] = useState(false);
   const [banBusy, setBanBusy] = useState(false);
   const [randomBusy, setRandomBusy] = useState(false);
-  const [generatorBusy, setGeneratorBusy] = useState({ in: false, sk: false });
+  const [mailListRatio, setMailListRatio] = useState(() => readStoredMailListRatio());
+  const [isResizingMailPanels, setIsResizingMailPanels] = useState(false);
   const [statusText, setStatusText] = useState("Готов к работе");
 
   const selectedAccount =
     accounts.find((account) => account.id === selectedAccountId) || null;
   const selectedMessage =
     messages.find((message) => message.id === selectedMessageId) || null;
+  const messageHtml = detailLoading ? "" : String(messageDetail?.html || "").trim();
+  const mailStackStyle = mailListRatio
+    ? {
+        gridTemplateRows: `minmax(${MAIL_LIST_MIN_HEIGHT}px, ${mailListRatio}fr) ${MAIL_PANEL_RESIZER_HEIGHT}px minmax(${MAIL_VIEWER_MIN_HEIGHT}px, ${Math.max(1 - mailListRatio, 0.01)}fr)`
+      }
+    : undefined;
 
   const loadAccounts = async (preferredAccountId = null) => {
     try {
@@ -287,29 +341,123 @@ export default function Dashboard({ token, user, onLogout }) {
     }
   };
 
-  const loadGenerator = async (kind) => {
-    try {
-      setGeneratorBusy((currentValue) => ({ ...currentValue, [kind]: true }));
-      const nextData =
-        kind === "in" ? await toolsApi.generatorIn(token) : await toolsApi.generatorSk(token);
-      if (kind === "in") {
-        setInGenerator(nextData);
-      } else {
-        setSkGenerator(nextData);
-      }
-    } catch (error) {
-      setStatusText(error.message);
-    } finally {
-      setGeneratorBusy((currentValue) => ({ ...currentValue, [kind]: false }));
+  const openGeneratorPopup = (kind) => {
+    const popupUrl = new URL(window.location.origin + window.location.pathname);
+    popupUrl.searchParams.set("popup", kind);
+
+    const screenLeft = typeof window.screenLeft === "number" ? window.screenLeft : 0;
+    const screenTop = typeof window.screenTop === "number" ? window.screenTop : 0;
+    const width = 560;
+    const height = 760;
+    const left = Math.max(screenLeft + Math.round((window.outerWidth - width) / 2), 0);
+    const top = Math.max(screenTop + Math.round((window.outerHeight - height) / 2), 0);
+    const popupName = kind === "in" ? "auto-reg-generator-in" : "auto-reg-generator-sk";
+    const features = [
+      "popup=yes",
+      `width=${width}`,
+      `height=${height}`,
+      `left=${left}`,
+      `top=${top}`,
+      "resizable=yes",
+      "scrollbars=yes"
+    ].join(",");
+
+    const existingWindow = generatorWindowsRef.current[kind];
+    if (existingWindow && !existingWindow.closed) {
+      existingWindow.location.href = popupUrl.toString();
+      existingWindow.focus();
+      setStatusText(`Окно ${kind.toUpperCase()} уже открыто`);
+      return;
     }
+
+    const popupWindow = window.open(popupUrl.toString(), popupName, features);
+    if (!popupWindow) {
+      setStatusText("Браузер заблокировал popup окно");
+      return;
+    }
+
+    generatorWindowsRef.current[kind] = popupWindow;
+    popupWindow.focus();
+    setStatusText(`Открыто окно ${kind.toUpperCase()}`);
   };
 
   useEffect(() => {
     loadAccounts();
     loadRandomPerson();
-    loadGenerator("in");
-    loadGenerator("sk");
   }, [token]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(generatorWindowsRef.current).forEach((popupWindow) => {
+        if (popupWindow && !popupWindow.closed) {
+          popupWindow.close();
+        }
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (mailListRatio) {
+        localStorage.setItem(MAIL_PANEL_RATIO_STORAGE_KEY, String(mailListRatio));
+      } else {
+        localStorage.removeItem(MAIL_PANEL_RATIO_STORAGE_KEY);
+      }
+      localStorage.removeItem(LEGACY_MAIL_PANEL_HEIGHT_STORAGE_KEY);
+    } catch {
+      return;
+    }
+  }, [mailListRatio]);
+
+  useEffect(() => {
+    if (mailListRatio) {
+      return undefined;
+    }
+
+    const stack = mailStackRef.current;
+    const legacyHeight = readStoredLegacyMailListHeight();
+    if (!stack || !legacyHeight) {
+      return undefined;
+    }
+
+    setMailListRatio(convertHeightToRatio(legacyHeight, stack));
+    return undefined;
+  }, [mailListRatio]);
+
+  useEffect(() => {
+    if (!isResizingMailPanels) {
+      return undefined;
+    }
+
+    const handlePointerMove = (event) => {
+      const dragState = mailPanelDragRef.current;
+      if (!dragState) {
+        return;
+      }
+
+      const nextHeight = dragState.startHeight + (event.clientY - dragState.startY);
+      setMailListRatio(convertHeightToRatio(nextHeight, dragState.stack));
+    };
+
+    const stopResizing = () => {
+      mailPanelDragRef.current = null;
+      setIsResizingMailPanels(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizingMailPanels]);
 
   useEffect(() => {
     if (!selectedAccountId) {
@@ -319,6 +467,10 @@ export default function Dashboard({ token, user, onLogout }) {
       return;
     }
 
+    // Reset the viewer only when switching accounts, not on every inbox poll.
+    setMessages([]);
+    setSelectedMessageId(null);
+    setMessageDetail(null);
     loadMessages(selectedAccountId, { ensureConnection: true });
   }, [selectedAccountId]);
 
@@ -347,7 +499,7 @@ export default function Dashboard({ token, user, onLogout }) {
     }
 
     loadMessageDetail(selectedAccountId, nextMessage);
-  }, [messages, selectedAccountId, selectedMessageId]);
+  }, [selectedAccountId, selectedMessageId]);
 
   const handleCreateAccount = async () => {
     try {
@@ -479,33 +631,29 @@ export default function Dashboard({ token, user, onLogout }) {
     }
   };
 
-  const renderGenerator = (title, data, busy, kind) => {
-    const entries = Object.entries(data);
-    if (!entries.length) {
-      return null;
+  const handleMailPanelResizeStart = (event) => {
+    const stack = mailStackRef.current;
+    if (!stack) {
+      return;
     }
 
-    return (
-      <div className="offline-generator-card">
-        <div className="offline-generator-head">
-          <strong>{title}</strong>
-          <button type="button" onClick={() => loadGenerator(kind)} disabled={busy}>
-            {busy ? "..." : "Обновить"}
-          </button>
-        </div>
-        <div className="offline-generator-grid">
-          {entries.map(([key, value]) => (
-            <div key={`${title}-${key}`} className="offline-generator-row">
-              <span>{GENERATOR_LABELS[key] || key}</span>
-              <code>{value}</code>
-              <button type="button" onClick={() => handleCopyField(value, `${title} ${key}`)}>
-                Копия
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+    const messagesCard = stack.querySelector(".offline-messages-card");
+    const initialHeight = messagesCard
+      ? Math.round(messagesCard.getBoundingClientRect().height)
+      : Math.round(
+          getMailPanelAvailableHeight(stack) * (mailListRatio || DEFAULT_MAIL_PANEL_RATIO)
+        );
+
+    mailPanelDragRef.current = {
+      startY: event.clientY,
+      startHeight: initialHeight,
+      stack
+    };
+
+    setIsResizingMailPanels(true);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+    event.preventDefault();
   };
 
   return (
@@ -624,15 +772,13 @@ export default function Dashboard({ token, user, onLogout }) {
             <div className="offline-inline-buttons">
               <button
                 type="button"
-                onClick={() => handleCopyField(inGenerator.address_en, "IN адрес")}
-                disabled={!inGenerator.address_en}
+                onClick={() => openGeneratorPopup("in")}
               >
                 IN
               </button>
               <button
                 type="button"
-                onClick={() => handleCopyField(skGenerator.address_en, "SK адрес")}
-                disabled={!skGenerator.address_en}
+                onClick={() => openGeneratorPopup("sk")}
               >
                 SK
               </button>
@@ -699,9 +845,10 @@ export default function Dashboard({ token, user, onLogout }) {
                 </button>
               </div>
             </div>
-
-            {renderGenerator("IN", inGenerator, generatorBusy.in, "in")}
-            {renderGenerator("SK", skGenerator, generatorBusy.sk, "sk")}
+            <p className="offline-generator-note">
+              Окна генераторов Индии и Южной Кореи открываются кнопками `IN` и `SK` в блоке
+              действий, как отдельные окна.
+            </p>
           </section>
         </aside>
 
@@ -758,72 +905,99 @@ export default function Dashboard({ token, user, onLogout }) {
             </div>
           </section>
 
-          <section className="offline-card offline-messages-card">
-            <div className="offline-panel-heading border-bottom">
-              <div>
-                <h3>Входящие</h3>
-                <p>{selectedAccount ? `Всего писем: ${messages.length}` : "Нет выбранного аккаунта"}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  selectedAccountId && loadMessages(selectedAccountId, { ensureConnection: true })
-                }
-                disabled={!selectedAccountId}
-              >
-                {messagesLoading ? "Загрузка..." : "Обновить"}
-              </button>
-            </div>
-
-            <div className="offline-message-list">
-              {!selectedAccount ? (
-                <div className="empty-state">Выберите аккаунт в левом списке.</div>
-              ) : null}
-
-              {selectedAccount && !messages.length && !messagesLoading ? (
-                <div className="empty-state">Писем пока нет.</div>
-              ) : null}
-
-              {messages.map((message) => (
+          <div ref={mailStackRef} className="offline-mail-stack" style={mailStackStyle}>
+            <section className="offline-card offline-messages-card">
+              <div className="offline-panel-heading border-bottom">
+                <div>
+                  <h3>Входящие</h3>
+                  <p>{selectedAccount ? `Всего писем: ${messages.length}` : "Нет выбранного аккаунта"}</p>
+                </div>
                 <button
-                  key={message.id}
                   type="button"
-                  className={`offline-message-row ${
-                    message.id === selectedMessageId ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedMessageId(message.id)}
+                  onClick={() =>
+                    selectedAccountId && loadMessages(selectedAccountId, { ensureConnection: true })
+                  }
+                  disabled={!selectedAccountId}
                 >
-                  <div className="offline-message-main">
-                    <strong>{message.sender || "Неизвестно"}</strong>
-                    <span>{message.subject || "(без темы)"}</span>
-                  </div>
-                  <time>{formatTimestamp(message.created_at)}</time>
+                  {messagesLoading ? "Загрузка..." : "Обновить"}
                 </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="offline-card offline-viewer-card">
-            <div className="offline-panel-heading border-bottom">
-              <div>
-                <h3>{selectedMessage?.subject || "Просмотр письма"}</h3>
-                <p>{selectedMessage ? `От: ${selectedMessage.sender}` : "Выберите письмо, чтобы увидеть содержимое."}</p>
               </div>
-              {messageDetail?.code ? (
-                <button type="button" onClick={() => handleCopyField(messageDetail.code, "Код")}>
-                  Копировать код
-                </button>
-              ) : null}
-            </div>
 
-            <div className="offline-message-detail">
-              <pre>
-                {detailLoading
-                  ? "Загрузка..."
-                  : messageDetail?.text || "Выберите письмо, чтобы увидеть содержимое."}
-              </pre>
-            </div>
-          </section>
+              <div className="offline-message-list">
+                {!selectedAccount ? (
+                  <div className="empty-state">Выберите аккаунт в левом списке.</div>
+                ) : null}
+
+                {selectedAccount && !messages.length && !messagesLoading ? (
+                  <div className="empty-state">Писем пока нет.</div>
+                ) : null}
+
+                {messages.map((message) => (
+                  <button
+                    key={message.id}
+                    type="button"
+                    className={`offline-message-row ${
+                      message.id === selectedMessageId ? "active" : ""
+                    }`}
+                    onClick={() => setSelectedMessageId(message.id)}
+                  >
+                    <div className="offline-message-main">
+                      <strong>{message.sender || "Неизвестно"}</strong>
+                      <span>{message.subject || "(без темы)"}</span>
+                    </div>
+                    <time>{formatTimestamp(message.created_at)}</time>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <button
+              type="button"
+              className={`offline-panel-resizer ${isResizingMailPanels ? "is-dragging" : ""}`}
+              aria-label="Изменить высоту блоков писем"
+              onDoubleClick={() => setMailListRatio(null)}
+              onPointerDown={handleMailPanelResizeStart}
+            >
+              <span className="offline-panel-resizer-line" />
+            </button>
+
+            <section className="offline-card offline-viewer-card">
+              <div className="offline-panel-heading border-bottom">
+                <div>
+                  <h3>{selectedMessage?.subject || "Просмотр письма"}</h3>
+                  <p>{selectedMessage ? `От: ${selectedMessage.sender}` : "Выберите письмо, чтобы увидеть содержимое."}</p>
+                </div>
+                {messageDetail?.code ? (
+                  <button type="button" onClick={() => handleCopyField(messageDetail.code, "Код")}>
+                    Копировать код
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="offline-message-detail">
+                {detailLoading ? (
+                  <pre>Загрузка...</pre>
+                ) : messageHtml ? (
+                  <>
+                    <iframe
+                      title="HTML preview"
+                      className="offline-message-html"
+                      sandbox="allow-popups allow-popups-to-escape-sandbox"
+                      srcDoc={messageHtml}
+                    />
+                    {messageDetail?.text ? (
+                      <details className="offline-message-raw">
+                        <summary>Сырой текст</summary>
+                        <pre>{messageDetail.text}</pre>
+                      </details>
+                    ) : null}
+                  </>
+                ) : (
+                  <pre>{messageDetail?.text || "Выберите письмо, чтобы увидеть содержимое."}</pre>
+                )}
+              </div>
+            </section>
+          </div>
         </main>
       </div>
 

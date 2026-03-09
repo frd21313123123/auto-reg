@@ -74,23 +74,79 @@ class IMAPSimpleClient:
         except Exception:
             return str(value)
 
+    def _select_inbox(self) -> bool:
+        if not self.mail:
+            return False
+        status, _ = self.mail.select("inbox")
+        return status == "OK"
+
+    def _search_message_ids(self) -> tuple[list[bytes], str]:
+        if not self.mail:
+            return [], "seq"
+
+        status, messages = self.mail.uid("search", None, "ALL")
+        if status == "OK" and messages and messages[0].strip():
+            return messages[0].split(), "uid"
+
+        status, messages = self.mail.search(None, "ALL")
+        if status == "OK" and messages:
+            return messages[0].split(), "seq"
+
+        return [], "seq"
+
+    def _fetch_parts(
+        self,
+        message_ref: bytes | str,
+        query: str,
+        mode: str,
+    ) -> tuple[str, list[object]]:
+        if not self.mail:
+            return "NO", []
+
+        if mode == "uid":
+            ref = message_ref.decode() if isinstance(message_ref, bytes) else str(message_ref)
+            status, data = self.mail.uid("fetch", ref, query)
+            return status, list(data or [])
+
+        status, data = self.mail.fetch(message_ref, query)
+        return status, list(data or [])
+
+    @staticmethod
+    def _encode_message_id(raw_id: bytes | str, mode: str) -> str:
+        value = raw_id.decode() if isinstance(raw_id, bytes) else str(raw_id)
+        return f"{mode}:{value}"
+
+    @staticmethod
+    def _decode_message_id(message_id: str) -> tuple[str | None, str]:
+        value = str(message_id or "").strip()
+        if not value:
+            return None, ""
+
+        if ":" in value:
+            prefix, raw_value = value.split(":", 1)
+            prefix = prefix.lower()
+            if prefix in {"uid", "seq"}:
+                return prefix, raw_value.strip()
+
+        return None, value
+
     def get_messages(self, limit: int = 20) -> list[dict[str, str]]:
         if not self.mail:
             return []
 
         try:
-            self.mail.select("inbox")
-            status, messages = self.mail.search(None, "ALL")
-            if status != "OK":
+            if not self._select_inbox():
                 return []
 
-            ids = messages[0].split()
+            ids, fetch_mode = self._search_message_ids()
             latest_ids = ids[-limit:] if len(ids) > limit else ids
 
             result: list[dict[str, str]] = []
             for mid in reversed(latest_ids):
                 try:
-                    _, data = self.mail.fetch(mid, "(RFC822.HEADER)")
+                    status, data = self._fetch_parts(mid, "(RFC822.HEADER)", fetch_mode)
+                    if status != "OK":
+                        continue
                     for part in data:
                         if not isinstance(part, tuple):
                             continue
@@ -100,7 +156,7 @@ class IMAPSimpleClient:
                         created_at = msg.get("Date") or ""
                         result.append(
                             {
-                                "id": mid.decode(),
+                                "id": self._encode_message_id(mid, fetch_mode),
                                 "from": sender,
                                 "subject": subject,
                                 "createdAt": created_at,
@@ -117,13 +173,34 @@ class IMAPSimpleClient:
             return "Not connected"
 
         try:
-            self.mail.select("inbox")
-            _, data = self.mail.fetch(str(msg_id), "(RFC822)")
+            if not self._select_inbox():
+                return "Error: could not select inbox"
+
+            explicit_mode, raw_id = self._decode_message_id(msg_id)
+            if not raw_id:
+                return "Error: invalid message ID"
+
+            fetch_modes: list[str]
+            if explicit_mode:
+                fetch_modes = [explicit_mode]
+            elif raw_id.isdigit():
+                # Backward compatibility for already-loaded numeric IDs from older frontend builds.
+                fetch_modes = ["uid", "seq"]
+            else:
+                return "Error: invalid message ID"
 
             raw_email = b""
-            for part in data:
-                if isinstance(part, tuple):
-                    raw_email = part[1]
+            for fetch_mode in fetch_modes:
+                status, data = self._fetch_parts(raw_id, "(RFC822)", fetch_mode)
+                if status != "OK":
+                    continue
+
+                for part in data:
+                    if isinstance(part, tuple):
+                        raw_email = part[1]
+                        break
+
+                if raw_email:
                     break
 
             if not raw_email:

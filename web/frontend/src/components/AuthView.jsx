@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { authApi } from "../api";
 
 export default function AuthView({ onAuthSuccess }) {
+  const rootRef = useRef(null);
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -11,6 +12,26 @@ export default function AuthView({ onAuthSuccess }) {
   const [busy, setBusy] = useState(false);
 
   const isRegister = mode === "register";
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const { body } = document;
+
+    html.classList.add("auth-screen-active");
+    body.classList.add("auth-screen-active");
+
+    window.scrollTo(0, 0);
+    html.scrollTop = 0;
+    body.scrollTop = 0;
+    if (rootRef.current) {
+      rootRef.current.scrollTop = 0;
+    }
+
+    return () => {
+      html.classList.remove("auth-screen-active");
+      body.classList.remove("auth-screen-active");
+    };
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -42,7 +63,7 @@ export default function AuthView({ onAuthSuccess }) {
   };
 
   return (
-    <div className="auth-root">
+    <div ref={rootRef} className="auth-root">
       <div className="auth-card">
         <section className="auth-hero">
           <div className="auth-hero-mark">M</div>
