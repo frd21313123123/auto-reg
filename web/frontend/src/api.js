@@ -51,7 +51,9 @@ async function request(path, options = {}) {
   try {
     requestUrl = buildUrl(path, query);
   } catch (error) {
-    throw new Error(error.message || "API URL build failed");
+    const apiError = new Error(error.message || "API URL build failed");
+    apiError.code = "API_URL_ERROR";
+    throw apiError;
   }
   let response;
   try {
@@ -61,9 +63,11 @@ async function request(path, options = {}) {
       body: body ? JSON.stringify(body) : undefined
     });
   } catch (error) {
-    throw new Error(
+    const apiError = new Error(
       `Cannot reach backend API (${requestUrl}). Ensure backend runs on port 8000 and restart frontend.`
     );
+    apiError.code = "NETWORK_ERROR";
+    throw apiError;
   }
 
   if (response.status === 204) {
@@ -79,7 +83,10 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const message = payload?.detail || `Request failed (${response.status})`;
-    throw new Error(message);
+    const apiError = new Error(message);
+    apiError.status = response.status;
+    apiError.code = payload?.code || "HTTP_ERROR";
+    throw apiError;
   }
 
   return payload;

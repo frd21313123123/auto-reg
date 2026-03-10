@@ -51,12 +51,18 @@ class MailApp:
     # Отступы
     PAD_X = 12
     PAD_Y = 6
+    DEFAULT_THEME = "dark"
+    WINDOW_FADE_STEPS = 14
+    WINDOW_FADE_DELAY = 18
+    THEME_TRANSITION_STEPS = 8
+    THEME_TRANSITION_DELAY = 16
 
     def __init__(self, root):
         self.root = root
         self.root.title("Mail.tm — Auto Registration")
         self.root.geometry("1050x680")
         self.root.minsize(800, 500)
+        self._window_alpha_supported = self._set_window_alpha(0.0)
 
         # Устанавливаем иконку окна
         try:
@@ -88,13 +94,14 @@ class MailApp:
         self.is_refreshing = False
         self.auto_refresh_job = None
         self.stop_threads = False
-        self.params = {"theme": "light"}
+        self.params = {"theme": self.DEFAULT_THEME}
         self.is_pinned = False
         self._ban_thread_local = threading.local()
         self._ban_thread_sessions = []
         self._ban_thread_sessions_lock = threading.Lock()
         self._ban_imap_host_cache = {}
         self._ban_imap_host_lock = threading.Lock()
+        self._theme_transition_job = None
 
         # Загружаем домены mail.tm в фоне
         threading.Thread(target=self.load_mail_tm_domains, daemon=True).start()
@@ -108,7 +115,7 @@ class MailApp:
         print(f"[*] Используемый файл аккаунтов: {ACCOUNTS_FILE}")
 
         # Применяем тему
-        self.set_theme("light")
+        self.set_theme(self.DEFAULT_THEME, animate=False)
 
         # Загружаем аккаунты
         self.load_accounts_from_file()
@@ -121,10 +128,11 @@ class MailApp:
 
         # Регистрация горячих клавиш
         self._setup_hotkeys()
+        self.root.after(40, self._animate_window_open)
 
     def _build_ui(self):
         """Построение всего интерфейса."""
-        colors = THEMES["light"]
+        colors = THEMES[self.params.get("theme", self.DEFAULT_THEME)]
 
         # Основной контейнер
         self.root_container = tk.Frame(self.root, bg=colors["bg"])
@@ -298,24 +306,34 @@ class MailApp:
         self.btn_check_ban.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(2, 0))
 
         # ---- СПИСОК АККАУНТОВ (с scrollbar) ----
-        acc_frame = tk.Frame(self.left_panel, bg=colors["panel_bg"])
-        acc_frame.grid(row=row, column=0, sticky="nsew",
-                       padx=self.PAD_X, pady=(0, 4))
+        self.acc_frame = tk.Frame(
+            self.left_panel,
+            bg=colors["surface"],
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=colors["border"],
+            highlightcolor=colors["accent"],
+        )
+        self.acc_frame.grid(row=row, column=0, sticky="nsew",
+                            padx=self.PAD_X, pady=(0, 4))
         self.left_panel.grid_rowconfigure(row, weight=1)
         row += 1
 
         self.acc_scrollbar = ttk.Scrollbar(
-            acc_frame, orient=tk.VERTICAL,
+            self.acc_frame, orient=tk.VERTICAL,
             style="Dark.Vertical.TScrollbar",
         )
         self.acc_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.acc_listbox = tk.Listbox(
-            acc_frame, height=12, exportselection=False,
+            self.acc_frame, height=12, exportselection=False,
             font=FONT_SMALL, activestyle="none",
             yscrollcommand=self.acc_scrollbar.set,
             relief=tk.FLAT, borderwidth=0, highlightthickness=1,
             highlightcolor=colors["accent"], highlightbackground=colors["border"],
+            selectborderwidth=0,
+            bg=colors["list_bg"],
+            fg=colors["list_fg"],
         )
         self.acc_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.acc_scrollbar.config(command=self.acc_listbox.yview)
@@ -563,7 +581,14 @@ class MailApp:
         self.header_separator.pack(fill=tk.X)
 
         # ---- СПИСОК ПИСЕМ ----
-        self.tree_frame = tk.Frame(self.right_panel, bg=colors["bg"])
+        self.tree_frame = tk.Frame(
+            self.right_panel,
+            bg=colors["surface"],
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=colors["border"],
+            highlightcolor=colors["accent"],
+        )
         self.tree_frame.pack(fill=tk.X, padx=self.PAD_X, pady=(8, 0))
 
         columns = ("sender", "subject", "date", "msg_id")
@@ -613,7 +638,14 @@ class MailApp:
         self.btn_copy_code.pack_forget()
 
         # Текст письма
-        self.msg_text_frame = tk.Frame(self.right_panel, bg=colors["bg"])
+        self.msg_text_frame = tk.Frame(
+            self.right_panel,
+            bg=colors["surface"],
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=colors["border"],
+            highlightcolor=colors["accent"],
+        )
         self.msg_text_frame.pack(fill=tk.BOTH, expand=True, padx=self.PAD_X,
                                  pady=(4, self.PAD_X))
 
@@ -633,6 +665,10 @@ class MailApp:
             fg=colors["text_fg"],
             insertbackground=colors["fg"],
             yscrollcommand=self.msg_scrollbar.set,
+            padx=14,
+            pady=12,
+            spacing1=2,
+            spacing3=2,
         )
         self.msg_text.pack(fill=tk.BOTH, expand=True)
         self.msg_scrollbar.config(command=self.msg_text.yview)

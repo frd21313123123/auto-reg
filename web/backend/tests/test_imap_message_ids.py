@@ -1,4 +1,10 @@
+import sys
 import unittest
+from pathlib import Path
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 from app.services.mail_backend import IMAPSimpleClient
 
@@ -42,6 +48,35 @@ class _FakeFallbackMailbox:
         return "OK", [(b"42", raw_email)]
 
 
+class _FakeMultipartMailbox:
+    def select(self, mailbox):
+        return "OK", [b""]
+
+    def uid(self, command, *args):
+        if command == "fetch" and args[0] == "700":
+            raw_email = (
+                b"From: test@example.com\r\n"
+                b"Subject: HTML mail\r\n"
+                b"MIME-Version: 1.0\r\n"
+                b"Content-Type: multipart/alternative; boundary=abc\r\n"
+                b"\r\n"
+                b"--abc\r\n"
+                b"Content-Type: text/plain; charset=utf-8\r\n"
+                b"\r\n"
+                b"Plain text fallback with code 123456\r\n"
+                b"--abc\r\n"
+                b"Content-Type: text/html; charset=utf-8\r\n"
+                b"\r\n"
+                b"<html><body><h1>Hello</h1><p>HTML body</p></body></html>\r\n"
+                b"--abc--\r\n"
+            )
+            return "OK", [(b"700", raw_email)]
+        return "NO", []
+
+    def fetch(self, *_args):
+        return "NO", []
+
+
 class IMAPMessageIdTests(unittest.TestCase):
     def test_get_messages_prefers_uid_ids(self):
         client = IMAPSimpleClient(host="example.com")
@@ -59,7 +94,17 @@ class IMAPMessageIdTests(unittest.TestCase):
 
         content = client.get_message_content("42")
 
-        self.assertIn("hello from sequence fetch", content)
+        self.assertIn("hello from sequence fetch", content.text)
+        self.assertIsNone(content.html)
+
+    def test_get_message_content_returns_html_and_plain_text(self):
+        client = IMAPSimpleClient(host="example.com")
+        client.mail = _FakeMultipartMailbox()
+
+        content = client.get_message_content("uid:700")
+
+        self.assertIn("Plain text fallback", content.text)
+        self.assertEqual(content.html, "<html><body><h1>Hello</h1><p>HTML body</p></body></html>")
 
 
 if __name__ == "__main__":

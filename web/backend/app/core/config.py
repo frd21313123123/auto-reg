@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api"
     secret_key: str = "change-me-in-env"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24
+    access_token_expire_minutes: int = 60 * 24 * 30
     database_url: str = Field(default_factory=_default_database_url)
     mail_tm_api_url: str = "https://api.mail.tm"
     cors_origins: list[str] = Field(

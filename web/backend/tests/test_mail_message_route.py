@@ -75,6 +75,7 @@ class MailMessageRouteTests(unittest.TestCase):
                         "sender": "test@example.com",
                         "subject": "Hello",
                         "text": "body",
+                        "html": "<p>Hello</p>",
                         "code": None,
                     }}
 
@@ -106,6 +107,7 @@ class MailMessageRouteTests(unittest.TestCase):
         self.assertEqual(stdout_lines[2], "201", msg=result.stdout)
         self.assertEqual(stdout_lines[3], "200", msg=result.stdout)
         self.assertIn('"id":"uid:202"', stdout_lines[4], msg=result.stdout)
+        self.assertIn('"html":"<p>Hello</p>"', stdout_lines[4], msg=result.stdout)
 
 
 if __name__ == "__main__":

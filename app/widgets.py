@@ -7,35 +7,108 @@ import tkinter as tk
 
 
 class HoverButton(tk.Button):
-    """Кнопка с эффектом наведения и скругленным видом."""
+    """Кнопка с мягким переходом цветов при наведении."""
 
-    def __init__(self, parent, hover_bg=None, hover_fg=None, **kwargs):
-        # Убираем стандартную рамку для плоского вида
+    def __init__(
+        self,
+        parent,
+        hover_bg=None,
+        hover_fg=None,
+        animation_steps=6,
+        animation_delay=16,
+        **kwargs,
+    ):
         kwargs.setdefault("relief", tk.FLAT)
         kwargs.setdefault("bd", 0)
         kwargs.setdefault("cursor", "hand2")
         kwargs.setdefault("padx", 10)
         kwargs.setdefault("pady", 5)
+        kwargs.setdefault("activebackground", hover_bg or kwargs.get("bg"))
+        kwargs.setdefault("activeforeground", hover_fg or kwargs.get("fg"))
+        kwargs.setdefault("highlightthickness", 0)
         super().__init__(parent, **kwargs)
 
         self._normal_bg = kwargs.get("bg", self.cget("bg"))
         self._normal_fg = kwargs.get("fg", self.cget("fg"))
         self._hover_bg = hover_bg or self._normal_bg
         self._hover_fg = hover_fg or self._normal_fg
+        self._hovered = False
+        self._animation_job = None
+        self._animation_steps = max(1, animation_steps)
+        self._animation_delay = max(1, animation_delay)
 
         self.bind("<Enter>", self._on_enter)
         self.bind("<Leave>", self._on_leave)
 
-    def _on_enter(self, e):
-        if self["state"] != tk.DISABLED:
-            self.config(bg=self._hover_bg, fg=self._hover_fg)
+    def _color_to_rgb(self, color):
+        r, g, b = self.winfo_rgb(color)
+        return r // 256, g // 256, b // 256
 
-    def _on_leave(self, e):
-        if self["state"] != tk.DISABLED:
-            self.config(bg=self._normal_bg, fg=self._normal_fg)
+    @staticmethod
+    def _rgb_to_hex(rgb):
+        return "#{:02x}{:02x}{:02x}".format(*rgb)
 
-    def update_colors(self, bg=None, fg=None, hover_bg=None, hover_fg=None):
-        """Обновить цвета кнопки (для смены темы)."""
+    def _blend_color(self, start_color, end_color, progress):
+        start_rgb = self._color_to_rgb(start_color)
+        end_rgb = self._color_to_rgb(end_color)
+        mixed = tuple(
+            round(start + (end - start) * progress)
+            for start, end in zip(start_rgb, end_rgb)
+        )
+        return self._rgb_to_hex(mixed)
+
+    def _stop_animation(self):
+        if self._animation_job is not None:
+            try:
+                self.after_cancel(self._animation_job)
+            except Exception:
+                pass
+            self._animation_job = None
+
+    def _animate_to(self, target_bg, target_fg):
+        self._stop_animation()
+        start_bg = self.cget("bg")
+        start_fg = self.cget("fg")
+        if start_bg == target_bg and start_fg == target_fg:
+            self.config(
+                bg=target_bg,
+                fg=target_fg,
+                activebackground=self._hover_bg,
+                activeforeground=self._hover_fg,
+            )
+            return
+
+        def run(frame):
+            progress = frame / self._animation_steps
+            eased = 1 - (1 - progress) ** 3
+            self.config(
+                bg=self._blend_color(start_bg, target_bg, eased),
+                fg=self._blend_color(start_fg, target_fg, eased),
+                activebackground=self._hover_bg,
+                activeforeground=self._hover_fg,
+            )
+            if frame < self._animation_steps:
+                self._animation_job = self.after(
+                    self._animation_delay,
+                    lambda: run(frame + 1),
+                )
+            else:
+                self._animation_job = None
+
+        run(0)
+
+    def _on_enter(self, event):
+        if self["state"] != tk.DISABLED:
+            self._hovered = True
+            self._animate_to(self._hover_bg, self._hover_fg)
+
+    def _on_leave(self, event):
+        if self["state"] != tk.DISABLED:
+            self._hovered = False
+            self._animate_to(self._normal_bg, self._normal_fg)
+
+    def update_colors(self, bg=None, fg=None, hover_bg=None, hover_fg=None, immediate=True):
+        """Обновить цвета кнопки для новой темы."""
         if bg is not None:
             self._normal_bg = bg
         if fg is not None:
@@ -44,12 +117,19 @@ class HoverButton(tk.Button):
             self._hover_bg = hover_bg
         if hover_fg is not None:
             self._hover_fg = hover_fg
-        self.config(
-            bg=self._normal_bg,
-            fg=self._normal_fg,
-            activebackground=self._hover_bg,
-            activeforeground=self._hover_fg,
-        )
+
+        target_bg = self._hover_bg if self._hovered and self["state"] != tk.DISABLED else self._normal_bg
+        target_fg = self._hover_fg if self._hovered and self["state"] != tk.DISABLED else self._normal_fg
+        if immediate:
+            self._stop_animation()
+            self.config(
+                bg=target_bg,
+                fg=target_fg,
+                activebackground=self._hover_bg,
+                activeforeground=self._hover_fg,
+            )
+        else:
+            self._animate_to(target_bg, target_fg)
 
 
 class AnimatedToggle(tk.Canvas):
@@ -72,12 +152,10 @@ class AnimatedToggle(tk.Canvas):
         self.p = 3
         self.d = height - 2 * self.p
 
-        # Фон (капсула)
         self.rect = self.create_oval(0, 0, height, height, outline="", fill=bg_off)
         self.rect2 = self.create_oval(width - height, 0, width, height, outline="", fill=bg_off)
         self.rect3 = self.create_rectangle(height / 2, 0, width - height / 2, height,
                                            outline="", fill=bg_off)
-        # Ручка с тенью (приближённый цвет вместо alpha)
         self.shadow = self.create_oval(self.p + 1, self.p + 1,
                                        self.p + self.d + 1, self.p + self.d + 1,
                                        fill=shadow_color, outline="")
@@ -201,7 +279,6 @@ class ThemedCheckbox(tk.Canvas):
             fill = self.colors["box_bg"]
             outline = self.colors["border"]
 
-        # Скруглённый прямоугольник
         self._round_rect(x0, y0, x1, y1, r, fill=fill, outline=outline, width=2)
 
         if self.checked:
@@ -216,7 +293,7 @@ class ThemedCheckbox(tk.Canvas):
             )
 
     def _round_rect(self, x0, y0, x1, y1, r, **kwargs):
-        """Рисует скруглённый прямоугольник."""
+        """Рисует скругленный прямоугольник."""
         points = [
             x0 + r, y0,
             x1 - r, y0,

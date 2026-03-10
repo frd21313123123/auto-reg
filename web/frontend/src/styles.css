@@ -28,6 +28,7 @@ body,
     radial-gradient(circle at top left, rgba(211, 227, 253, 0.9), transparent 32%),
     linear-gradient(180deg, #f8faff 0%, var(--bg) 42%, #eef4ff 100%);
   color: var(--text);
+  overflow-x: clip;
 }
 
 body {
@@ -161,6 +162,18 @@ textarea:focus {
   gap: 16px;
 }
 
+.auth-brand-lockup > div,
+.auth-mobile-brand > div,
+.auth-panel-head,
+.offline-shell > *,
+.offline-card > *,
+.offline-sidebar-head > div,
+.offline-account-head > div,
+.offline-panel-heading > div,
+.generator-popup-topbar > div {
+  min-width: 0;
+}
+
 .auth-eyebrow {
   margin: 0 0 8px;
   font-size: 13px;
@@ -188,6 +201,7 @@ textarea:focus {
   font-size: clamp(36px, 4.2vw, 54px);
   line-height: 0.98;
   letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
 }
 
 .auth-subtitle {
@@ -196,6 +210,7 @@ textarea:focus {
   font-size: 16px;
   line-height: 1.6;
   color: rgba(255, 255, 255, 0.78);
+  overflow-wrap: anywhere;
 }
 
 .auth-panel {
@@ -265,6 +280,7 @@ textarea:focus {
   margin: 12px 0 0;
   color: var(--muted);
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .auth-switch {
@@ -364,6 +380,7 @@ textarea:focus {
   border: 1px solid rgba(197, 34, 31, 0.18);
   color: var(--danger);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .auth-footer {
@@ -1198,10 +1215,12 @@ textarea:focus {
 }
 
 .offline-shell {
+  width: 100%;
+  max-width: 100%;
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: minmax(380px, 430px) minmax(0, 1fr);
   gap: 18px;
   padding: 18px;
   overflow: hidden;
@@ -1240,12 +1259,18 @@ textarea:focus {
   margin: 0;
 }
 
+.offline-account-head h2,
+.generator-popup-topbar h1 {
+  overflow-wrap: anywhere;
+}
+
 .offline-sidebar-user,
 .offline-panel-heading p,
 .offline-account-meta {
   margin: 8px 0 0;
   color: var(--muted);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .offline-create-button {
@@ -1283,7 +1308,7 @@ textarea:focus {
 
 .offline-inline-buttons {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1324,6 +1349,7 @@ textarea:focus {
 .offline-account-item,
 .offline-message-row {
   width: 100%;
+  min-width: 0;
   border-radius: 16px;
   border: 1px solid rgba(220, 227, 235, 0.92);
   background: #f8fbff;
@@ -1343,13 +1369,28 @@ textarea:focus {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
-.offline-account-item strong,
+.offline-account-item-top {
+  display: grid;
+  gap: 8px;
+}
+
+.offline-account-email,
 .offline-message-main strong {
   display: block;
   line-height: 1.45;
-  word-break: break-word;
+  font-weight: 600;
+}
+
+.offline-account-email {
+  max-width: 100%;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: normal;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .offline-account-item small,
@@ -1360,10 +1401,13 @@ textarea:focus {
 
 .offline-status-chip {
   flex-shrink: 0;
+  justify-self: start;
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 11px;
   font-weight: 700;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .offline-import-panel {
@@ -1538,6 +1582,7 @@ textarea:focus {
 .offline-message-detail pre {
   margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   line-height: 1.65;
   font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
 }
@@ -1551,6 +1596,7 @@ textarea:focus {
   color: var(--muted);
   line-height: 1.6;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .status-business {
@@ -1592,6 +1638,7 @@ textarea:focus {
   margin: 8px 0 0;
   color: var(--muted);
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .generator-popup-actions {
@@ -1643,6 +1690,7 @@ textarea:focus {
 
 .generator-popup-footer span {
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .theme-dark .offline-card {
@@ -1729,5 +1777,39 @@ textarea:focus {
   .generator-popup-footer {
     display: grid;
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .offline-shell {
+    padding: 10px;
+    gap: 12px;
+  }
+
+  .offline-card,
+  .generator-popup-card {
+    padding: 14px;
+  }
+
+  .offline-sidebar-head {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .offline-status-chip {
+    justify-self: start;
+  }
+
+  .offline-inline-buttons,
+  .offline-inline-buttons.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .generator-popup-actions {
+    justify-content: stretch;
+  }
+
+  .generator-popup-actions button {
+    width: 100%;
   }
 }

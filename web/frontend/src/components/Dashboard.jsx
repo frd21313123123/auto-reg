@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { accountsApi, mailApi, toolsApi } from "../api";
+import { accountsApi, mailApi } from "../api";
 
 const QUICK_STATUS_OPTIONS = [
   { value: "not_registered", label: "Не рег" },
@@ -54,6 +54,10 @@ function makeAccountLine(account) {
       : openAiPassword || mailPassword;
 
   return `${account.email} / ${passwords} / ${account.status}`;
+}
+
+function formatEmailForDisplay(email) {
+  return String(email ?? "").replace(/([@._+-])/g, "$1\u200b");
 }
 
 function downloadText(filename, content, type) {
@@ -195,14 +199,12 @@ export default function Dashboard({ token, user, onLogout }) {
   const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [messageDetail, setMessageDetail] = useState(null);
   const [importText, setImportText] = useState("");
-  const [randomPerson, setRandomPerson] = useState({ name: "", birthdate: "" });
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [banBusy, setBanBusy] = useState(false);
-  const [randomBusy, setRandomBusy] = useState(false);
   const [mailListRatio, setMailListRatio] = useState(() => readStoredMailListRatio());
   const [isResizingMailPanels, setIsResizingMailPanels] = useState(false);
   const [statusText, setStatusText] = useState("Готов к работе");
@@ -329,18 +331,6 @@ export default function Dashboard({ token, user, onLogout }) {
     }
   };
 
-  const loadRandomPerson = async () => {
-    try {
-      setRandomBusy(true);
-      const nextPerson = await toolsApi.randomPerson(token);
-      setRandomPerson(nextPerson);
-    } catch (error) {
-      setStatusText(error.message);
-    } finally {
-      setRandomBusy(false);
-    }
-  };
-
   const openGeneratorPopup = (kind) => {
     const popupUrl = new URL(window.location.origin + window.location.pathname);
     popupUrl.searchParams.set("popup", kind);
@@ -383,7 +373,6 @@ export default function Dashboard({ token, user, onLogout }) {
 
   useEffect(() => {
     loadAccounts();
-    loadRandomPerson();
   }, [token]);
 
   useEffect(() => {
@@ -720,12 +709,13 @@ export default function Dashboard({ token, user, onLogout }) {
                   onClick={() => setSelectedAccountId(account.id)}
                 >
                   <div className="offline-account-item-top">
-                    <strong>{account.email}</strong>
+                    <div className="offline-account-email" title={account.email}>
+                      {formatEmailForDisplay(account.email)}
+                    </div>
                     <span className={`offline-status-chip status-${account.status}`}>
                       {STATUS_LABELS[account.status] || account.status}
                     </span>
                   </div>
-                  <small>{formatTimestamp(account.updated_at)}</small>
                 </button>
               ))}
             </div>
@@ -758,15 +748,6 @@ export default function Dashboard({ token, user, onLogout }) {
               >
                 Почта
               </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleCopyField(selectedAccount ? makeAccountLine(selectedAccount) : "", "Полный")
-                }
-                disabled={!selectedAccount}
-              >
-                Полный
-              </button>
             </div>
 
             <div className="offline-inline-buttons">
@@ -781,9 +762,6 @@ export default function Dashboard({ token, user, onLogout }) {
                 onClick={() => openGeneratorPopup("sk")}
               >
                 SK
-              </button>
-              <button type="button" disabled title="Доступно только в офлайн версии">
-                Сапёр
               </button>
               <button type="button" disabled title="Доступно только в офлайн версии">
                 Настройки
@@ -818,38 +796,6 @@ export default function Dashboard({ token, user, onLogout }) {
             </div>
           </section>
 
-          <section className="offline-card">
-            <div className="offline-section-heading">
-              <span>ГЕНЕРАТОР</span>
-              <button type="button" onClick={loadRandomPerson} disabled={randomBusy}>
-                {randomBusy ? "..." : "Новые данные"}
-              </button>
-            </div>
-
-            <div className="offline-generator-card compact">
-              <div className="offline-generator-row">
-                <span>Имя</span>
-                <code>{randomPerson.name || "—"}</code>
-                <button type="button" onClick={() => handleCopyField(randomPerson.name, "Имя")}>
-                  Копия
-                </button>
-              </div>
-              <div className="offline-generator-row">
-                <span>Дата</span>
-                <code>{randomPerson.birthdate || "—"}</code>
-                <button
-                  type="button"
-                  onClick={() => handleCopyField(randomPerson.birthdate, "Дата рождения")}
-                >
-                  Копия
-                </button>
-              </div>
-            </div>
-            <p className="offline-generator-note">
-              Окна генераторов Индии и Южной Кореи открываются кнопками `IN` и `SK` в блоке
-              действий, как отдельные окна.
-            </p>
-          </section>
         </aside>
 
         <main className="offline-main">

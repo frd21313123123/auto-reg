@@ -6,10 +6,25 @@ import Dashboard from "./components/Dashboard";
 import GeneratorPopup from "./components/GeneratorPopup";
 
 const TOKEN_KEY = "auto_reg_web_token";
+const USER_KEY = "auto_reg_web_user";
 
 function readStoredToken() {
   try {
     return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function readStoredUser() {
+  try {
+    const rawValue = localStorage.getItem(USER_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue);
+    return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
   }
@@ -24,9 +39,27 @@ function writeStoredToken(token) {
   return true;
 }
 
+function writeStoredUser(user) {
+  try {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 function clearStoredToken() {
   try {
     localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+function clearStoredUser() {
+  try {
+    localStorage.removeItem(USER_KEY);
   } catch {
     return false;
   }
@@ -64,7 +97,7 @@ class AppErrorBoundary extends Component {
 
 function AppContent() {
   const [token, setToken] = useState(() => readStoredToken());
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => readStoredUser());
   const [checking, setChecking] = useState(true);
   const popupKind = resolvePopupKind();
 
@@ -74,6 +107,7 @@ function AppContent() {
     async function validateToken() {
       if (!token) {
         if (active) {
+          clearStoredUser();
           setUser(null);
           setChecking(false);
         }
@@ -83,14 +117,23 @@ function AppContent() {
       try {
         const currentUser = await authApi.me(token);
         if (active) {
+          writeStoredUser(currentUser);
           setUser(currentUser);
         }
-      } catch {
-        clearStoredToken();
-        if (active) {
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        if (error?.status === 401) {
+          clearStoredToken();
+          clearStoredUser();
           setToken(null);
           setUser(null);
+          return;
         }
+
+        setUser((currentUser) => currentUser || readStoredUser());
       } finally {
         if (active) {
           setChecking(false);
@@ -107,12 +150,14 @@ function AppContent() {
 
   const handleAuthSuccess = (nextToken, nextUser) => {
     writeStoredToken(nextToken);
+    writeStoredUser(nextUser);
     setToken(nextToken);
     setUser(nextUser);
   };
 
   const handleLogout = () => {
     clearStoredToken();
+    clearStoredUser();
     setToken(null);
     setUser(null);
   };

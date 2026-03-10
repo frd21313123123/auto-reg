@@ -112,6 +112,7 @@ class MessageDetail(BaseModel):
     sender: str
     subject: str
     text: str
+    html: str | None = None
     code: str | None = None
 
 

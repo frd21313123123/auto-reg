@@ -1,9 +1,11 @@
 import email
+import html as html_lib
 import imaplib
 import random
 import re
 import string
 import threading
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from email.header import decode_header
@@ -23,6 +25,73 @@ BAN_KEYWORDS = [
     "suspended",
     "violation",
 ]
+
+EXOTIC_SPACE_TRANSLATION = str.maketrans(
+    {
+        "\u00a0": " ",
+        "\u1680": " ",
+        "\u2000": " ",
+        "\u2001": " ",
+        "\u2002": " ",
+        "\u2003": " ",
+        "\u2004": " ",
+        "\u2005": " ",
+        "\u2006": " ",
+        "\u2007": " ",
+        "\u2008": " ",
+        "\u2009": " ",
+        "\u200a": " ",
+        "\u202f": " ",
+        "\u205f": " ",
+        "\u3000": " ",
+    }
+)
+
+
+@dataclass
+class MessageContent:
+    text: str
+    html: str | None = None
+
+
+def _coerce_message_string(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        parts = [str(item).strip() for item in value if str(item).strip()]
+        return "\n".join(parts)
+    return str(value).strip()
+
+
+def _sanitize_text_content(value: object) -> str:
+    text = _coerce_message_string(value)
+    if not text:
+        return ""
+
+    text = text.replace("\r\n", "\n").replace("\r", "\n").translate(EXOTIC_SPACE_TRANSLATION)
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+
+    sanitized_lines = [re.sub(r"[^\S\n]+", " ", line).strip() for line in text.split("\n")]
+    sanitized = "\n".join(sanitized_lines)
+    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized)
+    return sanitized.strip()
+
+
+def _coerce_html_content(value: object) -> str | None:
+    html = _coerce_message_string(value)
+    return html or None
+
+
+def _html_to_text(value: object) -> str:
+    html = _coerce_html_content(value)
+    if not html:
+        return ""
+
+    text = re.sub(r"(?is)<(script|style)\b[^>]*>.*?</\1>", " ", html)
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</(p|div|section|article|tr|li|ul|ol|table|h[1-6])>", "\n", text)
+    text = re.sub(r"(?is)<[^>]+>", " ", text)
+    return _sanitize_text_content(html_lib.unescape(text))
 
 
 class IMAPSimpleClient:
@@ -168,17 +237,17 @@ class IMAPSimpleClient:
         except Exception:
             return []
 
-    def get_message_content(self, msg_id: str) -> str:
+    def get_message_content(self, msg_id: str) -> MessageContent:
         if not self.mail:
-            return "Not connected"
+            return MessageContent(text="Not connected", html=None)
 
         try:
             if not self._select_inbox():
-                return "Error: could not select inbox"
+                return MessageContent(text="Error: could not select inbox", html=None)
 
             explicit_mode, raw_id = self._decode_message_id(msg_id)
             if not raw_id:
-                return "Error: invalid message ID"
+                return MessageContent(text="Error: invalid message ID", html=None)
 
             fetch_modes: list[str]
             if explicit_mode:
@@ -187,7 +256,7 @@ class IMAPSimpleClient:
                 # Backward compatibility for already-loaded numeric IDs from older frontend builds.
                 fetch_modes = ["uid", "seq"]
             else:
-                return "Error: invalid message ID"
+                return MessageContent(text="Error: invalid message ID", html=None)
 
             raw_email = b""
             for fetch_mode in fetch_modes:
@@ -204,17 +273,22 @@ class IMAPSimpleClient:
                     break
 
             if not raw_email:
-                return "Error: empty response from IMAP"
+                return MessageContent(text="Error: empty response from IMAP", html=None)
 
             msg = email.message_from_bytes(raw_email)
-            body = ""
+            text_body = ""
+            html_body = ""
 
-            def decode_payload(payload: object) -> str:
+            def decode_payload(payload: object, charset: str | None = None) -> str:
                 if isinstance(payload, str):
                     return payload
                 if not isinstance(payload, bytes):
                     return str(payload)
-                for enc in ["utf-8", "latin-1", "cp1252"]:
+                encodings = [charset] if charset else []
+                encodings.extend(["utf-8", "latin-1", "cp1252"])
+                for enc in encodings:
+                    if not enc:
+                        continue
                     try:
                         return payload.decode(enc)
                     except Exception:
@@ -225,27 +299,47 @@ class IMAPSimpleClient:
                 for part in msg.walk():
                     content_type = part.get_content_type()
                     content_disposition = str(part.get("Content-Disposition") or "")
+                    if part.get_content_maintype() == "multipart":
+                        continue
                     if "attachment" in content_disposition.lower():
                         continue
 
-                    if content_type == "text/plain":
-                        payload = part.get_payload(decode=True)
-                        if payload:
-                            body = decode_payload(payload)
-                            break
+                    payload = part.get_payload(decode=True)
+                    if payload is None:
+                        payload = part.get_payload()
+                    if not payload:
+                        continue
 
-                    if content_type == "text/html" and not body:
-                        payload = part.get_payload(decode=True)
-                        if payload:
-                            body = decode_payload(payload)
+                    decoded = decode_payload(payload, part.get_content_charset())
+                    if content_type == "text/plain" and not text_body:
+                        text_body = decoded
+                        continue
+
+                    if content_type == "text/html" and not html_body:
+                        html_body = decoded
             else:
                 payload = msg.get_payload(decode=True)
+                if payload is None:
+                    payload = msg.get_payload()
                 if payload:
-                    body = decode_payload(payload)
+                    decoded = decode_payload(payload, msg.get_content_charset())
+                    if msg.get_content_type() == "text/html":
+                        html_body = decoded
+                    else:
+                        text_body = decoded
 
-            return body or "No text content found"
+            html_body = _coerce_html_content(html_body)
+            text_body = _sanitize_text_content(text_body)
+
+            if not text_body and html_body:
+                text_body = _html_to_text(html_body)
+
+            return MessageContent(
+                text=text_body or "Нет текстового содержимого",
+                html=html_body,
+            )
         except Exception as exc:
-            return f"Error reading message: {exc}"
+            return MessageContent(text=f"Error reading message: {exc}", html=None)
 
 
 @dataclass
@@ -314,6 +408,18 @@ class MailBackendService:
             return dt.strftime("%H:%M:%S")
         except Exception:
             return value
+
+    @staticmethod
+    def _pick_message_html(data: dict[str, object]) -> str | None:
+        html_body = _coerce_html_content(data.get("html"))
+        if html_body:
+            return html_body
+
+        text_as_html = _coerce_html_content(data.get("textAsHtml"))
+        if text_as_html:
+            return text_as_html
+
+        return None
 
     def _request(self, method: str, url: str, **kwargs) -> requests.Response:
         timeout = kwargs.pop("timeout", (5, 10))
@@ -541,27 +647,33 @@ class MailBackendService:
             data = res.json()
             sender = self.extract_sender_address(data.get("from", {}))
             subject = data.get("subject") or "(без темы)"
-            text = data.get("text") or data.get("html") or "Нет текстового содержимого"
+            html_body = self._pick_message_html(data)
+            text = _sanitize_text_content(data.get("text"))
+            if not text and html_body:
+                text = _html_to_text(html_body)
+
             return {
                 "id": str(message_id),
                 "sender": sender,
                 "subject": subject,
-                "text": text,
+                "text": text or "Нет текстового содержимого",
+                "html": html_body,
                 "code": self._extract_code(text),
             }
 
         if not state.imap_client:
             raise RuntimeError("IMAP connection missing")
 
-        text = state.imap_client.get_message_content(message_id)
+        message_content = state.imap_client.get_message_content(message_id)
         sender = sender_hint or "IMAP Sender"
         subject = subject_hint or "IMAP Message"
         return {
             "id": str(message_id),
             "sender": sender,
             "subject": subject,
-            "text": text,
-            "code": self._extract_code(text),
+            "text": message_content.text,
+            "html": message_content.html,
+            "code": self._extract_code(message_content.text or _html_to_text(message_content.html)),
         }
 
     def create_mail_tm_account(self, password_length: int = 12) -> tuple[str, str]:
