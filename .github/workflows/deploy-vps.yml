@@ -137,22 +137,22 @@ jobs:
 
           if [ -z "$SERVICE_NAME" ]; then
             SERVICE_NAME="auto-reg-backend.service"
-            cat > "/etc/systemd/system/$SERVICE_NAME" <<EOF
-[Unit]
-Description=Auto-reg Web Backend
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=$APP_DIR/web/backend
-ExecStart=$APP_DIR/web/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
-Restart=always
-RestartSec=3
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
+            printf '%s\n' \
+              '[Unit]' \
+              'Description=Auto-reg Web Backend' \
+              'After=network.target' \
+              '' \
+              '[Service]' \
+              'Type=simple' \
+              "WorkingDirectory=$APP_DIR/web/backend" \
+              "ExecStart=$APP_DIR/web/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000" \
+              'Restart=always' \
+              'RestartSec=3' \
+              'User=root' \
+              '' \
+              '[Install]' \
+              'WantedBy=multi-user.target' \
+              > "/etc/systemd/system/$SERVICE_NAME"
             systemctl daemon-reload
             systemctl enable "$SERVICE_NAME"
           fi
