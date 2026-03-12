@@ -1,0 +1,183 @@
+name: Deploy Web App To VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+      VPS_ED25519_FINGERPRINT: "SHA256:61jcOe3NCRHFx17LH9S2hj+hPSfdlvMjMIyf0CTDaUU"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: web/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Create release archive
+        run: |
+          tar \
+            --exclude-vcs \
+            --exclude='./web/frontend/node_modules' \
+            --exclude='./web/backend/.venv' \
+            --exclude='./web/backend/web_app.db' \
+            -czf /tmp/auto-reg-release.tgz .
+
+      - name: Install SSH tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Verify host key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -p "$VPS_PORT" -t ed25519 "$VPS_HOST" > ~/.ssh/known_hosts.tmp
+          actual_fingerprint="$(ssh-keygen -lf ~/.ssh/known_hosts.tmp -E sha256 | awk 'NR==1 { print $2 }')"
+          if [ "$actual_fingerprint" != "$VPS_ED25519_FINGERPRINT" ]; then
+            echo "Unexpected SSH fingerprint: $actual_fingerprint"
+            exit 1
+          fi
+          cat ~/.ssh/known_hosts.tmp >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload release archive
+        run: |
+          sshpass -p "$VPS_PASSWORD" \
+            scp \
+            -P "$VPS_PORT" \
+            /tmp/auto-reg-release.tgz \
+            "$VPS_USER@$VPS_HOST:/tmp/auto-reg-release-${GITHUB_SHA}.tgz"
+
+      - name: Deploy on VPS
+        run: |
+          sshpass -p "$VPS_PASSWORD" \
+            ssh \
+            -p "$VPS_PORT" \
+            "$VPS_USER@$VPS_HOST" \
+            "DEPLOY_SHA='${GITHUB_SHA}' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          APP_DIR=""
+          for candidate in /opt/auto-reg /srv/auto-reg /root/auto-reg /var/www/auto-reg /home/auto-reg; do
+            if [ -f "$candidate/web/backend/app/main.py" ]; then
+              APP_DIR="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$APP_DIR" ]; then
+            found_backend="$(find /opt /srv /root /var/www /home -maxdepth 5 -type f -path '*/web/backend/app/main.py' 2>/dev/null | head -n 1 || true)"
+            if [ -n "$found_backend" ]; then
+              APP_DIR="$(dirname "$(dirname "$(dirname "$(dirname "$found_backend")")")")"
+            fi
+          fi
+
+          if [ -z "$APP_DIR" ]; then
+            APP_DIR="/opt/auto-reg"
+          fi
+
+          RELEASE_ARCHIVE="/tmp/auto-reg-release-${DEPLOY_SHA}.tgz"
+          RELEASE_DIR="/tmp/auto-reg-release-${DEPLOY_SHA}"
+
+          rm -rf "$RELEASE_DIR"
+          mkdir -p "$RELEASE_DIR" "$APP_DIR"
+          tar -xzf "$RELEASE_ARCHIVE" -C "$RELEASE_DIR"
+
+          apt-get update
+          apt-get install -y python3 python3-venv python3-pip curl rsync
+          if ! command -v nginx >/dev/null 2>&1; then
+            apt-get install -y nginx
+          fi
+
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='web/backend/web_app.db' \
+            --exclude='web/backend/.env' \
+            --exclude='web/backend/.venv' \
+            "$RELEASE_DIR/" "$APP_DIR/"
+
+          cd "$APP_DIR/web/backend"
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+
+          SERVICE_NAME=""
+          while read -r service_name; do
+            [ -n "$service_name" ] || continue
+            unit_body="$(systemctl cat "$service_name" 2>/dev/null || true)"
+            if printf '%s\n' "$unit_body" | grep -q "$APP_DIR/web/backend"; then
+              SERVICE_NAME="$service_name"
+              break
+            fi
+            if printf '%s\n' "$unit_body" | grep -q 'uvicorn .*app.main:app'; then
+              SERVICE_NAME="$service_name"
+              break
+            fi
+          done < <(systemctl list-unit-files --type=service --no-legend | awk '{print $1}')
+
+          if [ -z "$SERVICE_NAME" ]; then
+            SERVICE_NAME="auto-reg-backend.service"
+            cat > "/etc/systemd/system/$SERVICE_NAME" <<EOF
+[Unit]
+Description=Auto-reg Web Backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$APP_DIR/web/backend
+ExecStart=$APP_DIR/web/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+            systemctl daemon-reload
+            systemctl enable "$SERVICE_NAME"
+          fi
+
+          systemctl restart "$SERVICE_NAME"
+
+          FRONTEND_ROOT="/var/www/html"
+          if [ ! -f "$FRONTEND_ROOT/index.html" ] || ! grep -q 'Auto-reg Web' "$FRONTEND_ROOT/index.html"; then
+            candidate_root="$(grep -Rhs 'root ' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null | awk '/root / { print $2 }' | tr -d ';' | tail -n 1)"
+            if [ -n "$candidate_root" ]; then
+              FRONTEND_ROOT="$candidate_root"
+            fi
+          fi
+
+          mkdir -p "$FRONTEND_ROOT"
+          rsync -a --delete "$APP_DIR/web/frontend/dist/" "$FRONTEND_ROOT/"
+
+          nginx -t
+          systemctl reload nginx
+
+          backend_status_code="$(curl -s -o /tmp/auto-reg-backend-check.txt -w '%{http_code}' http://127.0.0.1:8000/api/auth/me || true)"
+          if [ "$backend_status_code" != "401" ]; then
+            echo "Unexpected backend status: $backend_status_code"
+            cat /tmp/auto-reg-backend-check.txt || true
+            exit 1
+          fi
+
+          echo "APP_DIR=$APP_DIR"
+          echo "FRONTEND_ROOT=$FRONTEND_ROOT"
+          echo "SERVICE_NAME=$SERVICE_NAME"
+          systemctl --no-pager --full status "$SERVICE_NAME" | sed -n '1,20p'
+          REMOTE
