@@ -1,6 +1,10 @@
 name: Deploy Web App To VPS
 
 on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/deploy-vps.yml"
   workflow_dispatch:
 
 jobs:
