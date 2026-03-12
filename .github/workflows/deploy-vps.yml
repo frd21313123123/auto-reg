@@ -232,6 +232,24 @@ jobs:
             echo "Synced frontend to $root_dir"
           done
 
+          if [ -f /etc/nginx/sites-enabled/ultra-connection ]; then
+            python3 - <<'PY'
+from pathlib import Path
+
+config_path = Path("/etc/nginx/sites-enabled/ultra-connection")
+config_text = config_path.read_text(encoding="utf-8")
+updated_text = config_text.replace(
+    "proxy_pass http://127.0.0.1:18000;",
+    "proxy_pass http://127.0.0.1:8000;",
+)
+if updated_text != config_text:
+    config_path.write_text(updated_text, encoding="utf-8")
+    print("Updated ultra-connection upstream: 18000 -> 8000")
+else:
+    print("ultra-connection upstream already points to 8000")
+PY
+          fi
+
           nginx -t
           systemctl reload nginx
 
