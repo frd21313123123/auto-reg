@@ -173,9 +173,19 @@ jobs:
           nginx -t
           systemctl reload nginx
 
-          backend_status_code="$(curl -s -o /tmp/auto-reg-backend-check.txt -w '%{http_code}' http://127.0.0.1:8000/api/auth/me || true)"
+          backend_status_code=""
+          for _ in $(seq 1 20); do
+            backend_status_code="$(curl -s -o /tmp/auto-reg-backend-check.txt -w '%{http_code}' http://127.0.0.1:8000/api/auth/me || true)"
+            if [ "$backend_status_code" = "401" ]; then
+              break
+            fi
+            sleep 2
+          done
+
           if [ "$backend_status_code" != "401" ]; then
             echo "Unexpected backend status: $backend_status_code"
+            systemctl --no-pager --full status "$SERVICE_NAME" || true
+            journalctl -u "$SERVICE_NAME" -n 100 --no-pager || true
             cat /tmp/auto-reg-backend-check.txt || true
             exit 1
           fi
