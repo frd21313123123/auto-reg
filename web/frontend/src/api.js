@@ -100,24 +100,58 @@ export const authApi = {
 
 export const accountsApi = {
   list: (token) => request("/accounts", { token }),
+  listFolders: (token) => request("/accounts/folders", { token }),
+  createFolder: (token, name) =>
+    request("/accounts/folders", {
+      method: "POST",
+      token,
+      body: { name }
+    }),
   create: (token, data) => request("/accounts", { method: "POST", token, body: data }),
-  createMailTm: (token, passwordLength = 12) =>
+  createMailTm: (token, passwordLength = 12, folderId = null) =>
     request("/accounts/create-mailtm", {
       method: "POST",
       token,
-      body: { password_length: passwordLength }
+      body: {
+        password_length: passwordLength,
+        folder_id: folderId
+      }
     }),
-  importAccounts: (token, text) =>
+  importAccounts: (token, text, folderId = null) =>
     request("/accounts/import", {
       method: "POST",
       token,
-      body: { text }
+      body: {
+        text,
+        folder_id: folderId
+      }
     }),
   updateStatus: (token, accountId, status) =>
     request(`/accounts/${accountId}/status`, {
       method: "PATCH",
       token,
       body: { status }
+    }),
+  moveBulk: (token, accountIds, folderId = null) =>
+    request("/accounts/bulk-move", {
+      method: "POST",
+      token,
+      body: {
+        account_ids: accountIds,
+        folder_id: folderId
+      }
+    }),
+  bulkDelete: (token, accountIds) =>
+    request("/accounts/bulk-delete", {
+      method: "POST",
+      token,
+      body: { account_ids: accountIds }
+    }),
+  deleteAll: (token, payload) =>
+    request("/accounts/delete-all", {
+      method: "POST",
+      token,
+      body: payload
     }),
   remove: (token, accountId) =>
     request(`/accounts/${accountId}`, {

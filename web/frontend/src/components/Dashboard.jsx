@@ -13,6 +13,8 @@ const EXTRA_STATUS_OPTIONS = [
   { value: "invalid_password", label: "Пароль" }
 ];
 
+const FOLDER_FILTER_ALL = "all";
+const FOLDER_FILTER_UNASSIGNED = "unassigned";
 const MAIL_LIST_MIN_HEIGHT = 220;
 const MAIL_VIEWER_MIN_HEIGHT = 280;
 const MAIL_PANEL_RESIZER_HEIGHT = 14;
@@ -28,6 +30,62 @@ const STATUS_LABELS = {
   invalid_password: "Неверный пароль",
   business: "Business"
 };
+
+function getFolderIdFromFilter(folderFilter) {
+  if (folderFilter === FOLDER_FILTER_ALL || folderFilter === FOLDER_FILTER_UNASSIGNED) {
+    return null;
+  }
+
+  return Number(folderFilter);
+}
+
+function getFolderFilterLabel(folderFilter, folders) {
+  if (folderFilter === FOLDER_FILTER_ALL) {
+    return "Все почты";
+  }
+  if (folderFilter === FOLDER_FILTER_UNASSIGNED) {
+    return "Без папки";
+  }
+
+  return folders.find((folder) => String(folder.id) === folderFilter)?.name || "Папка";
+}
+
+function getDeleteAllPayload(folderFilter) {
+  if (folderFilter === FOLDER_FILTER_ALL) {
+    return { scope: "all" };
+  }
+  if (folderFilter === FOLDER_FILTER_UNASSIGNED) {
+    return { scope: "unassigned" };
+  }
+
+  return {
+    scope: "folder",
+    folder_id: Number(folderFilter)
+  };
+}
+
+function getDeleteAllLabel(folderFilter) {
+  if (folderFilter === FOLDER_FILTER_ALL) {
+    return "Удалить всё";
+  }
+  if (folderFilter === FOLDER_FILTER_UNASSIGNED) {
+    return "Очистить без папки";
+  }
+
+  return "Очистить папку";
+}
+
+function filterAccountsByFolder(accounts, folderFilter) {
+  if (folderFilter === FOLDER_FILTER_ALL) {
+    return accounts;
+  }
+  if (folderFilter === FOLDER_FILTER_UNASSIGNED) {
+    return accounts.filter((account) => !account.folder_id);
+  }
+
+  const folderId = Number(folderFilter);
+  return accounts.filter((account) => account.folder_id === folderId);
+}
 
 function formatTimestamp(value) {
   if (!value) {
@@ -193,32 +251,60 @@ export default function Dashboard({ token, user, onLogout }) {
   const mailStackRef = useRef(null);
   const mailPanelDragRef = useRef(null);
 
+  const [folders, setFolders] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [selectedFolderFilter, setSelectedFolderFilter] = useState(FOLDER_FILTER_ALL);
+  const [selectedAccountIds, setSelectedAccountIds] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [messageDetail, setMessageDetail] = useState(null);
+  const [folderName, setFolderName] = useState("");
+  const [moveTargetFolder, setMoveTargetFolder] = useState(FOLDER_FILTER_UNASSIGNED);
   const [importText, setImportText] = useState("");
+  const [foldersLoading, setFoldersLoading] = useState(false);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
+  const [folderBusy, setFolderBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [banBusy, setBanBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [mailListRatio, setMailListRatio] = useState(() => readStoredMailListRatio());
   const [isResizingMailPanels, setIsResizingMailPanels] = useState(false);
   const [statusText, setStatusText] = useState("Готов к работе");
 
+  const visibleAccounts = filterAccountsByFolder(accounts, selectedFolderFilter);
   const selectedAccount =
-    accounts.find((account) => account.id === selectedAccountId) || null;
+    visibleAccounts.find((account) => account.id === selectedAccountId) || null;
   const selectedMessage =
     messages.find((message) => message.id === selectedMessageId) || null;
+  const currentFolderLabel = getFolderFilterLabel(selectedFolderFilter, folders);
   const messageHtml = detailLoading ? "" : String(messageDetail?.html || "").trim();
+  const visibleAccountIds = visibleAccounts.map((account) => account.id);
+  const selectedVisibleCount = visibleAccountIds.filter((id) =>
+    selectedAccountIds.includes(id)
+  ).length;
+  const allVisibleSelected =
+    visibleAccountIds.length > 0 && visibleAccountIds.every((id) => selectedAccountIds.includes(id));
   const mailStackStyle = mailListRatio
     ? {
         gridTemplateRows: `minmax(${MAIL_LIST_MIN_HEIGHT}px, ${mailListRatio}fr) ${MAIL_PANEL_RESIZER_HEIGHT}px minmax(${MAIL_VIEWER_MIN_HEIGHT}px, ${Math.max(1 - mailListRatio, 0.01)}fr)`
       }
     : undefined;
+
+  const loadFolders = async () => {
+    try {
+      setFoldersLoading(true);
+      const nextFolders = await accountsApi.listFolders(token);
+      setFolders(nextFolders);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setFoldersLoading(false);
+    }
+  };
 
   const loadAccounts = async (preferredAccountId = null) => {
     try {
@@ -372,7 +458,7 @@ export default function Dashboard({ token, user, onLogout }) {
   };
 
   useEffect(() => {
-    loadAccounts();
+    void Promise.all([loadFolders(), loadAccounts()]);
   }, [token]);
 
   useEffect(() => {
@@ -412,6 +498,40 @@ export default function Dashboard({ token, user, onLogout }) {
     setMailListRatio(convertHeightToRatio(legacyHeight, stack));
     return undefined;
   }, [mailListRatio]);
+
+  useEffect(() => {
+    setSelectedAccountIds([]);
+  }, [selectedFolderFilter]);
+
+  useEffect(() => {
+    setSelectedAccountIds((currentValue) =>
+      currentValue.filter((accountId) =>
+        accounts.some((account) => account.id === accountId)
+      )
+    );
+  }, [accounts]);
+
+  useEffect(() => {
+    setMoveTargetFolder((currentValue) => {
+      if (currentValue === FOLDER_FILTER_UNASSIGNED) {
+        return currentValue;
+      }
+      return folders.some((folder) => String(folder.id) === currentValue)
+        ? currentValue
+        : FOLDER_FILTER_UNASSIGNED;
+    });
+  }, [folders]);
+
+  useEffect(() => {
+    if (selectedAccountId && visibleAccounts.some((account) => account.id === selectedAccountId)) {
+      return;
+    }
+
+    const nextAccountId = visibleAccounts[0]?.id ?? null;
+    if (nextAccountId !== selectedAccountId) {
+      setSelectedAccountId(nextAccountId);
+    }
+  }, [accounts, selectedAccountId, selectedFolderFilter]);
 
   useEffect(() => {
     if (!isResizingMailPanels) {
@@ -490,11 +610,37 @@ export default function Dashboard({ token, user, onLogout }) {
     loadMessageDetail(selectedAccountId, nextMessage);
   }, [selectedAccountId, selectedMessageId]);
 
+  const handleCreateFolder = async () => {
+    const nextFolderName = folderName.trim();
+    if (!nextFolderName) {
+      setStatusText("Введите название папки");
+      return;
+    }
+
+    try {
+      setFolderBusy(true);
+      const createdFolder = await accountsApi.createFolder(token, nextFolderName);
+      setFolderName("");
+      setSelectedFolderFilter(String(createdFolder.id));
+      setMoveTargetFolder(String(createdFolder.id));
+      await loadFolders();
+      setStatusText(`Папка создана: ${createdFolder.name}`);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setFolderBusy(false);
+    }
+  };
+
   const handleCreateAccount = async () => {
     try {
       setCreateBusy(true);
-      const createdAccount = await accountsApi.createMailTm(token, 12);
-      await loadAccounts(createdAccount.id);
+      const createdAccount = await accountsApi.createMailTm(
+        token,
+        12,
+        getFolderIdFromFilter(selectedFolderFilter)
+      );
+      await Promise.all([loadFolders(), loadAccounts(createdAccount.id)]);
       setStatusText(`Создан: ${createdAccount.email}`);
     } catch (error) {
       setStatusText(error.message);
@@ -504,7 +650,7 @@ export default function Dashboard({ token, user, onLogout }) {
   };
 
   const handleRefreshWorkspace = async () => {
-    await loadAccounts(selectedAccountId);
+    await Promise.all([loadFolders(), loadAccounts(selectedAccountId)]);
     if (selectedAccountId) {
       await loadMessages(selectedAccountId, { ensureConnection: true });
     }
@@ -557,8 +703,12 @@ export default function Dashboard({ token, user, onLogout }) {
 
     try {
       setImportBusy(true);
-      const result = await accountsApi.importAccounts(token, cleanText);
-      await loadAccounts(selectedAccountId);
+      const result = await accountsApi.importAccounts(
+        token,
+        cleanText,
+        getFolderIdFromFilter(selectedFolderFilter)
+      );
+      await Promise.all([loadFolders(), loadAccounts(selectedAccountId)]);
       setStatusText(
         `Импорт: +${result.added} | Дубликаты: ${result.duplicates} | Пропущено: ${result.skipped}`
       );
@@ -620,6 +770,119 @@ export default function Dashboard({ token, user, onLogout }) {
     }
   };
 
+  const handleAccountSelection = (accountId, checked) => {
+    setSelectedAccountIds((currentValue) => {
+      if (checked) {
+        return currentValue.includes(accountId) ? currentValue : [...currentValue, accountId];
+      }
+      return currentValue.filter((id) => id !== accountId);
+    });
+  };
+
+  const handleToggleVisibleSelection = () => {
+    if (!visibleAccountIds.length) {
+      return;
+    }
+
+    setSelectedAccountIds((currentValue) => {
+      if (allVisibleSelected) {
+        return currentValue.filter((id) => !visibleAccountIds.includes(id));
+      }
+      return Array.from(new Set([...currentValue, ...visibleAccountIds]));
+    });
+  };
+
+  const handleDeleteAccount = async (account, event) => {
+    event.stopPropagation();
+
+    try {
+      setBulkBusy(true);
+      await accountsApi.remove(token, account.id);
+      setSelectedAccountIds((currentValue) => currentValue.filter((id) => id !== account.id));
+      await Promise.all([
+        loadFolders(),
+        loadAccounts(selectedAccountId === account.id ? null : selectedAccountId)
+      ]);
+      setStatusText(`Удалена: ${account.email}`);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedAccountIds.length) {
+      setStatusText("Сначала выделите почты");
+      return;
+    }
+
+    if (!window.confirm(`Удалить выбранные почты: ${selectedAccountIds.length}?`)) {
+      return;
+    }
+
+    try {
+      setBulkBusy(true);
+      const result = await accountsApi.bulkDelete(token, selectedAccountIds);
+      setSelectedAccountIds([]);
+      await Promise.all([loadFolders(), loadAccounts(selectedAccountId)]);
+      setStatusText(`Удалено почт: ${result.affected}`);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleMoveSelected = async () => {
+    if (!selectedAccountIds.length) {
+      setStatusText("Сначала выделите почты");
+      return;
+    }
+
+    try {
+      setBulkBusy(true);
+      const folderId =
+        moveTargetFolder === FOLDER_FILTER_UNASSIGNED ? null : Number(moveTargetFolder);
+      const result = await accountsApi.moveBulk(token, selectedAccountIds, folderId);
+      setSelectedAccountIds([]);
+      await Promise.all([loadFolders(), loadAccounts(selectedAccountId)]);
+      const destinationLabel =
+        moveTargetFolder === FOLDER_FILTER_UNASSIGNED
+          ? "Без папки"
+          : getFolderFilterLabel(moveTargetFolder, folders);
+      setStatusText(`Перенесено: ${result.affected} → ${destinationLabel}`);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (!visibleAccounts.length) {
+      setStatusText("Нет почт для удаления");
+      return;
+    }
+
+    const deleteLabel = getDeleteAllLabel(selectedFolderFilter);
+    if (!window.confirm(`${deleteLabel}? Будут удалены ${visibleAccounts.length} почт.`)) {
+      return;
+    }
+
+    try {
+      setBulkBusy(true);
+      const result = await accountsApi.deleteAll(token, getDeleteAllPayload(selectedFolderFilter));
+      setSelectedAccountIds([]);
+      await Promise.all([loadFolders(), loadAccounts(null)]);
+      setStatusText(`Удалено почт: ${result.affected}`);
+    } catch (error) {
+      setStatusText(error.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const handleMailPanelResizeStart = (event) => {
     const stack = mailStackRef.current;
     if (!stack) {
@@ -666,16 +929,81 @@ export default function Dashboard({ token, user, onLogout }) {
             onClick={handleCreateAccount}
             disabled={createBusy}
           >
-            {createBusy ? "Создание..." : "+ Создать аккаунт"}
+            {createBusy ? "Создание..." : `+ Создать аккаунт в "${currentFolderLabel}"`}
           </button>
 
           <section className="offline-card">
             <div className="offline-section-heading">
-              <span>АККАУНТЫ</span>
-              <strong>{accounts.length}</strong>
+              <span>ПАПКИ</span>
+              <strong>{folders.length}</strong>
             </div>
 
-            <div className="offline-inline-buttons">
+            <div className="offline-folder-list">
+              <button
+                type="button"
+                className={`offline-folder-item ${
+                  selectedFolderFilter === FOLDER_FILTER_ALL ? "active" : ""
+                }`}
+                onClick={() => setSelectedFolderFilter(FOLDER_FILTER_ALL)}
+              >
+                <span>Все почты</span>
+                <strong>{accounts.length}</strong>
+              </button>
+
+              <button
+                type="button"
+                className={`offline-folder-item ${
+                  selectedFolderFilter === FOLDER_FILTER_UNASSIGNED ? "active" : ""
+                }`}
+                onClick={() => setSelectedFolderFilter(FOLDER_FILTER_UNASSIGNED)}
+              >
+                <span>Без папки</span>
+                <strong>{accounts.filter((account) => !account.folder_id).length}</strong>
+              </button>
+
+              {folders.map((folder) => (
+                <button
+                  key={folder.id}
+                  type="button"
+                  className={`offline-folder-item ${
+                    selectedFolderFilter === String(folder.id) ? "active" : ""
+                  }`}
+                  onClick={() => setSelectedFolderFilter(String(folder.id))}
+                >
+                  <span>{folder.name}</span>
+                  <strong>
+                    {accounts.filter((account) => account.folder_id === folder.id).length}
+                  </strong>
+                </button>
+              ))}
+            </div>
+
+            <div className="offline-folder-create">
+              <input
+                value={folderName}
+                onChange={(event) => setFolderName(event.target.value)}
+                placeholder="Новая папка"
+                maxLength={120}
+              />
+              <button type="button" onClick={handleCreateFolder} disabled={folderBusy}>
+                {folderBusy ? "..." : "Создать"}
+              </button>
+            </div>
+
+            <p className="offline-folder-note">
+              {foldersLoading
+                ? "Обновляю папки..."
+                : `Новые аккаунты и импорт идут в: ${currentFolderLabel}`}
+            </p>
+          </section>
+
+          <section className="offline-card">
+            <div className="offline-section-heading">
+              <span>АККАУНТЫ</span>
+              <strong>{visibleAccounts.length}</strong>
+            </div>
+
+            <div className="offline-inline-buttons quad">
               <button type="button" onClick={handleRefreshWorkspace} disabled={accountsLoading}>
                 Обновить
               </button>
@@ -690,6 +1018,65 @@ export default function Dashboard({ token, user, onLogout }) {
               </button>
             </div>
 
+            <div className="offline-inline-buttons quad">
+              <button
+                type="button"
+                onClick={handleToggleVisibleSelection}
+                disabled={!visibleAccounts.length}
+              >
+                {allVisibleSelected ? "Снять всё" : "Выбрать всё"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedAccountIds([])}
+                disabled={!selectedAccountIds.length}
+              >
+                Снять
+              </button>
+              <button
+                type="button"
+                className="danger-inline"
+                onClick={handleBulkDelete}
+                disabled={bulkBusy || !selectedAccountIds.length}
+              >
+                Удалить
+              </button>
+              <button
+                type="button"
+                className="danger-inline"
+                onClick={handleDeleteAll}
+                disabled={bulkBusy || !visibleAccounts.length}
+              >
+                {getDeleteAllLabel(selectedFolderFilter)}
+              </button>
+            </div>
+
+            <div className="offline-bulk-row">
+              <select
+                value={moveTargetFolder}
+                onChange={(event) => setMoveTargetFolder(event.target.value)}
+              >
+                <option value={FOLDER_FILTER_UNASSIGNED}>Без папки</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={String(folder.id)}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleMoveSelected}
+                disabled={bulkBusy || !selectedAccountIds.length}
+              >
+                Перенести
+              </button>
+            </div>
+
+            <p className="offline-folder-note">
+              Текущая папка: {currentFolderLabel}. Выбрано: {selectedVisibleCount} из{" "}
+              {visibleAccounts.length}.
+            </p>
+
             <div className="offline-account-list">
               {accountsLoading ? <div className="empty-state compact">Загрузка аккаунтов...</div> : null}
 
@@ -699,25 +1086,65 @@ export default function Dashboard({ token, user, onLogout }) {
                 </div>
               ) : null}
 
-              {accounts.map((account) => (
-                <button
-                  key={account.id}
-                  type="button"
-                  className={`offline-account-item ${
-                    account.id === selectedAccountId ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedAccountId(account.id)}
-                >
-                  <div className="offline-account-item-top">
-                    <div className="offline-account-email" title={account.email}>
-                      {formatEmailForDisplay(account.email)}
-                    </div>
-                    <span className={`offline-status-chip status-${account.status}`}>
-                      {STATUS_LABELS[account.status] || account.status}
-                    </span>
+              {!accountsLoading && accounts.length > 0 && !visibleAccounts.length ? (
+                <div className="empty-state compact">В этой папке пока пусто.</div>
+              ) : null}
+
+              {visibleAccounts.map((account) => {
+                const isSelected = selectedAccountIds.includes(account.id);
+                const isActive = account.id === selectedAccountId;
+
+                return (
+                  <div
+                    key={account.id}
+                    className={`offline-account-item ${
+                      isActive ? "active" : ""
+                    } ${isSelected ? "selected-for-bulk" : ""}`}
+                  >
+                    <label
+                      className="offline-account-checkbox"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(event) =>
+                          handleAccountSelection(account.id, event.target.checked)
+                        }
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      className="offline-account-main"
+                      onClick={() => setSelectedAccountId(account.id)}
+                    >
+                      <div className="offline-account-item-top">
+                        <div>
+                          <div className="offline-account-email" title={account.email}>
+                            {formatEmailForDisplay(account.email)}
+                          </div>
+                          <small className="offline-account-folder">
+                            {account.folder_name || "Без папки"}
+                          </small>
+                        </div>
+                        <span className={`offline-status-chip status-${account.status}`}>
+                          {STATUS_LABELS[account.status] || account.status}
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="offline-account-delete"
+                      aria-label={`Удалить ${account.email}`}
+                      onClick={(event) => handleDeleteAccount(account, event)}
+                    >
+                      ×
+                    </button>
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </section>
 
@@ -805,7 +1232,7 @@ export default function Dashboard({ token, user, onLogout }) {
               <h2>{selectedAccount?.email || "Аккаунт не выбран"}</h2>
               <p className="offline-account-meta">
                 {selectedAccount
-                  ? `Почта: ${selectedAccount.password_mail} | OpenAI: ${selectedAccount.password_openai}`
+                  ? `Папка: ${selectedAccount.folder_name || "Без папки"} | Почта: ${selectedAccount.password_mail} | OpenAI: ${selectedAccount.password_openai}`
                   : "Выберите аккаунт слева, чтобы открыть inbox и письмо."}
               </p>
             </div>
