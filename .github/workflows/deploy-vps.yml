@@ -34,6 +34,7 @@ jobs:
         run: |
           npm ci
           npm run build
+          ls -1 dist/assets
 
       - name: Create release archive
         run: |
@@ -207,8 +208,8 @@ jobs:
 
           ACTIVE_FRONTEND_ROOT=""
           for root_dir in "${FRONTEND_ROOTS[@]}"; do
-            if [ "$root_dir" = "$SOURCE_FRONTEND_DIST" ]; then
-              echo "Skipping source dist root $root_dir"
+            if [[ "$root_dir" == "$APP_DIR/web/frontend" || "$root_dir" == "$SOURCE_FRONTEND_DIST" || "$root_dir" == "$APP_DIR/web/frontend/"* ]]; then
+              echo "Skipping app frontend path $root_dir"
               continue
             fi
             mkdir -p "$root_dir"
