@@ -174,13 +174,14 @@ jobs:
 
           systemctl restart "$SERVICE_NAME"
 
+          SOURCE_FRONTEND_DIST="$APP_DIR/web/frontend/dist"
           FRONTEND_ROOTS=()
           add_frontend_root "/var/www/html"
 
           while read -r existing_index; do
             [ -n "$existing_index" ] || continue
             add_frontend_root "$(dirname "$existing_index")"
-          done < <(find /var/www /opt /srv /home /root -maxdepth 6 -type f -name index.html -exec grep -l 'Auto-reg Web' {} + 2>/dev/null || true)
+          done < <(find /var/www /opt /srv /home /root /usr/share/nginx -maxdepth 8 -type f -name index.html -exec grep -l 'Auto-reg Web' {} + 2>/dev/null || true)
 
           while read -r config_file; do
             [ -n "$config_file" ] || continue
@@ -197,8 +198,19 @@ jobs:
             done < <(grep -Rhs 'root ' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null | awk '/root / { print $2 }' | tr -d ';')
           fi
 
+          echo "NGINX_MATCHES_BEGIN"
+          grep -RinE 'server_name[[:space:]].*ultra-connection\.xyz|root[[:space:]]+|proxy_pass[[:space:]]+' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
+          echo "NGINX_MATCHES_END"
+          echo "AUTO_REG_INDEXES_BEGIN"
+          find /var/www /opt /srv /home /root /usr/share/nginx -maxdepth 8 -type f -name index.html -exec grep -l 'Auto-reg Web' {} + 2>/dev/null || true
+          echo "AUTO_REG_INDEXES_END"
+
           ACTIVE_FRONTEND_ROOT=""
           for root_dir in "${FRONTEND_ROOTS[@]}"; do
+            if [ "$root_dir" = "$SOURCE_FRONTEND_DIST" ]; then
+              echo "Skipping source dist root $root_dir"
+              continue
+            fi
             mkdir -p "$root_dir"
             rsync -a --delete "$APP_DIR/web/frontend/dist/" "$root_dir/"
             ACTIVE_FRONTEND_ROOT="$root_dir"
