@@ -182,7 +182,7 @@ jobs:
           while read -r existing_index; do
             [ -n "$existing_index" ] || continue
             add_frontend_root "$(dirname "$existing_index")"
-          done < <(find /var/www /opt /srv /home /root /usr/share/nginx -maxdepth 8 -type f -name index.html -exec grep -l 'Auto-reg Web' {} + 2>/dev/null || true)
+          done < <(find / -maxdepth 10 -type f -name index.html -exec grep -l 'Auto-reg Web' {} + 2>/dev/null || true)
 
           while read -r config_file; do
             [ -n "$config_file" ] || continue
@@ -203,12 +203,12 @@ jobs:
           grep -RinE 'server_name[[:space:]].*ultra-connection\.xyz|root[[:space:]]+|proxy_pass[[:space:]]+' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
           echo "NGINX_MATCHES_END"
           echo "AUTO_REG_INDEXES_BEGIN"
-          find /var/www /opt /srv /home /root /usr/share/nginx -maxdepth 8 -type f -name index.html -exec grep -l 'Auto-reg Web' {} + 2>/dev/null || true
+          find / -maxdepth 10 -type f -name index.html -exec grep -l 'Auto-reg Web' {} + 2>/dev/null || true
           echo "AUTO_REG_INDEXES_END"
 
           ACTIVE_FRONTEND_ROOT=""
           for root_dir in "${FRONTEND_ROOTS[@]}"; do
-            if [[ "$root_dir" == "$APP_DIR/web/frontend" || "$root_dir" == "$SOURCE_FRONTEND_DIST" || "$root_dir" == "$APP_DIR/web/frontend/"* ]]; then
+            if [[ "$root_dir" == "$RELEASE_DIR" || "$root_dir" == "$RELEASE_DIR/"* || "$root_dir" == "$APP_DIR/web/frontend" || "$root_dir" == "$SOURCE_FRONTEND_DIST" || "$root_dir" == "$APP_DIR/web/frontend/"* ]]; then
               echo "Skipping app frontend path $root_dir"
               continue
             fi
