@@ -177,6 +177,11 @@ jobs:
           FRONTEND_ROOTS=()
           add_frontend_root "/var/www/html"
 
+          while read -r existing_index; do
+            [ -n "$existing_index" ] || continue
+            add_frontend_root "$(dirname "$existing_index")"
+          done < <(find /var/www /opt /srv /home /root -maxdepth 6 -type f -name index.html -exec grep -l 'Auto-reg Web' {} + 2>/dev/null || true)
+
           while read -r config_file; do
             [ -n "$config_file" ] || continue
             while read -r config_root; do
