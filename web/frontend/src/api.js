@@ -7,8 +7,11 @@ function resolveApiBase() {
   if (hostname.endsWith(".github.io")) {
     return "";
   }
-  const host = window.location.hostname || "127.0.0.1";
-  return `http://${host}:8000/api`;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    const host = window.location.hostname || "127.0.0.1";
+    return `http://${host}:8000/api`;
+  }
+  return "/api";
 }
 
 const API_BASE = resolveApiBase();
