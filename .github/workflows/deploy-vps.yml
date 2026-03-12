@@ -4,6 +4,8 @@ on:
   push:
     branches: ["main"]
     paths:
+      - "web/frontend/**"
+      - "web/backend/**"
       - ".github/workflows/deploy-vps.yml"
   workflow_dispatch:
 
@@ -99,6 +101,19 @@ jobs:
           RELEASE_ARCHIVE="/tmp/auto-reg-release-${DEPLOY_SHA}.tgz"
           RELEASE_DIR="/tmp/auto-reg-release-${DEPLOY_SHA}"
 
+          add_frontend_root() {
+            local candidate_root="${1:-}"
+            [ -n "$candidate_root" ] || return 0
+            candidate_root="${candidate_root%/}"
+            [ -n "$candidate_root" ] || return 0
+            for existing_root in "${FRONTEND_ROOTS[@]:-}"; do
+              if [ "$existing_root" = "$candidate_root" ]; then
+                return 0
+              fi
+            done
+            FRONTEND_ROOTS+=("$candidate_root")
+          }
+
           rm -rf "$RELEASE_DIR"
           mkdir -p "$RELEASE_DIR" "$APP_DIR"
           tar -xzf "$RELEASE_ARCHIVE" -C "$RELEASE_DIR"
@@ -159,16 +174,31 @@ jobs:
 
           systemctl restart "$SERVICE_NAME"
 
-          FRONTEND_ROOT="/var/www/html"
-          if [ ! -f "$FRONTEND_ROOT/index.html" ] || ! grep -q 'Auto-reg Web' "$FRONTEND_ROOT/index.html"; then
-            candidate_root="$(grep -Rhs 'root ' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null | awk '/root / { print $2 }' | tr -d ';' | tail -n 1)"
-            if [ -n "$candidate_root" ]; then
-              FRONTEND_ROOT="$candidate_root"
-            fi
+          FRONTEND_ROOTS=()
+          add_frontend_root "/var/www/html"
+
+          while read -r config_file; do
+            [ -n "$config_file" ] || continue
+            while read -r config_root; do
+              [ -n "$config_root" ] || continue
+              add_frontend_root "$config_root"
+            done < <(awk '/^[[:space:]]*root[[:space:]]+/ { gsub(";", "", $2); print $2 }' "$config_file")
+          done < <(grep -RilE 'server_name[[:space:]].*ultra-connection\.xyz|proxy_pass[[:space:]]+http://127\.0\.0\.1:8000' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)
+
+          if [ "${#FRONTEND_ROOTS[@]}" -eq 1 ]; then
+            while read -r candidate_root; do
+              [ -n "$candidate_root" ] || continue
+              add_frontend_root "$candidate_root"
+            done < <(grep -Rhs 'root ' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null | awk '/root / { print $2 }' | tr -d ';')
           fi
 
-          mkdir -p "$FRONTEND_ROOT"
-          rsync -a --delete "$APP_DIR/web/frontend/dist/" "$FRONTEND_ROOT/"
+          ACTIVE_FRONTEND_ROOT=""
+          for root_dir in "${FRONTEND_ROOTS[@]}"; do
+            mkdir -p "$root_dir"
+            rsync -a --delete "$APP_DIR/web/frontend/dist/" "$root_dir/"
+            ACTIVE_FRONTEND_ROOT="$root_dir"
+            echo "Synced frontend to $root_dir"
+          done
 
           nginx -t
           systemctl reload nginx
@@ -191,7 +221,8 @@ jobs:
           fi
 
           echo "APP_DIR=$APP_DIR"
-          echo "FRONTEND_ROOT=$FRONTEND_ROOT"
+          echo "FRONTEND_ROOTS=${FRONTEND_ROOTS[*]}"
+          echo "ACTIVE_FRONTEND_ROOT=$ACTIVE_FRONTEND_ROOT"
           echo "SERVICE_NAME=$SERVICE_NAME"
           systemctl --no-pager --full status "$SERVICE_NAME" | sed -n '1,20p'
           REMOTE
