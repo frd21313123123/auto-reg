@@ -675,6 +675,31 @@ class MailApp:
         self.msg_text.insert(tk.END, "Выберите письмо, чтобы увидеть содержимое.")
 
     # ================================================================
+    #  WINDOW ANIMATION
+    # ================================================================
+
+    def _set_window_alpha(self, alpha):
+        """Установить прозрачность окна. Возвращает True если поддерживается."""
+        try:
+            self.root.attributes("-alpha", alpha)
+            return True
+        except Exception:
+            return False
+
+    def _animate_window_open(self, step=0):
+        """Плавное появление окна (fade-in)."""
+        if not self._window_alpha_supported:
+            return
+        total = self.WINDOW_FADE_STEPS
+        if step <= total:
+            alpha = step / total
+            self._set_window_alpha(alpha)
+            self.root.after(
+                self.WINDOW_FADE_DELAY,
+                lambda: self._animate_window_open(step + 1),
+            )
+
+    # ================================================================
     #  NETWORKING
     # ================================================================
 
@@ -1738,7 +1763,7 @@ class MailApp:
         """Обработка переключения темы."""
         self.set_theme("dark" if is_on else "light")
 
-    def set_theme(self, theme_name):
+    def set_theme(self, theme_name, animate=True):
         """Установка темы оформления."""
         self.params["theme"] = theme_name
         colors = THEMES[theme_name]
