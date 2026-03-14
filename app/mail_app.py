@@ -43,6 +43,7 @@ from .sk_generator import show_sk_window
 from .in_generator import show_in_window
 from .minesweeper import show_minesweeper
 from .hotkey_settings import HotkeySettings, show_settings_window
+from .live_cards_pool import show_pre_generator_window
 
 
 class MailApp:
@@ -433,6 +434,14 @@ class MailApp:
         )
         self.btn_minesweeper.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
+        self.btn_pool = HoverButton(
+            self.tools_frame, text="Пул Карт", font=FONT_SMALL,
+            bg=colors["btn_bg"], fg=colors["btn_fg"],
+            hover_bg=colors["btn_hover"],
+            command=self._show_pool_window,
+        )
+        self.btn_pool.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+
         self.btn_hotkey_settings = HoverButton(
             self.tools_frame, text="Настройки", font=FONT_SMALL,
             bg=colors["btn_bg"], fg=colors["btn_fg"],
@@ -797,6 +806,12 @@ class MailApp:
         )
         self.hotkey_settings.set_callback("copy_account", self.copy_full_account)
         self.hotkey_settings.set_callback("random_name", self.copy_random_name)
+        self.hotkey_settings.set_callback("random_bdate", self.copy_random_birthdate)
+        self.hotkey_settings.set_callback("refresh", self.on_manual_refresh)
+        self.hotkey_settings.register_all()
+
+    def _show_pool_window(self):
+        show_pre_generator_window(self.root, theme_name=self.params.get("theme", self.DEFAULT_THEME))
         self.hotkey_settings.set_callback(
             "random_birthdate", self.copy_random_birthdate
         )

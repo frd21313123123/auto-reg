@@ -14,6 +14,7 @@ from faker import Faker
 
 from .themes import THEMES
 from .hotkey_settings import HotkeySettings, show_settings_window
+from .live_cards_pool import get_live_card_from_pool
 
 
 def show_in_window(parent, theme_name="light"):
@@ -183,9 +184,7 @@ def show_in_window(parent, theme_name="light"):
             toggle_search_btn(False)
             return
 
-        is_searching = True
-        stop_event.clear()
-        toggle_search_btn(True)
+        pooled_card = get_live_card_from_pool("55182706")
 
         name_val.set(fake_in.name())
         city_val.set(fake_in.city())
@@ -193,6 +192,19 @@ def show_in_window(parent, theme_name="light"):
         postcode_val.set(fake_in.postcode())
         addr_en_val.set(generate_eng_address())
         
+        if pooled_card:
+            parts = pooled_card.split('|')
+            if len(parts) >= 4:
+                card_val.set(parts[0])
+                exp_val.set(f"{parts[1]}/{str(parts[2])[-2:]}")
+                cvv_val.set(parts[3])
+                # We used a generated card instantly, no need to search
+                return
+
+        is_searching = True
+        stop_event.clear()
+        toggle_search_btn(True)
+
         # Start search thread with the prefix
         threading.Thread(target=search_live_card_thread, args=("55182706",), daemon=True).start()
 
