@@ -40,7 +40,6 @@ from .themes import THEMES
 from .widgets import HoverButton, AnimatedToggle, ThemedCheckbox, SectionLabel
 from .imap_client import IMAPClient
 from .sk_generator import show_sk_window
-from .in_generator import show_in_window
 from .minesweeper import show_minesweeper
 from .hotkey_settings import HotkeySettings, show_settings_window
 from .live_cards_pool import show_pre_generator_window
@@ -417,14 +416,6 @@ class MailApp:
             command=self._show_sk_window,
         )
         self.btn_sk.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
-
-        self.btn_in = HoverButton(
-            self.tools_frame, text="IN", font=FONT_SMALL,
-            bg=colors["btn_bg"], fg=colors["btn_fg"],
-            hover_bg=colors["btn_hover"],
-            command=self._show_in_window,
-        )
-        self.btn_in.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
 
         self.btn_minesweeper = HoverButton(
             self.tools_frame, text="Сапёр", font=FONT_SMALL,
@@ -1031,10 +1022,6 @@ class MailApp:
     def _show_sk_window(self):
         theme_name = self.params.get("theme", "light")
         show_sk_window(self.root, theme_name)
-
-    def _show_in_window(self):
-        theme_name = self.params.get("theme", "light")
-        show_in_window(self.root, theme_name)
 
     def _show_minesweeper(self):
         theme_name = self.params.get("theme", "light")
@@ -1860,7 +1847,7 @@ class MailApp:
         generic_btns = [
             self.btn_reload, self.btn_open_file, self.btn_open_excel,
             self.btn_copy_email, self.btn_copy_pass_openai, self.btn_copy_pass,
-            self.btn_sk, self.btn_in, self.btn_minesweeper, self.btn_hotkey_settings,
+            self.btn_sk, self.btn_minesweeper, self.btn_hotkey_settings,
             self.btn_copy_random_name, self.btn_copy_random_bdate,
         ]
         for btn in generic_btns:

@@ -1180,12 +1180,6 @@ export default function Dashboard({ token, user, onLogout }) {
             <div className="offline-inline-buttons">
               <button
                 type="button"
-                onClick={() => openGeneratorPopup("in")}
-              >
-                IN
-              </button>
-              <button
-                type="button"
                 onClick={() => openGeneratorPopup("sk")}
               >
                 SK
